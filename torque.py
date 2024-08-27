@@ -12,8 +12,8 @@ def get_machine_params(specs_df, machine_type):
         'n1': machine_data['n1 [1/min]'],
         'n2': machine_data['n2 [1/min]'],
         'M_cont_value': machine_data['M (dauer) [kNm]'],
-        'M_max_Vg1': machine_data['M (max.)'],
-        'torque_constant': machine_data['Torque Constant']  # Ensure this column exists in your Excel file
+        'M_max_Vg1': machine_data['M (max.) [kNm]'],
+        'torque_constant': machine_data['Drehmomentumrechnung [kNm/bar]']  # Ensure this column exists in your Excel file
     }
 
 def calculate_whisker_and_outliers(data):
