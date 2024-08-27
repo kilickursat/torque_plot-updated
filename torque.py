@@ -85,8 +85,18 @@ def add_logo():
             background-image: url(https://raw.githubusercontent.com/kilickursat/torque_plot-updated/main/Herrenknecht_logo.svg-1024x695.png);
             background-repeat: no-repeat;
             background-size: 200px;
-            padding-top: 120px;
             background-position: 20px 20px;
+        }
+        [data-testid="stSidebar"]::before {
+            content: "";
+            display: block;
+            height: 140px; /* Adjust this value to match your logo height plus any desired padding */
+        }
+        [data-testid="stSidebar"] > div:first-child {
+            padding-top: 0rem;
+        }
+        [data-testid="stSidebar"] .sidebar-content {
+            padding-top: 140px; /* Same as the ::before height */
         }
         </style>
         """,
@@ -114,8 +124,15 @@ def main():
 
     # Add logo to the sidebar
     add_logo()
-    st.title("TorqueVision: Herrenknecht's Advanced Analysis App")
+    
+    # Add this line to create a div for sidebar content
+    st.sidebar.markdown('<div class="sidebar-content">', unsafe_allow_html=True)
+    
+    st.title("TorqueVision: Herrenknecht's Advanced Analysis Suite")
     st.sidebar.markdown("**Created by Kursat Kilic - Geotechnical Digitalization**")
+    
+    # Add this line at the end of your main function
+    st.sidebar.markdown('</div>', unsafe_allow_html=True)
     
 
     # File uploaders
