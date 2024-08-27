@@ -149,7 +149,7 @@ def main():
     
     # Add logo to the sidebar
     
-    add_logo('path/to/Herrenknecht_logo.png')
+    add_logo('https://github.com/kilickursat/torque_plot-updated/blob/main/Herrenknecht_logo.svg-1024x695.png')
     
     st.title("Enhanced Torque Analysis App")
     st.sidebar.markdown("Created by Kursat Kilic - Geotechnical Digitalization")
