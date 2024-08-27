@@ -2,19 +2,24 @@ import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
-import io
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from fpdf import FPDF
+import io
+import base64
+from PIL import Image
 
 def load_machine_specs(file):
     specs_df = pd.read_excel(file)
     specs_df.columns = specs_df.columns.str.strip()  # Strip any leading/trailing whitespace and newlines
+    
+    # Display the columns in a more UX-friendly design
     with st.expander("Columns in the Uploaded Excel File"):
         st.dataframe(pd.DataFrame(specs_df.columns, columns=["Column Names"]))
+    
     return specs_df
 
 def get_machine_params(specs_df, machine_type):
     machine_data = specs_df[specs_df['Projekt'] == machine_type].iloc[0]
+    
     def find_column(possible_names):
         for name in possible_names:
             if name in machine_data.index:
@@ -35,6 +40,7 @@ def get_machine_params(specs_df, machine_type):
     m_max_col = find_column(m_max_names)
     torque_constant_col = find_column(torque_constant_names)
 
+    # Return machine parameters
     return {
         'n1': machine_data[n1_col],
         'n2': machine_data[n2_col],
@@ -53,7 +59,98 @@ def calculate_whisker_and_outliers(data):
     outliers = data[(data < lower_whisker) | (data > upper_whisker)]
     return lower_whisker, upper_whisker, outliers
 
+def create_pdf_report(df, machine_params, selected_machine, anomaly_threshold, fig):
+    pdf = FPDF()
+    pdf.add_page()
+    
+    # Title
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(0, 10, f"Torque Analysis Report - {selected_machine}", ln=True, align="C")
+    pdf.ln(10)
+    
+    # Machine Parameters
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 10, "Machine Parameters", ln=True)
+    pdf.set_font("Arial", "", 12)
+    for key, value in machine_params.items():
+        pdf.cell(0, 10, f"{key}: {value}", ln=True)
+    pdf.ln(10)
+    
+    # Statistical Analysis
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 10, "Statistical Analysis", ln=True)
+    pdf.set_font("Arial", "", 12)
+    for column in ['Revolution [rpm]', 'Calculated torque [kNm]', 'Working pressure [bar]']:
+        pdf.cell(0, 10, f"{column} Statistics:", ln=True)
+        stats = df[column].describe()
+        for stat, value in stats.items():
+            pdf.cell(0, 10, f"  {stat}: {value:.2f}", ln=True)
+        pdf.ln(5)
+    
+    # Anomaly Detection Results
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 10, "Anomaly Detection Results", ln=True)
+    pdf.set_font("Arial", "", 12)
+    anomaly_data = df[df['Is_Anomaly']]
+    pdf.cell(0, 10, f"Total data points: {len(df)}", ln=True)
+    pdf.cell(0, 10, f"Anomaly data points: {len(anomaly_data)}", ln=True)
+    pdf.cell(0, 10, f"Percentage of anomalies: {len(anomaly_data) / len(df) * 100:.2f}%", ln=True)
+    pdf.cell(0, 10, f"Anomaly threshold: {anomaly_threshold} bar", ln=True)
+    pdf.ln(10)
+    
+    # Torque Plot
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 10, "Torque Analysis Plot", ln=True)
+    img_buffer = io.BytesIO()
+    plt.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
+    img_buffer.seek(0)
+    pdf.image(img_buffer, x=10, y=pdf.get_y(), w=190)
+    
+    return pdf
+
+def set_page_config():
+    st.set_page_config(
+        page_title="Herrenknecht Torque Analysis",
+        page_icon="🚀",
+        layout="wide"
+    )
+
+def add_logo(logo_path):
+    logo = Image.open(logo_path)
+    
+    # Resize the logo to a smaller size (e.g., 200 pixels wide)
+    logo.thumbnail((200, 200))
+    
+    st.sidebar.image(logo, use_column_width=True)
+
+def set_background_color():
+    herrenknecht_green = "#007749"  # Herrenknecht green color
+    
+    # Custom CSS to set the background color
+    st.markdown(
+        f"""
+        <style>
+        .stApp {{
+            background-color: {herrenknecht_green};
+            color: white;
+        }}
+        .stSidebar .sidebar-content {{
+            background-color: white;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
 def main():
+    set_page_config()
+    set_background_color()
+    
+    # Add logo to the sidebar
+    
+    add_logo('path/to/Herrenknecht_logo.png')
+    
     st.title("Enhanced Torque Analysis App")
     st.sidebar.markdown("Created by Kursat Kilic - Geotechnical Digitalization")
 
@@ -101,7 +198,7 @@ def main():
 
         # RPM Statistics
         rpm_max_value = df['Revolution [rpm]'].max()
-        st.sidebar.write(f"Max RPM in Data: {rpm_max_value:.2f}")
+        st.sidebar.write(f"Recommended value for x-axis based on the Max RPM in Data: {rpm_max_value:.2f}")
 
         # Allow user to set x_axis_max
         x_axis_max = st.sidebar.number_input("X-axis maximum", value=rpm_max_value, min_value=1.0, max_value=100.0)
@@ -194,15 +291,15 @@ def main():
         ax.grid(True, which='both', linestyle=':', color='gray', alpha=0.5)
 
         # Add text annotations
-        ax.text(elbow_rpm_max * 0.5, machine_params['M_max_Vg1'] * 1.05, f'M max (max.): {machine_params['M_max_Vg1']} kNm',
+        ax.text(elbow_rpm_max * 0.5, machine_params['M_max_Vg1'] * 1.05, f'M max (max.): {machine_params["M_max_Vg1"]} kNm',
                 fontsize=10, ha='center', va='bottom', color='red')
-        ax.text(elbow_rpm_cont * 0.5, machine_params['M_cont_value'] * 0.95, f'M cont (max.): {machine_params['M_cont_value']} kNm',
+        ax.text(elbow_rpm_cont * 0.5, machine_params['M_cont_value'] * 0.95, f'M cont (max.): {machine_params["M_cont_value"]} kNm',
                 fontsize=10, ha='center', va='top', color='green')
 
         # Add text annotations for elbow points and n1
         ax.text(elbow_rpm_max, 0, f'{elbow_rpm_max:.2f}', ha='right', va='bottom', color='purple', fontsize=8)
         ax.text(elbow_rpm_cont, 0, f'{elbow_rpm_cont:.2f}', ha='right', va='bottom', color='orange', fontsize=8)
-        ax.text(machine_params['n1'], machine_params['M_cont_value'], f'n1: {machine_params['n1']}', ha='right', va='top', color='black', fontsize=8, rotation=90)
+        ax.text(machine_params['n1'], machine_params['M_cont_value'], f'n1: {machine_params["n1"]}', ha='right', va='top', color='black', fontsize=8, rotation=90)
 
         # Add colorbar for the scatter plot
         cbar = plt.colorbar(scatter_normal)
@@ -214,65 +311,38 @@ def main():
         plt.tight_layout()
         st.pyplot(fig)
 
-        # Save Plot as PNG
-        buf = io.BytesIO()
-        plt.savefig(buf, format="png")
+        # Display statistics on the web page
+        st.header("Data Statistics")
+        for column in ['Revolution [rpm]', 'Calculated torque [kNm]', 'Working pressure [bar]']:
+            st.subheader(f"{column} Statistics")
+            st.write(df[column].describe())
+
+        # Display anomaly detection results on the web page
+        st.header("Anomaly Detection Results")
+        anomaly_data = df[df['Is_Anomaly']]
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.write(f"Total data points: {len(df)}")
+            st.write(f"Normal data points: {len(df) - len(anomaly_data)}")
+        with col2:
+            st.write(f"Anomaly data points: {len(anomaly_data)}")
+            st.write(f"Percentage of anomalies: {len(anomaly_data) / len(df) * 100:.2f}%")
+        with col3:
+            st.write(f"Anomaly threshold: {anomaly_threshold} bar")
+
+        # Create and offer PDF report for download
+        pdf = create_pdf_report(df, machine_params, selected_machine, anomaly_threshold, fig)
+        
+        pdf_buffer = io.BytesIO()
+        pdf.output(pdf_buffer)
+        pdf_buffer.seek(0)
+        
         st.download_button(
-            label="Download Plot as PNG",
-            data=buf,
-            file_name=f"{selected_machine}_torque_analysis.png",
-            mime="image/png"
+            label="Download PDF Report",
+            data=pdf_buffer,
+            file_name=f"torque_analysis_report_{selected_machine}.pdf",
+            mime="application/pdf"
         )
-
-        # Save Data as CSV
-        st.download_button(
-            label="Download Data as CSV",
-            data=df.to_csv(index=False).encode('utf-8'),
-            file_name=f"{selected_machine}_analysis_data.csv",
-            mime="text/csv"
-        )
-
-        # Generate PDF Report
-        if st.button("Generate PDF Report"):
-            pdf = FPDF()
-            pdf.add_page()
-
-            pdf.set_font("Arial", size=12)
-            pdf.cell(200, 10, txt=f"{selected_machine} - Torque Analysis Report", ln=True, align="C")
-            pdf.ln(10)
-
-            # Summary
-            pdf.set_font("Arial", size=10)
-            pdf.multi_cell(0, 10, txt=f"Machine Parameters:\n{pd.DataFrame([machine_params]).to_string(index=False)}")
-            pdf.ln(5)
-            pdf.multi_cell(0, 10, txt=f"RPM Statistics:\n{df['Revolution [rpm]'].describe().to_string()}")
-            pdf.ln(5)
-            pdf.multi_cell(0, 10, txt=f"Calculated Torque Statistics:\n{df['Calculated torque [kNm]'].describe().to_string()}")
-            pdf.ln(5)
-            pdf.multi_cell(0, 10, txt=f"Working Pressure Statistics:\n{df['Working pressure [bar]'].describe().to_string()}")
-            pdf.ln(10)
-            pdf.multi_cell(0, 10, txt="Anomaly Detection Results:\n"
-                                      f"Total data points: {len(df)}\n"
-                                      f"Normal data points: {len(normal_data)}\n"
-                                      f"Anomaly data points: {len(anomaly_data)}\n"
-                                      f"Percentage of anomalies: {len(anomaly_data) / len(df) * 100:.2f}%\n"
-                                      f"Elbow point Max: {elbow_rpm_max:.2f} rpm\n"
-                                      f"Elbow point Cont: {elbow_rpm_cont:.2f} rpm\n"
-                                      f"Torque Upper Whisker: {torque_upper_whisker:.2f} kNm\n"
-                                      f"Torque Lower Whisker: {torque_lower_whisker:.2f} kNm\n"
-                                      f"Number of torque outliers: {len(torque_outliers)}\n"
-                                      f"RPM Upper Whisker: {rpm_upper_whisker:.2f} rpm\n"
-                                      f"RPM Lower Whisker: {rpm_lower_whisker:.2f} rpm\n"
-                                      f"Number of RPM outliers: {len(rpm_outliers)}\n")
-
-            pdf.output(f"{selected_machine}_torque_analysis.pdf")
-            with open(f"{selected_machine}_torque_analysis.pdf", "rb") as pdf_file:
-                st.download_button(
-                    label="Download PDF Report",
-                    data=pdf_file,
-                    file_name=f"{selected_machine}_torque_analysis.pdf",
-                    mime="application/pdf"
-                )
 
     else:
         st.info("Please upload a Raw Data CSV file to begin the analysis.")
