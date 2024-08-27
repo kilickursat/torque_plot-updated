@@ -20,11 +20,11 @@ def get_machine_params(specs_df, machine_type):
         return None
 
     # Define possible column names
-    n1_names = ['n1[1/min]', 'n1', 'n1 (1/min)', 'n1[rpm]']
-    n2_names = ['n2[1/min]', 'n2', 'n2 (1/min)', 'n2[rpm]']
-    m_cont_names = ['M(dauer) [kNm]', 'M (dauer)', 'M cont', 'M_cont[kNm]']
+    n1_names = ['n1[1/min]','n1 (1/min)', 'n1[rpm]']
+    n2_names = ['n2[1/min]','n2 (1/min)', 'n2[rpm]']
+    m_cont_names = ['M(dauer) [kNm]', 'M (dauer)']
     m_max_names = ['M(max)', 'M max', 'M (max)', 'M_max[kNm]']
-    torque_constant_names = ['Drehmomentumrechnung[kNm/bar]', 'Torque constant[kNm/bar]']
+    torque_constant_names = ['Drehmomentumrechnung[kNm/bar]']
 
     # Find the correct column names
     n1_col = find_column(n1_names)
