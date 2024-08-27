@@ -266,7 +266,7 @@ def main():
             st.write(f"Percentage of anomalies: {len(anomaly_data) / len(df) * 100:.2f}%")
 
         with col2:
-                        st.write(f"Elbow point Max: {elbow_rpm_max:.2f} rpm")
+            st.write(f"Elbow point Max: {elbow_rpm_max:.2f} rpm")
             st.write(f"Elbow point Cont: {elbow_rpm_cont:.2f} rpm")
 
         with col3:
