@@ -68,6 +68,9 @@ class PDF(FPDF):
         # Add any footer content if needed
         pass
 
+import tempfile
+import os
+
 def create_pdf_report(df, machine_params, selected_machine, anomaly_threshold, fig):
     pdf = PDF()
     pdf.add_page()
@@ -111,11 +114,14 @@ def create_pdf_report(df, machine_params, selected_machine, anomaly_threshold, f
     # Torque Plot
     pdf.set_font("Arial", "B", 14)
     pdf.cell(0, 10, "Torque Analysis Plot", ln=True)
-    img_buffer = io.BytesIO()
-    fig.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
-    img_buffer.seek(0)
-    img_str = base64.b64encode(img_buffer.getvalue()).decode()
-    pdf.image(f"data:image/png;base64,{img_str}", x=10, y=pdf.get_y(), w=190)
+    
+    # Save the plot to a temporary file
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile:
+        fig.savefig(tmpfile.name, format='png', dpi=300, bbox_inches='tight')
+        pdf.image(tmpfile.name, x=10, y=pdf.get_y(), w=190)
+    
+    # Remove the temporary file
+    os.unlink(tmpfile.name)
 
     return pdf
 
