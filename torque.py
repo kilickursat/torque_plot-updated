@@ -20,11 +20,11 @@ def get_machine_params(specs_df, machine_type):
         return None
 
     # Define possible column names
-    n1_names = ['n1[1/min]', 'n1', 'n1 (1/min)']
-    n2_names = ['n2[1/min]', 'n2', 'n2 (1/min)']
-    m_cont_names = ['M(dauer) [kNm]', 'M (dauer)', 'M cont']
-    m_max_names = ['M(max)', 'M max', 'M (max)']
-    torque_constant_names = ['Drehmomentumrechnung[kNm/bar]']
+    n1_names = ['n1[1/min]', 'n1', 'n1 (1/min)', 'n1[rpm]']
+    n2_names = ['n2[1/min]', 'n2', 'n2 (1/min)', 'n2[rpm]']
+    m_cont_names = ['M(dauer) [kNm]', 'M (dauer)', 'M cont', 'M_cont[kNm]']
+    m_max_names = ['M(max)', 'M max', 'M (max)', 'M_max[kNm]']
+    torque_constant_names = ['Drehmomentumrechnung[kNm/bar]', 'Torque constant[kNm/bar]']
 
     # Find the correct column names
     n1_col = find_column(n1_names)
@@ -34,8 +34,21 @@ def get_machine_params(specs_df, machine_type):
     torque_constant_col = find_column(torque_constant_names)
 
     # Check if all required columns are found
-    if not all([n1_col, n2_col, m_cont_col, m_max_col, torque_constant_col]):
-        st.error("Some required columns are missing in the Excel file. Please check the column names.")
+    missing_columns = []
+    if not n1_col:
+        missing_columns.append("n1")
+    if not n2_col:
+        missing_columns.append("n2")
+    if not m_cont_col:
+        missing_columns.append("M_cont")
+    if not m_max_col:
+        missing_columns.append("M_max")
+    if not torque_constant_col:
+        missing_columns.append("Torque constant")
+
+    if missing_columns:
+        st.error(f"The following required columns are missing in the Excel file: {', '.join(missing_columns)}")
+        st.error("Please check the column names and ensure they match one of the expected formats.")
         st.stop()
 
     return {
@@ -77,7 +90,7 @@ def main():
             n2 = machine_params['n2']
             M_cont_value = machine_params['M_cont_value']
             M_max_Vg1 = machine_params['M_max_Vg1']
-            torque_constant = machine_params['Drehmomentumrechnung[kNm/bar]']
+            torque_constant = machine_params['torque_constant']
 
             # Display the loaded parameters
             st.write("Loaded Machine Parameters:")
@@ -253,7 +266,7 @@ def main():
             st.write(f"Percentage of anomalies: {len(anomaly_data) / len(df) * 100:.2f}%")
 
         with col2:
-            st.write(f"Elbow point Max: {elbow_rpm_max:.2f} rpm")
+                        st.write(f"Elbow point Max: {elbow_rpm_max:.2f} rpm")
             st.write(f"Elbow point Cont: {elbow_rpm_cont:.2f} rpm")
 
         with col3:
