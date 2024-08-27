@@ -84,7 +84,7 @@ def add_logo():
         [data-testid="stSidebar"] {
             background-image: url(https://raw.githubusercontent.com/kilickursat/torque_plot-updated/main/Herrenknecht_logo.svg-1024x695.png);
             background-repeat: no-repeat;
-            background-size: 180px;
+            background-size: 170px;
             background-position: 10px 10px;
         }
         [data-testid="stSidebar"]::before {
