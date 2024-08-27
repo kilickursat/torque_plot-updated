@@ -59,15 +59,25 @@ def calculate_whisker_and_outliers(data):
     outliers = data[(data < lower_whisker) | (data > upper_whisker)]
     return lower_whisker, upper_whisker, outliers
 
+class PDF(FPDF):
+    def header(self):
+        # Add any header content if needed
+        pass
+
+    def footer(self):
+        # Add any footer content if needed
+        pass
+
+
 def create_pdf_report(df, machine_params, selected_machine, anomaly_threshold, fig):
-    pdf = FPDF()
+    pdf = PDF()
     pdf.add_page()
-    
+
     # Title
     pdf.set_font("Arial", "B", 16)
     pdf.cell(0, 10, f"Torque Analysis Report - {selected_machine}", ln=True, align="C")
     pdf.ln(10)
-    
+
     # Machine Parameters
     pdf.set_font("Arial", "B", 14)
     pdf.cell(0, 10, "Machine Parameters", ln=True)
@@ -75,7 +85,7 @@ def create_pdf_report(df, machine_params, selected_machine, anomaly_threshold, f
     for key, value in machine_params.items():
         pdf.cell(0, 10, f"{key}: {value}", ln=True)
     pdf.ln(10)
-    
+
     # Statistical Analysis
     pdf.set_font("Arial", "B", 14)
     pdf.cell(0, 10, "Statistical Analysis", ln=True)
@@ -86,7 +96,7 @@ def create_pdf_report(df, machine_params, selected_machine, anomaly_threshold, f
         for stat, value in stats.items():
             pdf.cell(0, 10, f"  {stat}: {value:.2f}", ln=True)
         pdf.ln(5)
-    
+
     # Anomaly Detection Results
     pdf.add_page()
     pdf.set_font("Arial", "B", 14)
@@ -98,16 +108,31 @@ def create_pdf_report(df, machine_params, selected_machine, anomaly_threshold, f
     pdf.cell(0, 10, f"Percentage of anomalies: {len(anomaly_data) / len(df) * 100:.2f}%", ln=True)
     pdf.cell(0, 10, f"Anomaly threshold: {anomaly_threshold} bar", ln=True)
     pdf.ln(10)
-    
+
     # Torque Plot
     pdf.set_font("Arial", "B", 14)
     pdf.cell(0, 10, "Torque Analysis Plot", ln=True)
     img_buffer = io.BytesIO()
-    plt.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
+    fig.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
     img_buffer.seek(0)
-    pdf.image(img_buffer, x=10, y=pdf.get_y(), w=190)
-    
+    img_str = base64.b64encode(img_buffer.getvalue()).decode()
+    pdf.image(f"data:image/png;base64,{img_str}", x=10, y=pdf.get_y(), w=190)
+
     return pdf
+
+# In the main function, replace the existing PDF generation code with:
+pdf = create_pdf_report(df, machine_params, selected_machine, anomaly_threshold, fig)
+
+pdf_buffer = io.BytesIO()
+pdf.output(pdf_buffer)
+pdf_buffer.seek(0)
+
+st.download_button(
+    label="Download PDF Report",
+    data=pdf_buffer,
+    file_name=f"torque_analysis_report_{selected_machine}.pdf",
+    mime="application/pdf"
+)
 
 def set_page_config():
     st.set_page_config(
