@@ -8,12 +8,42 @@ def load_machine_specs(file):
 
 def get_machine_params(specs_df, machine_type):
     machine_data = specs_df[specs_df['Projekt'] == machine_type].iloc[0]
+    
+    # Print column names for debugging
+    st.write("Available columns in the Excel file:", specs_df.columns.tolist())
+    
+    # Function to find the closest matching column name
+    def find_column(possible_names):
+        for name in possible_names:
+            if name in machine_data.index:
+                return name
+        return None
+
+    # Define possible column names
+    n1_names = ['n1 [1/min]', 'n1', 'n1 (1/min)']
+    n2_names = ['n2 [1/min]', 'n2', 'n2 (1/min)']
+    m_cont_names = ['M (dauer) [kNm]', 'M (dauer)', 'M cont']
+    m_max_names = ['M (max.)', 'M max', 'M (max)']
+    torque_constant_names = ['Torque Constant', 'Torque_Constant', 'TorqueConstant']
+
+    # Find the correct column names
+    n1_col = find_column(n1_names)
+    n2_col = find_column(n2_names)
+    m_cont_col = find_column(m_cont_names)
+    m_max_col = find_column(m_max_names)
+    torque_constant_col = find_column(torque_constant_names)
+
+    # Check if all required columns are found
+    if not all([n1_col, n2_col, m_cont_col, m_max_col, torque_constant_col]):
+        st.error("Some required columns are missing in the Excel file. Please check the column names.")
+        st.stop()
+
     return {
-        'n1': machine_data['n1 [1/min]'],
-        'n2': machine_data['n2 [1/min]'],
-        'M_cont_value': machine_data['M (dauer) [kNm]'],
-        'M_max_Vg1': machine_data['M (max.) [kNm]'],
-        'torque_constant': machine_data['Drehmomentumrechnung [kNm/bar]']  # Ensure this column exists in your Excel file
+        'n1': machine_data[n1_col],
+        'n2': machine_data[n2_col],
+        'M_cont_value': machine_data[m_cont_col],
+        'M_max_Vg1': machine_data[m_max_col],
+        'torque_constant': machine_data[torque_constant_col]
     }
 
 def calculate_whisker_and_outliers(data):
@@ -35,18 +65,31 @@ def main():
     machine_specs_file = st.file_uploader("Upload Machine Specifications XLSX", type="xlsx")
 
     if machine_specs_file is not None:
-        machine_specs = load_machine_specs(machine_specs_file)
-        machine_types = machine_specs['Projekt'].unique()
-        selected_machine = st.sidebar.selectbox("Select Machine Type", machine_types)
-        
-        machine_params = get_machine_params(machine_specs, selected_machine)
-        
-        # Use machine parameters
-        n1 = machine_params['n1']
-        n2 = machine_params['n2']
-        M_cont_value = machine_params['M_cont_value']
-        M_max_Vg1 = machine_params['M_max_Vg1']
-        torque_constant = machine_params['torque_constant']
+        try:
+            machine_specs = load_machine_specs(machine_specs_file)
+            machine_types = machine_specs['Projekt'].unique()
+            selected_machine = st.sidebar.selectbox("Select Machine Type", machine_types)
+            
+            machine_params = get_machine_params(machine_specs, selected_machine)
+            
+            # Use machine parameters
+            n1 = machine_params['n1']
+            n2 = machine_params['n2']
+            M_cont_value = machine_params['M_cont_value']
+            M_max_Vg1 = machine_params['M_max_Vg1']
+            torque_constant = machine_params['torque_constant']
+
+            # Display the loaded parameters
+            st.write("Loaded Machine Parameters:")
+            st.write(f"n1: {n1}")
+            st.write(f"n2: {n2}")
+            st.write(f"M_cont_value: {M_cont_value}")
+            st.write(f"M_max_Vg1: {M_max_Vg1}")
+            st.write(f"Torque Constant: {torque_constant}")
+
+        except Exception as e:
+            st.error(f"An error occurred while processing the machine specifications: {str(e)}")
+            st.stop()
     else:
         st.warning("Please upload Machine Specifications XLSX file.")
         return
