@@ -58,7 +58,7 @@ def calculate_whisker_and_outliers(data):
 def set_page_config():
     st.set_page_config(
         page_title="Herrenknecht Torque Analysis",
-        page_icon="🚀",
+        page_icon="https://raw.githubusercontent.com/kilickursat/torque_plot-updated/main/Herrenknecht_logo.svg-1024x695.png",
         layout="wide"
     )
 
@@ -97,7 +97,7 @@ def main():
 
     # Add logo to the sidebar
     add_logo()
-    st.title("Enhanced Torque Analysis App")
+    st.title("Torque vs Rpm Curve Analysis App through Machine Maximum Power (kW)")
     st.sidebar.markdown("Created by Kursat Kilic - Geotechnical Digitalization")
     
 
@@ -146,7 +146,7 @@ def main():
         # RPM Statistics
         rpm_stats = df['Revolution [rpm]'].describe()
         rpm_max_value = rpm_stats['max']
-        st.sidebar.write(f"Recommended value for x-axis based on the Max RPM in Data: {rpm_max_value:.2f}")
+        st.sidebar.write(f"Max RPM in Data: {rpm_max_value:.2f}")
 
         # Allow user to set x_axis_max
         x_axis_max = st.sidebar.number_input("X-axis maximum", value=rpm_max_value, min_value=1.0, max_value=100.0)
