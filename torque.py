@@ -5,7 +5,6 @@ import pandas as pd
 
 def load_machine_specs(file):
     return pd.read_excel(file)
-    def load_machine_specs(file):
     specs_df = pd.read_excel(file)
     
     # Print column names using list function
