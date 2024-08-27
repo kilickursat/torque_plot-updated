@@ -290,7 +290,7 @@ def main():
     scatter_anomaly = ax.scatter(anomaly_data['Revolution [rpm]'], anomaly_data['Calculated torque [kNm]'],
                                  color='red', s=100, alpha=0.8, marker='X', label=f'Anomaly (Pressure ≥ {anomaly_threshold} bar)')
     scatter_torque_outliers = ax.scatter(torque_outlier_data['Revolution [rpm]'], torque_outlier_data['Calculated torque [kNm]'],
-                                         color='orange', s=100, alpha=0,color='orange', s=100, alpha=0.8, marker='D', label='Torque Outliers')
+                                         color='orange', s=100,alpha=0.8, marker='D', label='Torque Outliers')
     scatter_rpm_outliers = ax.scatter(rpm_outlier_data['Revolution [rpm]'], rpm_outlier_data['Calculated torque [kNm]'],
                                       color='purple', s=100, alpha=0.8, marker='s', label='RPM Outliers')
 
