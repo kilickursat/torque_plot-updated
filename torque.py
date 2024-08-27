@@ -116,16 +116,24 @@ def set_page_config():
         layout="wide"
     )
 
-def add_logo(logo_path):
-    logo = Image.open(logo_path)
-    
-    # Resize the logo to a smaller size (e.g., 200 pixels wide)
-    logo.thumbnail((200, 200))
-    
-    st.sidebar.image(logo, use_column_width=True)
+def add_logo():
+    st.sidebar.markdown(
+        """
+        <style>
+        [data-testid="stSidebar"] {
+            background-image: url(https://raw.githubusercontent.com/kilickursat/torque_plot-updated/main/Herrenknecht_logo.svg-1024x695.png);
+            background-repeat: no-repeat;
+            background-size: 200px;
+            padding-top: 120px;
+            background-position: 20px 20px;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 def set_background_color():
-    herrenknecht_green = "#007749"  # Herrenknecht green color
+    herrenknecht_green = "#90EE90"  # Herrenknecht green color
     
     # Custom CSS to set the background color
     st.markdown(
@@ -146,10 +154,9 @@ def set_background_color():
 def main():
     set_page_config()
     set_background_color()
-    
+
     # Add logo to the sidebar
-    
-    add_logo('https://github.com/kilickursat/torque_plot-updated/blob/main/Herrenknecht_logo.svg-1024x695.png')
+    add_logo()
     
     st.title("Enhanced Torque Analysis App")
     st.sidebar.markdown("Created by Kursat Kilic - Geotechnical Digitalization")
