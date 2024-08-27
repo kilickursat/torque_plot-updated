@@ -6,6 +6,8 @@ from fpdf import FPDF
 import io
 import base64
 from PIL import Image
+import os
+import tempfile
 
 def load_machine_specs(file):
     specs_df = pd.read_excel(file)
