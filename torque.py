@@ -254,17 +254,17 @@ def main():
 
     df['Calculated torque [kNm]'] = df.apply(calculate_torque_wrapper, axis=1)
 
-    # ... (rest of the code remains the same)
+  
 
         # Calculate whiskers and outliers
-        torque_lower_whisker, torque_upper_whisker, torque_outliers = calculate_whisker_and_outliers(df['Calculated torque [kNm]'])
-        rpm_lower_whisker, rpm_upper_whisker, rpm_outliers = calculate_whisker_and_outliers(df['Revolution [rpm]'])
+    torque_lower_whisker, torque_upper_whisker, torque_outliers = calculate_whisker_and_outliers(df['Calculated torque [kNm]'])
+    rpm_lower_whisker, rpm_upper_whisker, rpm_outliers = calculate_whisker_and_outliers(df['Revolution [rpm]'])
 
         # Anomaly detection
-        df['Is_Anomaly'] = df['Working pressure [bar]'] >= anomaly_threshold
+    df['Is_Anomaly'] = df['Working pressure [bar]'] >= anomaly_threshold
 
         # Function to calculate M max Vg2
-        def M_max_Vg2(rpm):
+    def M_max_Vg2(rpm):
             return np.minimum(machine_params['M_max_Vg1'], (P_max * 60 * nu) / (2 * np.pi * rpm))
 
         # Calculate the intersection points
