@@ -176,13 +176,12 @@ def set_background_color():
         unsafe_allow_html=True
     )
 
+
 def main():
     set_page_config()
     set_background_color()
-
-    # Add logo to the sidebar
     add_logo()
-    
+
     st.title("Enhanced Torque Analysis App")
     st.sidebar.markdown("Created by Kursat Kilic - Geotechnical Digitalization")
 
@@ -190,23 +189,23 @@ def main():
     raw_data_file = st.file_uploader("Upload Raw Data CSV", type="csv")
     machine_specs_file = st.file_uploader("Upload Machine Specifications XLSX", type="xlsx")
 
-    if machine_specs_file is not None:
-        try:
-            machine_specs = load_machine_specs(machine_specs_file)
-            machine_types = machine_specs['Projekt'].unique()
-            selected_machine = st.sidebar.selectbox("Select Machine Type", machine_types)
-            
-            machine_params = get_machine_params(machine_specs, selected_machine)
-            
-            # Display loaded parameters in a table
-            st.write("Loaded Machine Parameters:")
-            st.table(pd.DataFrame([machine_params]))
-
-        except Exception as e:
-            st.error(f"An error occurred while processing the machine specifications: {str(e)}")
-            st.stop()
-    else:
+    if machine_specs_file is None:
         st.warning("Please upload Machine Specifications XLSX file.")
+        return
+
+    try:
+        machine_specs = load_machine_specs(machine_specs_file)
+        machine_types = machine_specs['Projekt'].unique()
+        selected_machine = st.sidebar.selectbox("Select Machine Type", machine_types)
+
+        machine_params = get_machine_params(machine_specs, selected_machine)
+
+        # Display loaded parameters in a table
+        st.write("Loaded Machine Parameters:")
+        st.table(pd.DataFrame([machine_params]))
+
+    except Exception as e:
+        st.error(f"An error occurred while processing the machine specifications: {str(e)}")
         return
 
     # Sidebar for user inputs
@@ -215,8 +214,11 @@ def main():
     nu = st.sidebar.number_input("Efficiency coefficient", value=0.7, min_value=0.1, max_value=1.0)
     anomaly_threshold = st.sidebar.number_input("Anomaly threshold (bar)", value=250, min_value=100, max_value=500)
 
-    if raw_data_file is not None:
-        df = pd.read_csv(raw_data_file, sep=';', decimal=',')
+    if raw_data_file is None:
+        st.info("Please upload a Raw Data CSV file to begin the analysis.")
+        return
+
+    df = pd.read_csv(raw_data_file, sep=';', decimal=',')
         
         # Rename and clean columns as needed
         df = df.rename(columns={
@@ -343,41 +345,38 @@ def main():
         plt.tight_layout()
         st.pyplot(fig)
 
-        # Display statistics on the web page
-        st.header("Data Statistics")
-        for column in ['Revolution [rpm]', 'Calculated torque [kNm]', 'Working pressure [bar]']:
-            st.subheader(f"{column} Statistics")
-            st.write(df[column].describe())
+    # Display statistics on the web page
+    st.header("Data Statistics")
+    for column in ['Revolution [rpm]', 'Calculated torque [kNm]', 'Working pressure [bar]']:
+        st.subheader(f"{column} Statistics")
+        st.write(df[column].describe())
 
-        # Display anomaly detection results on the web page
-        st.header("Anomaly Detection Results")
-        anomaly_data = df[df['Is_Anomaly']]
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.write(f"Total data points: {len(df)}")
-            st.write(f"Normal data points: {len(df) - len(anomaly_data)}")
-        with col2:
-            st.write(f"Anomaly data points: {len(anomaly_data)}")
-            st.write(f"Percentage of anomalies: {len(anomaly_data) / len(df) * 100:.2f}%")
-        with col3:
-            st.write(f"Anomaly threshold: {anomaly_threshold} bar")
+    # Display anomaly detection results on the web page
+    st.header("Anomaly Detection Results")
+    anomaly_data = df[df['Is_Anomaly']]
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.write(f"Total data points: {len(df)}")
+        st.write(f"Normal data points: {len(df) - len(anomaly_data)}")
+    with col2:
+        st.write(f"Anomaly data points: {len(anomaly_data)}")
+        st.write(f"Percentage of anomalies: {len(anomaly_data) / len(df) * 100:.2f}%")
+    with col3:
+        st.write(f"Anomaly threshold: {anomaly_threshold} bar")
 
-        # Create and offer PDF report for download
-        pdf = create_pdf_report(df, machine_params, selected_machine, anomaly_threshold, fig)
-        
-        pdf_buffer = io.BytesIO()
-        pdf.output(pdf_buffer)
-        pdf_buffer.seek(0)
-        
-        st.download_button(
-            label="Download PDF Report",
-            data=pdf_buffer,
-            file_name=f"torque_analysis_report_{selected_machine}.pdf",
-            mime="application/pdf"
-        )
+    # Create and offer PDF report for download
+    pdf = create_pdf_report(df, machine_params, selected_machine, anomaly_threshold, fig)
 
-    else:
-        st.info("Please upload a Raw Data CSV file to begin the analysis.")
+    pdf_buffer = io.BytesIO()
+    pdf.output(pdf_buffer)
+    pdf_buffer.seek(0)
+
+    st.download_button(
+        label="Download PDF Report",
+        data=pdf_buffer,
+        file_name=f"torque_analysis_report_{selected_machine}.pdf",
+        mime="application/pdf"
+    )
 
     # Add footer with creator information
     st.markdown("---")
