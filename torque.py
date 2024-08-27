@@ -5,6 +5,14 @@ import pandas as pd
 
 def load_machine_specs(file):
     return pd.read_excel(file)
+    def load_machine_specs(file):
+    specs_df = pd.read_excel(file)
+    
+    # Print column names using list function
+    st.write("Columns in the uploaded Excel file:")
+    st.write(list(specs_df.columns))
+    
+    return specs_df
 
 def get_machine_params(specs_df, machine_type):
     machine_data = specs_df[specs_df['Projekt'] == machine_type].iloc[0]
