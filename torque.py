@@ -310,7 +310,7 @@ def main():
 
     # Add footer with creator information
     st.markdown("---")
-    st.markdown("Created by Kursat Kilic - Geotechnical Digitalization")
+    st.markdown("*Created by Kursat Kilic - Geotechnical Digitalization*")
 
 if __name__ == "__main__":
     main()
