@@ -97,7 +97,7 @@ def main():
 
     # Add logo to the sidebar
     add_logo()
-    st.title("TorqueVision: Herrenknecht's Advanced Analysis Suite")
+    st.title("TorqueVision: Herrenknecht's Advanced Analysis App")
     st.sidebar.markdown("**Created by Kursat Kilic - Geotechnical Digitalization**")
     
 
