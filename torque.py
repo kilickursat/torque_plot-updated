@@ -68,7 +68,6 @@ class PDF(FPDF):
         # Add any footer content if needed
         pass
 
-
 def create_pdf_report(df, machine_params, selected_machine, anomaly_threshold, fig):
     pdf = PDF()
     pdf.add_page()
@@ -120,20 +119,6 @@ def create_pdf_report(df, machine_params, selected_machine, anomaly_threshold, f
 
     return pdf
 
-# In the main function, replace the existing PDF generation code with:
-pdf = create_pdf_report(df, machine_params, selected_machine, anomaly_threshold, fig)
-
-pdf_buffer = io.BytesIO()
-pdf.output(pdf_buffer)
-pdf_buffer.seek(0)
-
-st.download_button(
-    label="Download PDF Report",
-    data=pdf_buffer,
-    file_name=f"torque_analysis_report_{selected_machine}.pdf",
-    mime="application/pdf"
-)
-
 def set_page_config():
     st.set_page_config(
         page_title="Herrenknecht Torque Analysis",
@@ -175,7 +160,6 @@ def set_background_color():
         """,
         unsafe_allow_html=True
     )
-
 
 def main():
     set_page_config()
@@ -254,16 +238,14 @@ def main():
 
     df['Calculated torque [kNm]'] = df.apply(calculate_torque_wrapper, axis=1)
 
-  
-
-        # Calculate whiskers and outliers
+    # Calculate whiskers and outliers
     torque_lower_whisker, torque_upper_whisker, torque_outliers = calculate_whisker_and_outliers(df['Calculated torque [kNm]'])
     rpm_lower_whisker, rpm_upper_whisker, rpm_outliers = calculate_whisker_and_outliers(df['Revolution [rpm]'])
 
-        # Anomaly detection
+    # Anomaly detection
     df['Is_Anomaly'] = df['Working pressure [bar]'] >= anomaly_threshold
 
-        # Function to calculate M max Vg2
+    # Function to calculate M max Vg2
     def M_max_Vg2(rpm):
         return np.minimum(machine_params['M_max_Vg1'], (P_max * 60 * nu) / (2 * np.pi * rpm))
 
@@ -279,15 +261,15 @@ def main():
 
     # Plot torque curves
     ax.plot(rpm_curve[rpm_curve <= elbow_rpm_cont],
-                np.full_like(rpm_curve[rpm_curve <= elbow_rpm_cont], machine_params['M_cont_value']),
-                'g-', linewidth=2, label='M cont Max [kNm]')
+            np.full_like(rpm_curve[rpm_curve <= elbow_rpm_cont], machine_params['M_cont_value']),
+            'g-', linewidth=2, label='M cont Max [kNm]')
 
     ax.plot(rpm_curve[rpm_curve <= elbow_rpm_max],
-                np.full_like(rpm_curve[rpm_curve <= elbow_rpm_max], machine_params['M_max_Vg1']),
-                'r-', linewidth=2, label='M max Vg1 [kNm]')
+            np.full_like(rpm_curve[rpm_curve <= elbow_rpm_max], machine_params['M_max_Vg1']),
+            'r-', linewidth=2, label='M max Vg1 [kNm]')
 
     ax.plot(rpm_curve[rpm_curve <= machine_params['n1']], M_max_Vg2(rpm_curve[rpm_curve <= machine_params['n1']]),
-                'r--', linewidth=2, label='M max Vg2 [kNm]')
+            'r--', linewidth=2, label='M max Vg2 [kNm]')
 
     # Add vertical lines at the elbow points
     ax.plot([elbow_rpm_max, elbow_rpm_max], [0, machine_params['M_max_Vg1']], color='purple', linestyle=':', linewidth=3)
@@ -303,14 +285,14 @@ def main():
     rpm_outlier_data = df[df['Revolution [rpm]'].isin(rpm_outliers) & (~df['Is_Anomaly'])]
 
     scatter_normal = ax.scatter(normal_data['Revolution [rpm]'], normal_data['Calculated torque [kNm]'],
-                                    c=normal_data['Calculated torque [kNm]'], cmap='viridis',
-                                    s=50, alpha=0.6, label='Normal Data')
+                                c=normal_data['Calculated torque [kNm]'], cmap='viridis',
+                                s=50, alpha=0.6, label='Normal Data')
     scatter_anomaly = ax.scatter(anomaly_data['Revolution [rpm]'], anomaly_data['Calculated torque [kNm]'],
-                                     color='red', s=100, alpha=0.8, marker='X', label=f'Anomaly (Pressure ≥ {anomaly_threshold} bar)')
+                                 color='red', s=100, alpha=0.8, marker='X', label=f'Anomaly (Pressure ≥ {anomaly_threshold} bar)')
     scatter_torque_outliers = ax.scatter(torque_outlier_data['Revolution [rpm]'], torque_outlier_data['Calculated torque [kNm]'],
-                                             color='orange', s=100, alpha=0.8, marker='D', label='Torque Outliers')
+                                         color='orange', s=100, alpha=0,color='orange', s=100, alpha=0.8, marker='D', label='Torque Outliers')
     scatter_rpm_outliers = ax.scatter(rpm_outlier_data['Revolution [rpm]'], rpm_outlier_data['Calculated torque [kNm]'],
-                                          color='purple', s=100, alpha=0.8, marker='s', label='RPM Outliers')
+                                      color='purple', s=100, alpha=0.8, marker='s', label='RPM Outliers')
 
     # Add horizontal lines for the torque whiskers
     ax.axhline(y=torque_upper_whisker, color='gray', linestyle='--', linewidth=1, label='Torque Upper Whisker')
@@ -328,9 +310,9 @@ def main():
 
     # Add text annotations
     ax.text(elbow_rpm_max * 0.5, machine_params['M_max_Vg1'] * 1.05, f'M max (max.): {machine_params["M_max_Vg1"]} kNm',
-                fontsize=10, ha='center', va='bottom', color='red')
+            fontsize=10, ha='center', va='bottom', color='red')
     ax.text(elbow_rpm_cont * 0.5, machine_params['M_cont_value'] * 0.95, f'M cont (max.): {machine_params["M_cont_value"]} kNm',
-                fontsize=10, ha='center', va='top', color='green')
+            fontsize=10, ha='center', va='top', color='green')
 
     # Add text annotations for elbow points and n1
     ax.text(elbow_rpm_max, 0, f'{elbow_rpm_max:.2f}', ha='right', va='bottom', color='purple', fontsize=8)
@@ -347,41 +329,42 @@ def main():
     plt.tight_layout()
     st.pyplot(fig)
 
-# Display statistics on the web page
-st.header("Data Statistics")
-for column in ['Revolution [rpm]', 'Calculated torque [kNm]', 'Working pressure [bar]']:
+    # Display statistics on the web page
+    st.header("Data Statistics")
+    for column in ['Revolution [rpm]', 'Calculated torque [kNm]', 'Working pressure [bar]']:
         st.subheader(f"{column} Statistics")
         st.write(df[column].describe())
 
-# Display anomaly detection results on the web page
-st.header("Anomaly Detection Results")
-anomaly_data = df[df['Is_Anomaly']]
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.write(f"Total data points: {len(df)}")
-    st.write(f"Normal data points: {len(df) - len(anomaly_data)}")
-with col2:
-    st.write(f"Anomaly data points: {len(anomaly_data)}")
-    st.write(f"Percentage of anomalies: {len(anomaly_data) / len(df) * 100:.2f}%")
-with col3:
-    st.write(f"Anomaly threshold: {anomaly_threshold} bar")
+    # Display anomaly detection results on the web page
+    st.header("Anomaly Detection Results")
+    anomaly_data = df[df['Is_Anomaly']]
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.write(f"Total data points: {len(df)}")
+        st.write(f"Normal data points: {len(df) - len(anomaly_data)}")
+    with col2:
+        st.write(f"Anomaly data points: {len(anomaly_data)}")
+        st.write(f"Percentage of anomalies: {len(anomaly_data) / len(df) * 100:.2f}%")
+    with col3:
+        st.write(f"Anomaly threshold: {anomaly_threshold} bar")
 
-# Create and offer PDF report for download
-pdf = create_pdf_report(df, machine_params, selected_machine, anomaly_threshold, fig)
+    # Create and offer PDF report for download
+    pdf = create_pdf_report(df, machine_params, selected_machine, anomaly_threshold, fig)
 
-pdf_buffer = io.BytesIO()
-pdf.output(pdf_buffer)
-pdf_buffer.seek(0)
+    pdf_buffer = io.BytesIO()
+    pdf.output(pdf_buffer)
+    pdf_buffer.seek(0)
 
-st.download_button(
-    label="Download PDF Report",
-    data=pdf_buffer,
-    file_name=f"torque_analysis_report_{selected_machine}.pdf",
-    mime="application/pdf")
+    st.download_button(
+        label="Download PDF Report",
+        data=pdf_buffer,
+        file_name=f"torque_analysis_report_{selected_machine}.pdf",
+        mime="application/pdf"
+    )
 
-# Add footer with creator information
-st.markdown("---")
-st.markdown("Created by Kursat Kilic - Geotechnical Digitalization")
+    # Add footer with creator information
+    st.markdown("---")
+    st.markdown("Created by Kursat Kilic - Geotechnical Digitalization")
 
 if __name__ == "__main__":
     main()
