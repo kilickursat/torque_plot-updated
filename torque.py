@@ -54,7 +54,27 @@ def calculate_whisker_and_outliers(data):
     upper_whisker = Q3 + whisker_length
     outliers = data[(data < lower_whisker) | (data > upper_whisker)]
     return lower_whisker, upper_whisker, outliers
-    
+
+def set_page_config():
+    st.set_page_config(
+        page_title="Herrenknecht Torque Analysis",
+        page_icon="🚀",
+        layout="wide"
+    )
+
+def set_background_color():
+    st.markdown(
+        """
+        <style>
+        .stApp {
+            background-color: #90EE90;
+            color: black;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
 def add_logo():
     st.sidebar.markdown(
         """
