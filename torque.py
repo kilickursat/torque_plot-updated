@@ -73,7 +73,7 @@ class PDF(FPDF):
 import tempfile
 import os
 
-def create_pdf_report(df, machine_params, selected_machine, anomaly_threshold, fig):
+def create_pdf_report(df, machine_params, selected_machine, anomaly_threshold):
     pdf = PDF()
     pdf.add_page()
 
@@ -111,19 +111,6 @@ def create_pdf_report(df, machine_params, selected_machine, anomaly_threshold, f
     pdf.cell(0, 10, f"Anomaly data points: {len(anomaly_data)}", ln=True)
     pdf.cell(0, 10, f"Percentage of anomalies: {len(anomaly_data) / len(df) * 100:.2f}%", ln=True)
     pdf.cell(0, 10, f"Anomaly threshold: {anomaly_threshold} bar", ln=True)
-    pdf.ln(10)
-
-    # Torque Plot
-    pdf.set_font("Arial", "B", 14)
-    pdf.cell(0, 10, "Torque Analysis Plot", ln=True)
-    
-    # Save the plot to a temporary file
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile:
-        fig.savefig(tmpfile.name, format='png', dpi=300, bbox_inches='tight')
-        pdf.image(tmpfile.name, x=10, y=pdf.get_y(), w=190)
-    
-    # Remove the temporary file
-    os.unlink(tmpfile.name)
 
     return pdf
 
@@ -356,12 +343,19 @@ def main():
     with col3:
         st.write(f"Anomaly threshold: {anomaly_threshold} bar")
 
-    # Create and offer PDF report for download
-    pdf = create_pdf_report(df, machine_params, selected_machine, anomaly_threshold, fig)
-
+# Create and offer PDF report for download
+if st.button("Generate PDF Report"):
+    pdf = create_pdf_report(df, machine_params, selected_machine, anomaly_threshold)
     pdf_buffer = io.BytesIO()
     pdf.output(pdf_buffer)
     pdf_buffer.seek(0)
+
+    st.download_button(
+        label="Download PDF Report",
+        data=pdf_buffer,
+        file_name=f"torque_analysis_report_{selected_machine}.pdf",
+        mime="application/pdf"
+    )
 
     st.download_button(
         label="Download PDF Report",
