@@ -144,7 +144,8 @@ def main():
         df = df.dropna(subset=['Revolution [rpm]', 'Working pressure [bar]'])
 
         # RPM Statistics
-        rpm_max_value = df['Revolution [rpm]'].max()
+        rpm_stats = df['Revolution [rpm]'].describe()
+        rpm_max_value = rpm_stats['max']
         st.sidebar.write(f"Recommended value for x-axis based on the Max RPM in Data: {rpm_max_value:.2f}")
 
         # Allow user to set x_axis_max
@@ -264,13 +265,12 @@ def main():
 
         with col1:
             st.write("RPM Statistics:")
-            st.write(df['Revolution [rpm]'].describe())
+            st.write(rpm_stats)
 
         with col2:
             st.write("Calculated Torque Statistics:")
             st.write(df['Calculated torque [kNm]'].describe())
-
-        with col3:
+                with col3:
             st.write("Working Pressure Statistics:")
             st.write(df['Working pressure [bar]'].describe())
 
