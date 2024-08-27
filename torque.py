@@ -77,7 +77,7 @@ def main():
             n2 = machine_params['n2']
             M_cont_value = machine_params['M_cont_value']
             M_max_Vg1 = machine_params['M_max_Vg1']
-            torque_constant = machine_params['torque_constant']
+            torque_constant = machine_params['Drehmomentumrechnung[kNm/bar]']
 
             # Display the loaded parameters
             st.write("Loaded Machine Parameters:")
