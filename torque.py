@@ -114,8 +114,8 @@ def main():
 
     # Add logo to the sidebar
     add_logo()
-    st.title("TorqueVision: Herrenknecht's Advanced Analysis Suite")
-    st.sidebar.markdown("Created by Kursat Kilic - Geotechnical Digitalization")
+    st.title("TorqueVision: Herrenknecht's Advanced Analysis App")
+    st.sidebar.markdown("**Created by Kursat Kilic - Geotechnical Digitalization**")
     
 
     # File uploaders
@@ -358,7 +358,7 @@ def main():
 
     # Add footer with creator information
     st.markdown("---")
-    st.markdown("Created by Kursat Kilic - Geotechnical Digitalization")
+    st.markdown("**Created by Kursat Kilic - Geotechnical Digitalization**")
 
 if __name__ == "__main__":
     main()
