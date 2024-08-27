@@ -219,40 +219,42 @@ def main():
         return
 
     df = pd.read_csv(raw_data_file, sep=';', decimal=',')
-        
-        # Rename and clean columns as needed
-        df = df.rename(columns={
-            'AzV.V13_SR_ArbDr_Z | DB    60.DBD    26': 'Working pressure [bar]',
-            'AzV.V13_SR_Drehz_nach_Abgl_Z | DB    60.DBD    30': 'Revolution [rpm]'
-        })
-        
-        df['Revolution [rpm]'] = pd.to_numeric(df['Revolution [rpm]'], errors='coerce')
-        df['Working pressure [bar]'] = pd.to_numeric(df['Working pressure [bar]'], errors='coerce')
-        df = df.dropna(subset=['Revolution [rpm]', 'Working pressure [bar]'])
+    
+    # Rename and clean columns as needed
+    df = df.rename(columns={
+        'AzV.V13_SR_ArbDr_Z | DB    60.DBD    26': 'Working pressure [bar]',
+        'AzV.V13_SR_Drehz_nach_Abgl_Z | DB    60.DBD    30': 'Revolution [rpm]'
+    })
+    
+    df['Revolution [rpm]'] = pd.to_numeric(df['Revolution [rpm]'], errors='coerce')
+    df['Working pressure [bar]'] = pd.to_numeric(df['Working pressure [bar]'], errors='coerce')
+    df = df.dropna(subset=['Revolution [rpm]', 'Working pressure [bar]'])
 
-        # RPM Statistics
-        rpm_max_value = df['Revolution [rpm]'].max()
-        st.sidebar.write(f"Recommended value for x-axis based on the Max RPM in Data: {rpm_max_value:.2f}")
+    # RPM Statistics
+    rpm_max_value = df['Revolution [rpm]'].max()
+    st.sidebar.write(f"Recommended value for x-axis based on the Max RPM in Data: {rpm_max_value:.2f}")
 
-        # Allow user to set x_axis_max
-        x_axis_max = st.sidebar.number_input("X-axis maximum", value=rpm_max_value, min_value=1.0, max_value=100.0)
-        
-        # Filter data points between n2 and n1 rpm
-        df = df[(df['Revolution [rpm]'] >= machine_params['n2']) & (df['Revolution [rpm]'] <= machine_params['n1'])]
+    # Allow user to set x_axis_max
+    x_axis_max = st.sidebar.number_input("X-axis maximum", value=rpm_max_value, min_value=1.0, max_value=100.0)
+    
+    # Filter data points between n2 and n1 rpm
+    df = df[(df['Revolution [rpm]'] >= machine_params['n2']) & (df['Revolution [rpm]'] <= machine_params['n1'])]
 
-        # Calculate torque
-        def calculate_torque_wrapper(row):
-            working_pressure = row['Working pressure [bar]']
-            current_speed = row['Revolution [rpm]']
+    # Calculate torque
+    def calculate_torque_wrapper(row):
+        working_pressure = row['Working pressure [bar]']
+        current_speed = row['Revolution [rpm]']
 
-            if current_speed < machine_params['n1']:
-                torque = working_pressure * machine_params['torque_constant']
-            else:
-                torque = (machine_params['n1'] / current_speed) * machine_params['torque_constant'] * working_pressure
+        if current_speed < machine_params['n1']:
+            torque = working_pressure * machine_params['torque_constant']
+        else:
+            torque = (machine_params['n1'] / current_speed) * machine_params['torque_constant'] * working_pressure
 
-            return round(torque, 2)
+        return round(torque, 2)
 
-        df['Calculated torque [kNm]'] = df.apply(calculate_torque_wrapper, axis=1)
+    df['Calculated torque [kNm]'] = df.apply(calculate_torque_wrapper, axis=1)
+
+    # ... (rest of the code remains the same)
 
         # Calculate whiskers and outliers
         torque_lower_whisker, torque_upper_whisker, torque_outliers = calculate_whisker_and_outliers(df['Calculated torque [kNm]'])
