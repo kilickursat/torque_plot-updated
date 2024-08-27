@@ -84,19 +84,22 @@ def add_logo():
         [data-testid="stSidebar"] {
             background-image: url(https://raw.githubusercontent.com/kilickursat/torque_plot-updated/main/Herrenknecht_logo.svg-1024x695.png);
             background-repeat: no-repeat;
-            background-size: 200px;
-            background-position: 20px 20px;
+            background-size: 180px;
+            background-position: 10px 10px;
         }
         [data-testid="stSidebar"]::before {
             content: "";
             display: block;
-            height: 140px; /* Adjust this value to match your logo height plus any desired padding */
+            height: 100px; /* Reduced height */
         }
         [data-testid="stSidebar"] > div:first-child {
             padding-top: 0rem;
         }
-        [data-testid="stSidebar"] .sidebar-content {
-            padding-top: 140px; /* Same as the ::before height */
+        .sidebar-content {
+            padding-top: 100px; /* Same as the ::before height */
+        }
+        .sidebar-content > * {
+            margin-bottom: 0.5rem !important; /* Reduce space between sidebar elements */
         }
         </style>
         """,
@@ -130,6 +133,8 @@ def main():
     
     st.title("TorqueVision: Herrenknecht's Advanced Analysis Suite")
     st.sidebar.markdown("**Created by Kursat Kilic - Geotechnical Digitalization**")
+    
+    # Rest of your main function code...
     
     # Add this line at the end of your main function
     st.sidebar.markdown('</div>', unsafe_allow_html=True)
