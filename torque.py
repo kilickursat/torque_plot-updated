@@ -2,20 +2,19 @@ import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+import io
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+from fpdf import FPDF
 
 def load_machine_specs(file):
     specs_df = pd.read_excel(file)
     specs_df.columns = specs_df.columns.str.strip()  # Strip any leading/trailing whitespace and newlines
-    
-    # Display the columns in a more UX-friendly design
     with st.expander("Columns in the Uploaded Excel File"):
         st.dataframe(pd.DataFrame(specs_df.columns, columns=["Column Names"]))
-    
     return specs_df
 
 def get_machine_params(specs_df, machine_type):
     machine_data = specs_df[specs_df['Projekt'] == machine_type].iloc[0]
-    
     def find_column(possible_names):
         for name in possible_names:
             if name in machine_data.index:
@@ -36,7 +35,6 @@ def get_machine_params(specs_df, machine_type):
     m_max_col = find_column(m_max_names)
     torque_constant_col = find_column(torque_constant_names)
 
-    # Return machine parameters
     return {
         'n1': machine_data[n1_col],
         'n2': machine_data[n2_col],
@@ -103,7 +101,7 @@ def main():
 
         # RPM Statistics
         rpm_max_value = df['Revolution [rpm]'].max()
-        st.sidebar.write(f"Recommended value for x-axis based on the Max RPM in Data: {rpm_max_value:.2f}")
+        st.sidebar.write(f"Max RPM in Data: {rpm_max_value:.2f}")
 
         # Allow user to set x_axis_max
         x_axis_max = st.sidebar.number_input("X-axis maximum", value=rpm_max_value, min_value=1.0, max_value=100.0)
@@ -216,51 +214,65 @@ def main():
         plt.tight_layout()
         st.pyplot(fig)
 
-        # Display statistics
-        st.subheader("Data Statistics")
-        col1, col2, col3 = st.columns(3)
+        # Save Plot as PNG
+        buf = io.BytesIO()
+        plt.savefig(buf, format="png")
+        st.download_button(
+            label="Download Plot as PNG",
+            data=buf,
+            file_name=f"{selected_machine}_torque_analysis.png",
+            mime="image/png"
+        )
 
-        with col1:
-            st.write("RPM Statistics:")
-            st.write(df['Revolution [rpm]'].describe())
+        # Save Data as CSV
+        st.download_button(
+            label="Download Data as CSV",
+            data=df.to_csv(index=False).encode('utf-8'),
+            file_name=f"{selected_machine}_analysis_data.csv",
+            mime="text/csv"
+        )
 
-        with col2:
-            st.write("Calculated Torque Statistics:")
-            st.write(df['Calculated torque [kNm]'].describe())
+        # Generate PDF Report
+        if st.button("Generate PDF Report"):
+            pdf = FPDF()
+            pdf.add_page()
 
-        with col3:
-            st.write("Working Pressure Statistics:")
-            st.write(df['Working pressure [bar]'].describe())
+            pdf.set_font("Arial", size=12)
+            pdf.cell(200, 10, txt=f"{selected_machine} - Torque Analysis Report", ln=True, align="C")
+            pdf.ln(10)
 
-        # Anomaly Detection Results with Explanation
-        st.subheader("Anomaly Detection Results")
-        col1, col2, col3 = st.columns(3)
+            # Summary
+            pdf.set_font("Arial", size=10)
+            pdf.multi_cell(0, 10, txt=f"Machine Parameters:\n{pd.DataFrame([machine_params]).to_string(index=False)}")
+            pdf.ln(5)
+            pdf.multi_cell(0, 10, txt=f"RPM Statistics:\n{df['Revolution [rpm]'].describe().to_string()}")
+            pdf.ln(5)
+            pdf.multi_cell(0, 10, txt=f"Calculated Torque Statistics:\n{df['Calculated torque [kNm]'].describe().to_string()}")
+            pdf.ln(5)
+            pdf.multi_cell(0, 10, txt=f"Working Pressure Statistics:\n{df['Working pressure [bar]'].describe().to_string()}")
+            pdf.ln(10)
+            pdf.multi_cell(0, 10, txt="Anomaly Detection Results:\n"
+                                      f"Total data points: {len(df)}\n"
+                                      f"Normal data points: {len(normal_data)}\n"
+                                      f"Anomaly data points: {len(anomaly_data)}\n"
+                                      f"Percentage of anomalies: {len(anomaly_data) / len(df) * 100:.2f}%\n"
+                                      f"Elbow point Max: {elbow_rpm_max:.2f} rpm\n"
+                                      f"Elbow point Cont: {elbow_rpm_cont:.2f} rpm\n"
+                                      f"Torque Upper Whisker: {torque_upper_whisker:.2f} kNm\n"
+                                      f"Torque Lower Whisker: {torque_lower_whisker:.2f} kNm\n"
+                                      f"Number of torque outliers: {len(torque_outliers)}\n"
+                                      f"RPM Upper Whisker: {rpm_upper_whisker:.2f} rpm\n"
+                                      f"RPM Lower Whisker: {rpm_lower_whisker:.2f} rpm\n"
+                                      f"Number of RPM outliers: {len(rpm_outliers)}\n")
 
-        with col1:
-            st.write(f"Total data points: {len(df)}")
-            st.write(f"Normal data points: {len(normal_data)}")
-            st.write(f"Anomaly data points: {len(anomaly_data)}")
-            st.write(f"Percentage of anomalies: {len(anomaly_data) / len(df) * 100:.2f}%")
-
-        with col2:
-            st.write(f"Elbow point Max: {elbow_rpm_max:.2f} rpm")
-            st.write(f"Elbow point Cont: {elbow_rpm_cont:.2f} rpm")
-
-        with col3:
-            st.write("Whisker and Outlier Information:")
-            st.write(f"Torque Upper Whisker: {torque_upper_whisker:.2f} kNm")
-            st.write(f"Torque Lower Whisker: {torque_lower_whisker:.2f} kNm")
-            st.write(f"Number of torque outliers: {len(torque_outliers)}")
-            st.write(f"Percentage of torque outliers: {len(torque_outliers) / len(df) * 100:.2f}%")
-            st.write(f"RPM Upper Whisker: {rpm_upper_whisker:.2f} rpm")
-            st.write(f"RPM Lower Whisker: {rpm_lower_whisker:.2f} rpm")
-            st.write(f"Number of RPM outliers: {len(rpm_outliers)}")
-            st.write(f"Percentage of RPM outliers: {len(rpm_outliers) / len(df) * 100:.2f}%")
-
-        # Short explanation for non-technical users
-        st.info("The Anomaly Detection Results highlight points in the data where the machine's behavior deviates from expected patterns. "
-                "Anomalies are identified when the working pressure exceeds a defined threshold, which could indicate potential issues. "
-                "Outliers are data points that fall outside the normal range, which may also signal unusual conditions that warrant attention.")
+            pdf.output(f"{selected_machine}_torque_analysis.pdf")
+            with open(f"{selected_machine}_torque_analysis.pdf", "rb") as pdf_file:
+                st.download_button(
+                    label="Download PDF Report",
+                    data=pdf_file,
+                    file_name=f"{selected_machine}_torque_analysis.pdf",
+                    mime="application/pdf"
+                )
 
     else:
         st.info("Please upload a Raw Data CSV file to begin the analysis.")
