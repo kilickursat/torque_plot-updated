@@ -90,7 +90,7 @@ def add_logo():
         [data-testid="stSidebar"]::before {
             content: "";
             display: block;
-            height: 120px; /* Reduced height */
+            height: 100px; /* Reduced height */
         }
         [data-testid="stSidebar"] > div:first-child {
             padding-top: 0rem;
