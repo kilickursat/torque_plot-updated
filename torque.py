@@ -103,7 +103,7 @@ def main():
 
         # RPM Statistics
         rpm_max_value = df['Revolution [rpm]'].max()
-        st.sidebar.write(f"Max RPM in Data: {rpm_max_value:.2f}")
+        st.sidebar.write(f"Recommended value for x-axis based on the Max RPM in Data: {rpm_max_value:.2f}")
 
         # Allow user to set x_axis_max
         x_axis_max = st.sidebar.number_input("X-axis maximum", value=rpm_max_value, min_value=1.0, max_value=100.0)
