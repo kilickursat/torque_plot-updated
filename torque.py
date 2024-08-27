@@ -13,9 +13,6 @@ def load_machine_specs(file):
 def get_machine_params(specs_df, machine_type):
     machine_data = specs_df[specs_df['Projekt'] == machine_type].iloc[0]
     
-    # Print column names for debugging
-    st.write("Available columns in the Excel file:", specs_df.columns.tolist())
-    
     # Function to find the closest matching column name
     def find_column(possible_names):
         for name in possible_names:
@@ -37,24 +34,7 @@ def get_machine_params(specs_df, machine_type):
     m_max_col = find_column(m_max_names)
     torque_constant_col = find_column(torque_constant_names)
 
-    # Check if all required columns are found
-    missing_columns = []
-    if not n1_col:
-        missing_columns.append("n1")
-    if not n2_col:
-        missing_columns.append("n2")
-    if not m_cont_col:
-        missing_columns.append("M_cont")
-    if not m_max_col:
-        missing_columns.append("M_max")
-    if not torque_constant_col:
-        missing_columns.append("Torque constant")
-
-    if missing_columns:
-        st.error(f"The following required columns are missing in the Excel file: {', '.join(missing_columns)}")
-        st.error("Please check the column names and ensure they match one of the expected formats.")
-        st.stop()
-
+    # Return machine parameters
     return {
         'n1': machine_data[n1_col],
         'n2': machine_data[n2_col],
@@ -62,6 +42,7 @@ def get_machine_params(specs_df, machine_type):
         'M_max_Vg1': machine_data[m_max_col],
         'torque_constant': machine_data[torque_constant_col]
     }
+
 def calculate_whisker_and_outliers(data):
     Q1 = data.quantile(0.25)
     Q3 = data.quantile(0.75)
@@ -114,26 +95,28 @@ def main():
     st.sidebar.header("Parameter Settings")
     P_max = st.sidebar.number_input("Maximum power (kW)", value=132.0, min_value=1.0, max_value=500.0)
     nu = st.sidebar.number_input("Efficiency coefficient", value=0.7, min_value=0.1, max_value=1.0)
-    x_axis_max = st.sidebar.number_input("X-axis maximum", value=26.0, min_value=n1, max_value=100.0)
     anomaly_threshold = st.sidebar.number_input("Anomaly threshold (bar)", value=250, min_value=100, max_value=500)
 
     if raw_data_file is not None:
-        # Read the CSV file
         df = pd.read_csv(raw_data_file, sep=';', decimal=',')
-
-        # Rename columns for clarity
+        
+        # Rename and clean columns as needed
         df = df.rename(columns={
             'AzV.V13_SR_ArbDr_Z | DB    60.DBD    26': 'Working pressure [bar]',
             'AzV.V13_SR_Drehz_nach_Abgl_Z | DB    60.DBD    30': 'Revolution [rpm]'
         })
-
-        # Clean numeric columns
+        
         df['Revolution [rpm]'] = pd.to_numeric(df['Revolution [rpm]'], errors='coerce')
         df['Working pressure [bar]'] = pd.to_numeric(df['Working pressure [bar]'], errors='coerce')
-
-        # Remove rows with NaN values
         df = df.dropna(subset=['Revolution [rpm]', 'Working pressure [bar]'])
 
+        # RPM Statistics
+        rpm_max_value = df['Revolution [rpm]'].max()
+        st.sidebar.write(f"Max RPM in Data: {rpm_max_value:.2f}")
+
+        # Allow user to set x_axis_max
+        x_axis_max = st.sidebar.number_input("X-axis maximum", value=26.0, min_value=n1, max_value=100.0)
+        
         # Filter data points between n2 and n1 rpm
         df = df[(df['Revolution [rpm]'] >= n2) & (df['Revolution [rpm]'] <= n1)]
 
@@ -271,6 +254,8 @@ def main():
         with col2:
             st.write(f"Elbow point Max: {elbow_rpm_max:.2f} rpm")
             st.write(f"Elbow point Cont: {elbow_rpm_cont:.2f} rpm")
+
+
 
         with col3:
             st.write("Whisker and Outlier Information:")
