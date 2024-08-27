@@ -4,13 +4,10 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 def load_machine_specs(file):
-    return pd.read_excel(file)
     specs_df = pd.read_excel(file)
-    
-    # Print column names using list function
+    specs_df.columns = specs_df.columns.str.strip()  # Strip any leading/trailing whitespace and newlines
     st.write("Columns in the uploaded Excel file:")
     st.write(list(specs_df.columns))
-    
     return specs_df
 
 def get_machine_params(specs_df, machine_type):
@@ -27,11 +24,11 @@ def get_machine_params(specs_df, machine_type):
         return None
 
     # Define possible column names
-    n1_names = ['n1[1/min]','n1 (1/min)', 'n1[rpm]']
-    n2_names = ['n2[1/min]','n2 (1/min)', 'n2[rpm]']
-    m_cont_names = ['M(dauer) [kNm]', 'M (dauer)']
-    m_max_names = ['M(max)', 'M max', 'M (max)', 'M_max[kNm]']
-    torque_constant_names = ['Drehmomentumrechnung[kNm/bar]']
+    n1_names = ['n1[1/min]', 'n1 (1/min)', 'n1[rpm]']
+    n2_names = ['n2[1/min]', 'n2 (1/min)', 'n2[rpm]']
+    m_cont_names = ['M(dauer) [kNm]', 'M(dauer)[kNm]', 'M (dauer)']
+    m_max_names = ['M(max)', 'M max', 'M (max)', 'M_max[kNm]', 'M(max)[kNm]']
+    torque_constant_names = ['Drehmomentumrechnung[kNm/bar]', 'Drehmomentumrechnung [kNm/bar]']
 
     # Find the correct column names
     n1_col = find_column(n1_names)
@@ -65,7 +62,6 @@ def get_machine_params(specs_df, machine_type):
         'M_max_Vg1': machine_data[m_max_col],
         'torque_constant': machine_data[torque_constant_col]
     }
-
 def calculate_whisker_and_outliers(data):
     Q1 = data.quantile(0.25)
     Q3 = data.quantile(0.75)
