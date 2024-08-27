@@ -270,7 +270,8 @@ def main():
         with col2:
             st.write("Calculated Torque Statistics:")
             st.write(df['Calculated torque [kNm]'].describe())
-                with col3:
+
+        with col3:
             st.write("Working Pressure Statistics:")
             st.write(df['Working pressure [bar]'].describe())
 
@@ -313,3 +314,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+            
