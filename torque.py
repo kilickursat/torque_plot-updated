@@ -133,50 +133,50 @@ def main():
             # Display loaded parameters in a table
             st.write("Loaded Machine Parameters:")
             # Convert the machine parameters to a DataFrame
-params_df = pd.DataFrame([machine_params])
+            params_df = pd.DataFrame([machine_params])
 
-# Create a styled HTML table with thicker borders
-styled_table = params_df.style.set_table_styles([
-    {'selector': 'th', 'props': [('border', '2px solid black'), ('padding', '5px')]},
-    {'selector': 'td', 'props': [('border', '2px solid black'), ('padding', '5px')]},
-    {'selector': '', 'props': [('border-collapse', 'collapse')]}
-]).to_html()
-
-# Display the styled table
-st.markdown(
-    f"""
-    <style>
-    table {{
-        border-collapse: collapse;
-        margin: 25px 0;
-        font-size: 0.9em;
-        font-family: sans-serif;
-        min-width: 400px;
-        box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
-    }}
-    table thead tr {{
-        background-color: #009879;
-        color: #ffffff;
-        text-align: left;
-    }}
-    table th,
-    table td {{
-        padding: 12px 15px;
-    }}
-    table tbody tr {{
-        border-bottom: 1px solid #dddddd;
-    }}
-    table tbody tr:nth-of-type(even) {{
-        background-color: #f3f3f3;
-    }}
-    table tbody tr:last-of-type {{
-        border-bottom: 2px solid #009879;
-    }}
-    </style>
-    {styled_table}
-    """,
-    unsafe_allow_html=True
-)
+            # Create a styled HTML table with thicker borders
+            styled_table = params_df.style.set_table_styles([
+                {'selector': 'th', 'props': [('border', '2px solid black'), ('padding', '5px')]},
+                {'selector': 'td', 'props': [('border', '2px solid black'), ('padding', '5px')]},
+                {'selector': '', 'props': [('border-collapse', 'collapse')]}
+            ]).to_html()
+            
+            # Display the styled table
+            st.markdown(
+                f"""
+                <style>
+                table {{
+                    border-collapse: collapse;
+                    margin: 25px 0;
+                    font-size: 0.9em;
+                    font-family: sans-serif;
+                    min-width: 400px;
+                    box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
+                }}
+                table thead tr {{
+                    background-color: #009879;
+                    color: #ffffff;
+                    text-align: left;
+                }}
+                table th,
+                table td {{
+                    padding: 12px 15px;
+                }}
+                table tbody tr {{
+                    border-bottom: 1px solid #dddddd;
+                }}
+                table tbody tr:nth-of-type(even) {{
+                    background-color: #f3f3f3;
+                }}
+                table tbody tr:last-of-type {{
+                    border-bottom: 2px solid #009879;
+                }}
+                </style>
+                {styled_table}
+                """,
+                unsafe_allow_html=True
+            )
 
         except Exception as e:
             st.error(f"An error occurred while processing the machine specifications: {str(e)}")
