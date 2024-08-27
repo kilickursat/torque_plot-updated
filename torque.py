@@ -54,10 +54,32 @@ def calculate_whisker_and_outliers(data):
     upper_whisker = Q3 + whisker_length
     outliers = data[(data < lower_whisker) | (data > upper_whisker)]
     return lower_whisker, upper_whisker, outliers
-
+    
+def add_logo():
+    st.sidebar.markdown(
+        """
+        <style>
+        [data-testid="stSidebar"] {
+            background-image: url(https://raw.githubusercontent.com/kilickursat/torque_plot-updated/main/Herrenknecht_logo.svg-1024x695.png);
+            background-repeat: no-repeat;
+            background-size: 200px;
+            padding-top: 120px;
+            background-position: 20px 20px;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    
 def main():
+    set_page_config()
+    set_background_color()
+
+    # Add logo to the sidebar
+    add_logo()
     st.title("Enhanced Torque Analysis App")
     st.sidebar.markdown("Created by Kursat Kilic - Geotechnical Digitalization")
+    
 
     # File uploaders
     raw_data_file = st.file_uploader("Upload Raw Data CSV", type="csv")
