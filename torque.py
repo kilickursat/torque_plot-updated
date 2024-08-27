@@ -265,124 +265,123 @@ def main():
 
         # Function to calculate M max Vg2
     def M_max_Vg2(rpm):
-            return np.minimum(machine_params['M_max_Vg1'], (P_max * 60 * nu) / (2 * np.pi * rpm))
+        return np.minimum(machine_params['M_max_Vg1'], (P_max * 60 * nu) / (2 * np.pi * rpm))
 
-        # Calculate the intersection points
-        elbow_rpm_max = (P_max * 60 * nu) / (2 * np.pi * machine_params['M_max_Vg1'])
-        elbow_rpm_cont = (P_max * 60 * nu) / (2 * np.pi * machine_params['M_cont_value'])
+    # Calculate the intersection points
+    elbow_rpm_max = (P_max * 60 * nu) / (2 * np.pi * machine_params['M_max_Vg1'])
+    elbow_rpm_cont = (P_max * 60 * nu) / (2 * np.pi * machine_params['M_cont_value'])
 
-        # Generate rpm values for the continuous curves
-        rpm_curve = np.linspace(0.1, machine_params['n1'], 1000)  # Avoid division by zero
+    # Generate rpm values for the continuous curves
+    rpm_curve = np.linspace(0.1, machine_params['n1'], 1000)  # Avoid division by zero
 
-        # Create the plot
-        fig, ax = plt.subplots(figsize=(14, 10))
+    # Create the plot
+    fig, ax = plt.subplots(figsize=(14, 10))
 
-        # Plot torque curves
-        ax.plot(rpm_curve[rpm_curve <= elbow_rpm_cont],
+    # Plot torque curves
+    ax.plot(rpm_curve[rpm_curve <= elbow_rpm_cont],
                 np.full_like(rpm_curve[rpm_curve <= elbow_rpm_cont], machine_params['M_cont_value']),
                 'g-', linewidth=2, label='M cont Max [kNm]')
 
-        ax.plot(rpm_curve[rpm_curve <= elbow_rpm_max],
+    ax.plot(rpm_curve[rpm_curve <= elbow_rpm_max],
                 np.full_like(rpm_curve[rpm_curve <= elbow_rpm_max], machine_params['M_max_Vg1']),
                 'r-', linewidth=2, label='M max Vg1 [kNm]')
 
-        ax.plot(rpm_curve[rpm_curve <= machine_params['n1']], M_max_Vg2(rpm_curve[rpm_curve <= machine_params['n1']]),
+    ax.plot(rpm_curve[rpm_curve <= machine_params['n1']], M_max_Vg2(rpm_curve[rpm_curve <= machine_params['n1']]),
                 'r--', linewidth=2, label='M max Vg2 [kNm]')
 
-        # Add vertical lines at the elbow points
-        ax.plot([elbow_rpm_max, elbow_rpm_max], [0, machine_params['M_max_Vg1']], color='purple', linestyle=':', linewidth=3)
-        ax.plot([elbow_rpm_cont, elbow_rpm_cont], [0, machine_params['M_cont_value']], color='orange', linestyle=':', linewidth=3)
+    # Add vertical lines at the elbow points
+    ax.plot([elbow_rpm_max, elbow_rpm_max], [0, machine_params['M_max_Vg1']], color='purple', linestyle=':', linewidth=3)
+    ax.plot([elbow_rpm_cont, elbow_rpm_cont], [0, machine_params['M_cont_value']], color='orange', linestyle=':', linewidth=3)
 
-        # Add a truncated vertical line at n1
-        ax.plot([machine_params['n1'], machine_params['n1']], [0, machine_params['M_cont_value']], color='black', linestyle='--', linewidth=2)
+    # Add a truncated vertical line at n1
+    ax.plot([machine_params['n1'], machine_params['n1']], [0, machine_params['M_cont_value']], color='black', linestyle='--', linewidth=2)
 
-        # Plot calculated torque vs RPM, differentiating between normal, anomaly, and outlier points
-        normal_data = df[(~df['Is_Anomaly']) & (~df['Calculated torque [kNm]'].isin(torque_outliers))]
-        anomaly_data = df[df['Is_Anomaly']]
-        torque_outlier_data = df[df['Calculated torque [kNm]'].isin(torque_outliers) & (~df['Is_Anomaly'])]
-        rpm_outlier_data = df[df['Revolution [rpm]'].isin(rpm_outliers) & (~df['Is_Anomaly'])]
+    # Plot calculated torque vs RPM, differentiating between normal, anomaly, and outlier points
+    normal_data = df[(~df['Is_Anomaly']) & (~df['Calculated torque [kNm]'].isin(torque_outliers))]
+    anomaly_data = df[df['Is_Anomaly']]
+    torque_outlier_data = df[df['Calculated torque [kNm]'].isin(torque_outliers) & (~df['Is_Anomaly'])]
+    rpm_outlier_data = df[df['Revolution [rpm]'].isin(rpm_outliers) & (~df['Is_Anomaly'])]
 
-        scatter_normal = ax.scatter(normal_data['Revolution [rpm]'], normal_data['Calculated torque [kNm]'],
+    scatter_normal = ax.scatter(normal_data['Revolution [rpm]'], normal_data['Calculated torque [kNm]'],
                                     c=normal_data['Calculated torque [kNm]'], cmap='viridis',
                                     s=50, alpha=0.6, label='Normal Data')
-        scatter_anomaly = ax.scatter(anomaly_data['Revolution [rpm]'], anomaly_data['Calculated torque [kNm]'],
+    scatter_anomaly = ax.scatter(anomaly_data['Revolution [rpm]'], anomaly_data['Calculated torque [kNm]'],
                                      color='red', s=100, alpha=0.8, marker='X', label=f'Anomaly (Pressure ≥ {anomaly_threshold} bar)')
-        scatter_torque_outliers = ax.scatter(torque_outlier_data['Revolution [rpm]'], torque_outlier_data['Calculated torque [kNm]'],
+    scatter_torque_outliers = ax.scatter(torque_outlier_data['Revolution [rpm]'], torque_outlier_data['Calculated torque [kNm]'],
                                              color='orange', s=100, alpha=0.8, marker='D', label='Torque Outliers')
-        scatter_rpm_outliers = ax.scatter(rpm_outlier_data['Revolution [rpm]'], rpm_outlier_data['Calculated torque [kNm]'],
+    scatter_rpm_outliers = ax.scatter(rpm_outlier_data['Revolution [rpm]'], rpm_outlier_data['Calculated torque [kNm]'],
                                           color='purple', s=100, alpha=0.8, marker='s', label='RPM Outliers')
 
-        # Add horizontal lines for the torque whiskers
-        ax.axhline(y=torque_upper_whisker, color='gray', linestyle='--', linewidth=1, label='Torque Upper Whisker')
-        ax.axhline(y=torque_lower_whisker, color='gray', linestyle=':', linewidth=1, label='Torque Lower Whisker')
+    # Add horizontal lines for the torque whiskers
+    ax.axhline(y=torque_upper_whisker, color='gray', linestyle='--', linewidth=1, label='Torque Upper Whisker')
+    ax.axhline(y=torque_lower_whisker, color='gray', linestyle=':', linewidth=1, label='Torque Lower Whisker')
 
-        # Set plot limits and labels
-        ax.set_xlim(0, x_axis_max)
-        ax.set_ylim(0, max(60, df['Calculated torque [kNm]'].max() * 1.1))
-        ax.set_xlabel('Drehzahl / speed / vitesse / revolutiones [1/min]')
-        ax.set_ylabel('Drehmoment / torque / couple / par de giro [kNm]')
-        plt.title(f'{selected_machine} - Torque Analysis')
+    # Set plot limits and labels
+    ax.set_xlim(0, x_axis_max)
+    ax.set_ylim(0, max(60, df['Calculated torque [kNm]'].max() * 1.1))
+    ax.set_xlabel('Drehzahl / speed / vitesse / revolutiones [1/min]')
+    ax.set_ylabel('Drehmoment / torque / couple / par de giro [kNm]')
+    plt.title(f'{selected_machine} - Torque Analysis')
 
-        # Add grid
-        ax.grid(True, which='both', linestyle=':', color='gray', alpha=0.5)
+    # Add grid
+    ax.grid(True, which='both', linestyle=':', color='gray', alpha=0.5)
 
-        # Add text annotations
-        ax.text(elbow_rpm_max * 0.5, machine_params['M_max_Vg1'] * 1.05, f'M max (max.): {machine_params["M_max_Vg1"]} kNm',
+    # Add text annotations
+    ax.text(elbow_rpm_max * 0.5, machine_params['M_max_Vg1'] * 1.05, f'M max (max.): {machine_params["M_max_Vg1"]} kNm',
                 fontsize=10, ha='center', va='bottom', color='red')
-        ax.text(elbow_rpm_cont * 0.5, machine_params['M_cont_value'] * 0.95, f'M cont (max.): {machine_params["M_cont_value"]} kNm',
+    ax.text(elbow_rpm_cont * 0.5, machine_params['M_cont_value'] * 0.95, f'M cont (max.): {machine_params["M_cont_value"]} kNm',
                 fontsize=10, ha='center', va='top', color='green')
 
-        # Add text annotations for elbow points and n1
-        ax.text(elbow_rpm_max, 0, f'{elbow_rpm_max:.2f}', ha='right', va='bottom', color='purple', fontsize=8)
-        ax.text(elbow_rpm_cont, 0, f'{elbow_rpm_cont:.2f}', ha='right', va='bottom', color='orange', fontsize=8)
-        ax.text(machine_params['n1'], machine_params['M_cont_value'], f'n1: {machine_params["n1"]}', ha='right', va='top', color='black', fontsize=8, rotation=90)
+    # Add text annotations for elbow points and n1
+    ax.text(elbow_rpm_max, 0, f'{elbow_rpm_max:.2f}', ha='right', va='bottom', color='purple', fontsize=8)
+    ax.text(elbow_rpm_cont, 0, f'{elbow_rpm_cont:.2f}', ha='right', va='bottom', color='orange', fontsize=8)
+    ax.text(machine_params['n1'], machine_params['M_cont_value'], f'n1: {machine_params["n1"]}', ha='right', va='top', color='black', fontsize=8, rotation=90)
 
-        # Add colorbar for the scatter plot
-        cbar = plt.colorbar(scatter_normal)
-        cbar.set_label('Calculated Torque [kNm]')
+    # Add colorbar for the scatter plot
+    cbar = plt.colorbar(scatter_normal)
+    cbar.set_label('Calculated Torque [kNm]')
 
-        # Add legend
-        ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=4, fontsize=10)
+    # Add legend
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=4, fontsize=10)
 
-        plt.tight_layout()
-        st.pyplot(fig)
+    plt.tight_layout()
+    st.pyplot(fig)
 
-    # Display statistics on the web page
-    st.header("Data Statistics")
-    for column in ['Revolution [rpm]', 'Calculated torque [kNm]', 'Working pressure [bar]']:
+# Display statistics on the web page
+st.header("Data Statistics")
+for column in ['Revolution [rpm]', 'Calculated torque [kNm]', 'Working pressure [bar]']:
         st.subheader(f"{column} Statistics")
         st.write(df[column].describe())
 
-    # Display anomaly detection results on the web page
-    st.header("Anomaly Detection Results")
-    anomaly_data = df[df['Is_Anomaly']]
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.write(f"Total data points: {len(df)}")
-        st.write(f"Normal data points: {len(df) - len(anomaly_data)}")
-    with col2:
-        st.write(f"Anomaly data points: {len(anomaly_data)}")
-        st.write(f"Percentage of anomalies: {len(anomaly_data) / len(df) * 100:.2f}%")
-    with col3:
-        st.write(f"Anomaly threshold: {anomaly_threshold} bar")
+# Display anomaly detection results on the web page
+st.header("Anomaly Detection Results")
+anomaly_data = df[df['Is_Anomaly']]
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.write(f"Total data points: {len(df)}")
+    st.write(f"Normal data points: {len(df) - len(anomaly_data)}")
+with col2:
+    st.write(f"Anomaly data points: {len(anomaly_data)}")
+    st.write(f"Percentage of anomalies: {len(anomaly_data) / len(df) * 100:.2f}%")
+with col3:
+    st.write(f"Anomaly threshold: {anomaly_threshold} bar")
 
-    # Create and offer PDF report for download
-    pdf = create_pdf_report(df, machine_params, selected_machine, anomaly_threshold, fig)
+# Create and offer PDF report for download
+pdf = create_pdf_report(df, machine_params, selected_machine, anomaly_threshold, fig)
 
-    pdf_buffer = io.BytesIO()
-    pdf.output(pdf_buffer)
-    pdf_buffer.seek(0)
+pdf_buffer = io.BytesIO()
+pdf.output(pdf_buffer)
+pdf_buffer.seek(0)
 
-    st.download_button(
-        label="Download PDF Report",
-        data=pdf_buffer,
-        file_name=f"torque_analysis_report_{selected_machine}.pdf",
-        mime="application/pdf"
-    )
+st.download_button(
+    label="Download PDF Report",
+    data=pdf_buffer,
+    file_name=f"torque_analysis_report_{selected_machine}.pdf",
+    mime="application/pdf")
 
-    # Add footer with creator information
-    st.markdown("---")
-    st.markdown("Created by Kursat Kilic - Geotechnical Digitalization")
+# Add footer with creator information
+st.markdown("---")
+st.markdown("Created by Kursat Kilic - Geotechnical Digitalization")
 
 if __name__ == "__main__":
     main()
