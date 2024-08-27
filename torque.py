@@ -97,7 +97,7 @@ def main():
 
     # Add logo to the sidebar
     add_logo()
-    st.title("Torque vs Rpm Curve Analysis App through Machine Maximum Power (kW)")
+    st.title("TorqueVision: Herrenknecht's Advanced Analysis Suite")
     st.sidebar.markdown("**Created by Kursat Kilic - Geotechnical Digitalization**")
     
 
