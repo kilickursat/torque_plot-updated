@@ -2,6 +2,8 @@ import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+import io
+import base64
 
 def load_machine_specs(file):
     specs_df = pd.read_excel(file)
@@ -90,6 +92,21 @@ def add_logo():
         """,
         unsafe_allow_html=True,
     )
+
+def get_table_download_link(df, filename, text):
+    """Generates a link allowing the data in a given panda dataframe to be downloaded"""
+    csv = df.to_csv(index=False)
+    b64 = base64.b64encode(csv.encode()).decode()  # some strings <-> bytes conversions necessary here
+    href = f'<a href="data:file/csv;base64,{b64}" download="{filename}">{text}</a>'
+    return href
+
+def fig_to_base64(fig):
+    """Converts Matplotlib figure to base64 string for downloading"""
+    buf = io.BytesIO()
+    fig.savefig(buf, format='png')
+    buf.seek(0)
+    img_str = base64.b64encode(buf.getvalue()).decode()
+    return img_str
     
 def main():
     set_page_config()
@@ -97,8 +114,8 @@ def main():
 
     # Add logo to the sidebar
     add_logo()
-    st.title("TorqueVision: Herrenknecht's Advanced Analysis App")
-    st.sidebar.markdown("**Created by Kursat Kilic - Geotechnical Digitalization**")
+    st.title("TorqueVision: Herrenknecht's Advanced Analysis Suite")
+    st.sidebar.markdown("Created by Kursat Kilic - Geotechnical Digitalization")
     
 
     # File uploaders
@@ -146,7 +163,7 @@ def main():
         # RPM Statistics
         rpm_stats = df['Revolution [rpm]'].describe()
         rpm_max_value = rpm_stats['max']
-        st.sidebar.write(f"Max RPM in Data: {rpm_max_value:.2f}")
+        st.sidebar.write(f"Recommended value for x-axis based on the Max RPM in Data: {rpm_max_value:.2f}")
 
         # Allow user to set x_axis_max
         x_axis_max = st.sidebar.number_input("X-axis maximum", value=rpm_max_value, min_value=1.0, max_value=100.0)
@@ -245,6 +262,7 @@ def main():
                 fontsize=10, ha='center', va='top', color='green')
 
         # Add text annotations for elbow points and n1
+                # Add text annotations for elbow points and n1
         ax.text(elbow_rpm_max, 0, f'{elbow_rpm_max:.2f}', ha='right', va='bottom', color='purple', fontsize=8)
         ax.text(elbow_rpm_cont, 0, f'{elbow_rpm_cont:.2f}', ha='right', va='bottom', color='orange', fontsize=8)
         ax.text(machine_params['n1'], machine_params['M_cont_value'], f'n1: {machine_params['n1']}', ha='right', va='top', color='black', fontsize=8, rotation=90)
@@ -258,6 +276,36 @@ def main():
 
         plt.tight_layout()
         st.pyplot(fig)
+
+        # Download buttons
+        st.sidebar.markdown("## Download Results")
+
+        # Statistical Analysis Results
+        stats_df = pd.DataFrame({
+            'RPM': rpm_stats,
+            'Calculated Torque': df['Calculated torque [kNm]'].describe(),
+            'Working Pressure': df['Working pressure [bar]'].describe()
+        })
+        st.sidebar.markdown(get_table_download_link(stats_df, "statistical_analysis.csv", "Download Statistical Analysis"), unsafe_allow_html=True)
+
+        # Plot
+        plot_base64 = fig_to_base64(fig)
+        href = f'<a href="data:image/png;base64,{plot_base64}" download="torque_analysis_plot.png">Download Plot</a>'
+        st.sidebar.markdown(href, unsafe_allow_html=True)
+
+        # Result Analysis
+        result_analysis_df = pd.DataFrame({
+            'Metric': ['Total data points', 'Normal data points', 'Anomaly data points', 'Percentage of anomalies',
+                       'Elbow point Max', 'Elbow point Cont', 'Torque Upper Whisker', 'Torque Lower Whisker',
+                       'Number of torque outliers', 'Percentage of torque outliers', 'RPM Upper Whisker', 'RPM Lower Whisker',
+                       'Number of RPM outliers', 'Percentage of RPM outliers'],
+            'Value': [len(df), len(normal_data), len(anomaly_data), f"{len(anomaly_data) / len(df) * 100:.2f}%",
+                      f"{elbow_rpm_max:.2f}", f"{elbow_rpm_cont:.2f}", f"{torque_upper_whisker:.2f}",
+                      f"{torque_lower_whisker:.2f}", len(torque_outliers),
+                      f"{len(torque_outliers) / len(df) * 100:.2f}%", f"{rpm_upper_whisker:.2f}",
+                      f"{rpm_lower_whisker:.2f}", len(rpm_outliers), f"{len(rpm_outliers) / len(df) * 100:.2f}%"]
+        })
+        st.sidebar.markdown(get_table_download_link(result_analysis_df, "result_analysis.csv", "Download Result Analysis"), unsafe_allow_html=True)
 
         # Display statistics
         st.subheader("Data Statistics")
@@ -310,8 +358,9 @@ def main():
 
     # Add footer with creator information
     st.markdown("---")
-    st.markdown("**Created by Kursat Kilic - Geotechnical Digitalization**")
+    st.markdown("Created by Kursat Kilic - Geotechnical Digitalization")
 
 if __name__ == "__main__":
     main()
-            
+
+        
