@@ -69,7 +69,7 @@ def set_background_color():
         """
         <style>
         .stApp {
-            background-color: #90EE90;
+            background-color: rgb(220, 234, 197);
             color: black;
         }
         </style>
@@ -180,7 +180,7 @@ def main():
                     box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
                 }}
                 table thead tr {{
-                    background-color: #009879;
+                    background-color: rgb(0, 62, 37);
                     color: #ffffff;
                     text-align: left;
                 }}
@@ -196,7 +196,7 @@ def main():
                     background-color: #f3f3f3;
                 }}
                 table tbody tr:last-of-type {{
-                    border-bottom: 2px solid #009879;
+                    border-bottom: 2px solid rgb(0, 62, 37);
                 }}
                 </style>
                 {styled_table}
@@ -433,5 +433,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-        
