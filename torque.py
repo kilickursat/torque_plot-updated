@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import io
 import base64
-import openpyxl
 
 def load_machine_specs(file):
     specs_df = pd.read_excel(file)
@@ -121,55 +120,29 @@ def fig_to_base64(fig):
     buf.seek(0)
     img_str = base64.b64encode(buf.getvalue()).decode()
     return img_str
-
-def load_raw_data(file):
-    file_extension = file.name.split('.')[-1].lower()
-    if file_extension == 'csv':
-        df = pd.read_csv(file, sep=None, engine='python')
-    elif file_extension in ['xlsx', 'xls']:
-        df = pd.read_excel(file)
-    else:
-        st.error("Unsupported file format. Please upload a CSV or Excel file.")
-        return None
-    return df
-
-def find_column(df, possible_names):
-    for name in possible_names:
-        if name in df.columns:
-            return name
-    return None
-
-def identify_columns(df):
-    # Define possible column names
-    revolution_names = ["Revolution [rpm]", "RPM", "Speed", "Drehzahl", "Vitesse", "Revoluciones"]
-    working_pressure_names = ["Working pressure [bar]", "Pressure", "Druck", "Pression", "Presión"]
-
-    # Find the correct column names
-    revolution_col = find_column(df, revolution_names)
-    working_pressure_col = find_column(df, working_pressure_names)
-  
-    if revolution_col is None or working_pressure_col is None:
-        st.error("Could not identify Revolution and/or Working pressure columns. Please check your data.")
-        return None
-
-    return {
-        'Revolution': revolution_col,
-        'Working pressure': working_pressure_col
-    }
-
+    
 def main():
     set_page_config()
     set_background_color()
+
+    # Add logo to the sidebar
     add_logo()
     
+    # Add this line to create a div for sidebar content
     st.sidebar.markdown('<div class="sidebar-content">', unsafe_allow_html=True)
     
     st.title("TorqueVision: Herrenknecht's Advanced Analysis App")
     st.sidebar.markdown("**Created by Kursat Kilic - Geotechnical Digitalization**")
     
+    # Rest of your main function code...
+    
+    # Add this line at the end of your main function
+    st.sidebar.markdown('</div>', unsafe_allow_html=True)
+    
+
     # File uploaders
-    raw_data_file = st.file_uploader("Upload Raw Data (CSV or Excel)", type=["csv", "xlsx", "xls"])
-    machine_specs_file = st.file_uploader("Upload Machine Specifications (Excel)", type=["xlsx", "xls"])
+    raw_data_file = st.file_uploader("Upload Raw Data CSV", type="csv")
+    machine_specs_file = st.file_uploader("Upload Machine Specifications XLSX", type="xlsx")
 
     if machine_specs_file is not None:
         try:
@@ -181,14 +154,62 @@ def main():
             
             # Display loaded parameters in a table
             st.write("**Loaded Machine Parameters:**")
-            params_df = pd.DataFrame([machine_params])
-            st.dataframe(params_df)
+            
+            # Convert the machine parameters to a DataFrame
+            params_df = pd.DataFrame([machine_params])   
+            # Create a styled HTML table with thicker borders
+            styled_table = params_df.style.set_table_styles([
+                {'selector': 'th', 'props': [('border', '2px solid black'), ('padding', '5px')]},
+                {'selector': 'td', 'props': [('border', '2px solid black'), ('padding', '5px')]},
+                {'selector': '', 'props': [('border-collapse', 'collapse')]}
+            ]).to_html()
+            
+            # Remove the unwanted CSS that appears above the table
+            styled_table = styled_table.split('</style>')[-1]
+            
+            # Display the styled table
+            st.markdown(
+                f"""
+                <style>
+                table {{
+                    border-collapse: collapse;
+                    margin: 25px 0;
+                    font-size: 0.9em;
+                    font-family: sans-serif;
+                    min-width: 400px;
+                    box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
+                }}
+                table thead tr {{
+                    background-color: rgb(0, 62, 37);
+                    color: #ffffff;
+                    text-align: left;
+                }}
+                table th,
+                table td {{
+                    padding: 12px 15px;
+                    border: 2px solid black;
+                }}
+                table tbody tr {{
+                    border-bottom: 1px solid #dddddd;
+                }}
+                table tbody tr:nth-of-type(even) {{
+                    background-color: #f3f3f3;
+                }}
+                table tbody tr:last-of-type {{
+                    border-bottom: 2px solid rgb(0, 62, 37);
+                }}
+                </style>
+                {styled_table}
+                """,
+                unsafe_allow_html=True
+            )
+            
 
         except Exception as e:
             st.error(f"An error occurred while processing the machine specifications: {str(e)}")
             st.stop()
     else:
-        st.warning("Please upload Machine Specifications Excel file.")
+        st.warning("Please upload Machine Specifications XLSX file.")
         return
 
     # Sidebar for user inputs
@@ -198,18 +219,12 @@ def main():
     anomaly_threshold = st.sidebar.number_input("Anomaly threshold (bar)", value=250, min_value=100, max_value=500)
 
     if raw_data_file is not None:
-        df = load_raw_data(raw_data_file)
-        if df is None:
-            return
-
-        columns = identify_columns(df)
-        if columns is None:
-            return
-
-        # Rename columns for consistency
+        df = pd.read_csv(raw_data_file, sep=';', decimal=',')
+        
+        # Rename and clean columns as needed
         df = df.rename(columns={
-            columns['Working pressure']: 'Working pressure [bar]',
-            columns['Revolution']: 'Revolution [rpm]'
+            'AzV.V13_SR_ArbDr_Z | DB    60.DBD    26': 'Working pressure [bar]',
+            'AzV.V13_SR_Drehz_nach_Abgl_Z | DB    60.DBD    30': 'Revolution [rpm]'
         })
         
         df['Revolution [rpm]'] = pd.to_numeric(df['Revolution [rpm]'], errors='coerce')
@@ -318,6 +333,7 @@ def main():
                 fontsize=10, ha='center', va='top', color='green')
 
         # Add text annotations for elbow points and n1
+                # Add text annotations for elbow points and n1
         ax.text(elbow_rpm_max, 0, f'{elbow_rpm_max:.2f}', ha='right', va='bottom', color='purple', fontsize=8)
         ax.text(elbow_rpm_cont, 0, f'{elbow_rpm_cont:.2f}', ha='right', va='bottom', color='orange', fontsize=8)
         ax.text(machine_params['n1'], machine_params['M_cont_value'], f'n1: {machine_params['n1']}', ha='right', va='top', color='black', fontsize=8, rotation=90)
@@ -409,13 +425,11 @@ def main():
                 "Outliers are data points that fall outside the normal range, which may also signal unusual conditions that warrant attention.")
 
     else:
-        st.info("Please upload a Raw Data file (CSV or Excel) to begin the analysis.")
+        st.info("Please upload a Raw Data CSV file to begin the analysis.")
 
     # Add footer with creator information
     st.markdown("---")
     st.markdown("**Created by Kursat Kilic - Geotechnical Digitalization**")
-
-    st.sidebar.markdown('</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
