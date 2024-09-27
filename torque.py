@@ -25,6 +25,11 @@ def find_column(possible_names, df_columns):
     for name in possible_names:
         if name in df_columns:
             return name
+    # If exact matches are not found, try partial matches
+    for name in possible_names:
+        match = [col for col in df_columns if name.lower() in col.lower()]
+        if match:
+            return match[0]
     return None
 
 def get_machine_params(specs_df, machine_type):
@@ -217,32 +222,31 @@ def main():
             return
 
         # Dynamic renaming for sensor columns
-        df = df.rename(columns={
-            'AzV.V13_SR_ArbDr_Z | DB    60.DBD     26': 'Working pressure [bar]',
-            'AzV.V13_SR_Drehz_nach_Abgl_Z | DB    60.DBD     30': 'Revolution [rpm]',
-            'Arbeitsdruck': 'Working pressure [bar]',
-            'Drehzahl': 'Revolution [rpm]',
-            'ArbDr': 'Working pressure [bar]',
-            'ArbDr_Z': 'Working pressure [bar]',
-            'Drehz': 'Revolution [rpm]',
-            'Drehz_nach_Abgl_Z': 'Revolution [rpm]'
-        })
-        
-        df['Revolution [rpm]'] = pd.to_numeric(df['Revolution [rpm]'], errors='coerce')
-        df['Working pressure [bar]'] = pd.to_numeric(df['Working pressure [bar]'], errors='coerce')
-        df = df.dropna(subset=['Revolution [rpm]', 'Working pressure [bar]'])
+        revolution_names = ['Revolution [rpm]', 'Drehzahl', 'Speed', 'RPM','Drehz_nach_Abgl_Z','Drehz']
+        working_pressure_names = ['Working pressure [bar]', 'Arbeitsdruck', 'Pressure', 'Bar','ArbDr_Z','ArbDr']
 
-        rpm_stats = df['Revolution [rpm]'].describe()
+        revolution_col = find_column(revolution_names, df.columns)
+        working_pressure_col = find_column(working_pressure_names, df.columns)
+
+        if not revolution_col or not working_pressure_col:
+            st.error("Required columns for Revolution and Working Pressure not found.")
+            return
+
+        df[revolution_col] = pd.to_numeric(df[revolution_col], errors='coerce')
+        df[working_pressure_col] = pd.to_numeric(df[working_pressure_col], errors='coerce')
+        df = df.dropna(subset=[revolution_col, working_pressure_col])
+
+        rpm_stats = df[revolution_col].describe()
         rpm_max_value = rpm_stats['max']
         st.sidebar.write(f"Recommended value for x-axis based on the Max RPM in Data: {rpm_max_value:.2f}")
 
         x_axis_max = st.sidebar.number_input("X-axis maximum", value=rpm_max_value, min_value=1.0, max_value=100.0)
 
-        df = df[(df['Revolution [rpm]'] >= machine_params['n2']) & (df['Revolution [rpm]'] <= machine_params['n1'])]
+        df = df[(df[revolution_col] >= machine_params['n2']) & (df[revolution_col] <= machine_params['n1'])]
 
         def calculate_torque_wrapper(row):
-            working_pressure = row['Working pressure [bar]']
-            current_speed = row['Revolution [rpm]']
+            working_pressure = row[working_pressure_col]
+            current_speed = row[revolution_col]
 
             if current_speed < machine_params['n1']:
                 torque = working_pressure * machine_params['torque_constant']
@@ -254,9 +258,9 @@ def main():
         df['Calculated torque [kNm]'] = df.apply(calculate_torque_wrapper, axis=1)
 
         torque_lower_whisker, torque_upper_whisker, torque_outliers = calculate_whisker_and_outliers(df['Calculated torque [kNm]'])
-        rpm_lower_whisker, rpm_upper_whisker, rpm_outliers = calculate_whisker_and_outliers(df['Revolution [rpm]'])
+        rpm_lower_whisker, rpm_upper_whisker, rpm_outliers = calculate_whisker_and_outliers(df[revolution_col])
 
-        df['Is_Anomaly'] = df['Working pressure [bar]'] >= anomaly_threshold
+        df['Is_Anomaly'] = df[working_pressure_col] >= anomaly_threshold
 
         def M_max_Vg2(rpm):
             return np.minimum(machine_params['M_max_Vg1'], (P_max * 60 * nu) / (2 * np.pi * rpm))
@@ -286,16 +290,16 @@ def main():
         normal_data = df[(~df['Is_Anomaly']) & (~df['Calculated torque [kNm]'].isin(torque_outliers))]
         anomaly_data = df[df['Is_Anomaly']]
         torque_outlier_data = df[df['Calculated torque [kNm]'].isin(torque_outliers) & (~df['Is_Anomaly'])]
-        rpm_outlier_data = df[df['Revolution [rpm]'].isin(rpm_outliers) & (~df['Is_Anomaly'])]
+        rpm_outlier_data = df[df[revolution_col].isin(rpm_outliers) & (~df['Is_Anomaly'])]
 
-        scatter_normal = ax.scatter(normal_data['Revolution [rpm]'], normal_data['Calculated torque [kNm]'],
+        scatter_normal = ax.scatter(normal_data[revolution_col], normal_data['Calculated torque [kNm]'],
                                     c=normal_data['Calculated torque [kNm]'], cmap='viridis',
                                     s=50, alpha=0.6, label='Normal Data')
-        scatter_anomaly = ax.scatter(anomaly_data['Revolution [rpm]'], anomaly_data['Calculated torque [kNm]'],
+        scatter_anomaly = ax.scatter(anomaly_data[revolution_col], anomaly_data['Calculated torque [kNm]'],
                                      color='red', s=100, alpha=0.8, marker='X', label=f'Anomaly (Pressure ≥ {anomaly_threshold} bar)')
-        scatter_torque_outliers = ax.scatter(torque_outlier_data['Revolution [rpm]'], torque_outlier_data['Calculated torque [kNm]'],
+        scatter_torque_outliers = ax.scatter(torque_outlier_data[revolution_col], torque_outlier_data['Calculated torque [kNm]'],
                                              color='orange', s=100, alpha=0.8, marker='D', label='Torque Outliers')
-        scatter_rpm_outliers = ax.scatter(rpm_outlier_data['Revolution [rpm]'], rpm_outlier_data['Calculated torque [kNm]'],
+        scatter_rpm_outliers = ax.scatter(rpm_outlier_data[revolution_col], rpm_outlier_data['Calculated torque [kNm]'],
                                           color='purple', s=100, alpha=0.8, marker='s', label='RPM Outliers')
 
         ax.axhline(y=torque_upper_whisker, color='gray', linestyle='--', linewidth=1, label='Torque Upper Whisker')
@@ -331,7 +335,7 @@ def main():
         stats_df = pd.DataFrame({
             'RPM': rpm_stats,
             'Calculated Torque': df['Calculated torque [kNm]'].describe(),
-            'Working Pressure': df['Working pressure [bar]'].describe()
+            'Working Pressure': df[working_pressure_col].describe()
         })
         st.sidebar.markdown(get_table_download_link(stats_df, "statistical_analysis.csv", "Download Statistical Analysis"), unsafe_allow_html=True)
 
@@ -365,7 +369,7 @@ def main():
 
         with col3:
             st.write("Working Pressure Statistics:")
-            st.write(df['Working pressure [bar]'].describe())
+            st.write(df[working_pressure_col].describe())
 
         st.subheader("Anomaly Detection Results")
         col1, col2, col3 = st.columns(3)
