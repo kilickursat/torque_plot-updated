@@ -133,25 +133,29 @@ def load_raw_data(file):
         return None
     return df
 
+def find_column(df, possible_names):
+    for name in possible_names:
+        if name in df.columns:
+            return name
+    return None
+
 def identify_columns(df):
-    pressure_keywords = ['pressure', 'druck', 'bar','ArbDr','V13_SR_ArbDr_Z']
-    rpm_keywords = ['rpm', 'revolution', 'speed', 'drehzahl','Drehz','nach_Abgl_Z','V13_SR_Drehz_nach_Abgl_Z']
-    
-    pressure_col = None
-    rpm_col = None
-    
-    for col in df.columns:
-        col_lower = col.lower()
-        if any(keyword in col_lower for keyword in pressure_keywords):
-            pressure_col = col
-        elif any(keyword in col_lower for keyword in rpm_keywords):
-            rpm_col = col
-    
-    if pressure_col is None or rpm_col is None:
-        st.error("Could not identify pressure and/or RPM columns. Please check your data.")
-        return None, None
-    
-    return pressure_col, rpm_col
+    # Define possible column names
+    revolution_names = ["Revolution [rpm]", "RPM", "Speed", "Drehzahl", "Vitesse", "Revoluciones"]
+    working_pressure_names = ["Working pressure [bar]", "Pressure", "Druck", "Pression", "Presión"]
+
+    # Find the correct column names
+    revolution_col = find_column(df, revolution_names)
+    working_pressure_col = find_column(df, working_pressure_names)
+  
+    if revolution_col is None or working_pressure_col is None:
+        st.error("Could not identify Revolution and/or Working pressure columns. Please check your data.")
+        return None
+
+    return {
+        'Revolution': revolution_col,
+        'Working pressure': working_pressure_col
+    }
 
 def main():
     set_page_config()
@@ -198,14 +202,14 @@ def main():
         if df is None:
             return
 
-        pressure_col, rpm_col = identify_columns(df)
-        if pressure_col is None or rpm_col is None:
+        columns = identify_columns(df)
+        if columns is None:
             return
 
         # Rename columns for consistency
         df = df.rename(columns={
-            pressure_col: 'Working pressure [bar]',
-            rpm_col: 'Revolution [rpm]'
+            columns['Working pressure']: 'Working pressure [bar]',
+            columns['Revolution']: 'Revolution [rpm]'
         })
         
         df['Revolution [rpm]'] = pd.to_numeric(df['Revolution [rpm]'], errors='coerce')
