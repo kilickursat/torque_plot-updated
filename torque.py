@@ -74,14 +74,29 @@ def map_columns(df):
     return column_mapping
 
 def user_column_mapping(df):
-    st.subheader("Column Mapping")
+    st.subheader("Manual Column Mapping")
     st.write("Please select the appropriate columns for the required data:")
 
     column_mapping = {}
-    for required_col in ['Working pressure [bar]', 'Revolution [rpm]']:
-        selected_col = st.selectbox(f"Select column for {required_col}", options=[''] + df.columns.tolist())
+    required_columns = ['Working pressure [bar]', 'Revolution [rpm]']
+
+    for required_col in required_columns:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            st.write(f"{required_col}:")
+        with col2:
+            selected_col = st.selectbox(
+                f"Select column for {required_col}",
+                options=[''] + df.columns.tolist(),
+                key=f"select_{required_col}"
+            )
         if selected_col:
             column_mapping[required_col] = selected_col
+
+    if len(column_mapping) == len(required_columns):
+        st.success("All required columns have been mapped successfully!")
+    else:
+        st.warning(f"Please map all required columns. {len(required_columns) - len(column_mapping)} column(s) still need to be mapped.")
 
     return column_mapping
 
@@ -264,7 +279,12 @@ def main():
         # If automatic mapping fails, allow user to manually map columns
         if len(column_mapping) < 2:
             st.warning("Automatic column mapping failed. Please manually select the appropriate columns.")
-            column_mapping = user_column_mapping(df)
+            manual_mapping = user_column_mapping(df)
+            if len(manual_mapping) == 2:
+                column_mapping = manual_mapping
+            else:
+                st.error("Manual column mapping is incomplete. Please map all required columns.")
+                return
         
         if len(column_mapping) == 2:  # Only proceed if both required columns are mapped
             # Rename columns based on the mapping
