@@ -47,6 +47,27 @@ def get_machine_params(specs_df, machine_type):
         'torque_constant': machine_data[torque_constant_col]
     }
 
+def map_columns(df):
+    column_mapping = {}
+    
+    # Function to check if a column contains mostly numeric data
+    def is_numeric_column(col):
+        return pd.to_numeric(df[col], errors='coerce').notnull().mean() > 0.5
+
+    # Find working pressure column
+    pressure_keywords = ['pressure', 'arbdr', 'druck']
+    pressure_columns = [col for col in df.columns if any(keyword in col.lower() for keyword in pressure_keywords) and is_numeric_column(col)]
+    if pressure_columns:
+        column_mapping['Working pressure [bar]'] = pressure_columns[0]
+
+    # Find revolution column
+    revolution_keywords = ['revolution', 'drehz', 'speed', 'rpm']
+    revolution_columns = [col for col in df.columns if any(keyword in col.lower() for keyword in revolution_keywords) and is_numeric_column(col)]
+    if revolution_columns:
+        column_mapping['Revolution [rpm]'] = revolution_columns[0]
+
+    return column_mapping
+
 def calculate_whisker_and_outliers(data):
     Q1 = data.quantile(0.25)
     Q3 = data.quantile(0.75)
@@ -134,12 +155,6 @@ def main():
     st.title("TorqueVision: Herrenknecht's Advanced Analysis App")
     st.sidebar.markdown("**Created by Kursat Kilic - Geotechnical Digitalization**")
     
-    # Rest of your main function code...
-    
-    # Add this line at the end of your main function
-    st.sidebar.markdown('</div>', unsafe_allow_html=True)
-    
-
     # File uploaders
     raw_data_file = st.file_uploader("Upload Raw Data CSV", type="csv")
     machine_specs_file = st.file_uploader("Upload Machine Specifications XLSX", type="xlsx")
@@ -204,7 +219,6 @@ def main():
                 unsafe_allow_html=True
             )
             
-
         except Exception as e:
             st.error(f"An error occurred while processing the machine specifications: {str(e)}")
             st.stop()
@@ -221,11 +235,15 @@ def main():
     if raw_data_file is not None:
         df = pd.read_csv(raw_data_file, sep=';', decimal=',')
         
-        # Rename and clean columns as needed
-        df = df.rename(columns={
-            'AzV.V13_SR_ArbDr_Z | DB    60.DBD    26': 'Working pressure [bar]',
-            'AzV.V13_SR_Drehz_nach_Abgl_Z | DB    60.DBD    30': 'Revolution [rpm]'
-        })
+        # Use the new column mapping function
+        column_mapping = map_columns(df)
+        
+        if 'Working pressure [bar]' not in column_mapping or 'Revolution [rpm]' not in column_mapping:
+            st.error("Could not identify the required columns in the uploaded data. Please check your CSV file.")
+            return
+
+        # Rename columns based on the mapping
+        df = df.rename(columns={v: k for k, v in column_mapping.items()})
         
         df['Revolution [rpm]'] = pd.to_numeric(df['Revolution [rpm]'], errors='coerce')
         df['Working pressure [bar]'] = pd.to_numeric(df['Working pressure [bar]'], errors='coerce')
@@ -333,7 +351,6 @@ def main():
                 fontsize=10, ha='center', va='top', color='green')
 
         # Add text annotations for elbow points and n1
-                # Add text annotations for elbow points and n1
         ax.text(elbow_rpm_max, 0, f'{elbow_rpm_max:.2f}', ha='right', va='bottom', color='purple', fontsize=8)
         ax.text(elbow_rpm_cont, 0, f'{elbow_rpm_cont:.2f}', ha='right', va='bottom', color='orange', fontsize=8)
         ax.text(machine_params['n1'], machine_params['M_cont_value'], f'n1: {machine_params['n1']}', ha='right', va='top', color='black', fontsize=8, rotation=90)
@@ -430,6 +447,9 @@ def main():
     # Add footer with creator information
     st.markdown("---")
     st.markdown("**Created by Kursat Kilic - Geotechnical Digitalization**")
+
+    # Add this line at the end of your main function
+    st.sidebar.markdown('</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
