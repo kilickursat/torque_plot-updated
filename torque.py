@@ -134,8 +134,8 @@ def load_raw_data(file):
     return df
 
 def identify_columns(df):
-    pressure_keywords = ['pressure', 'druck', 'bar']
-    rpm_keywords = ['rpm', 'revolution', 'speed', 'drehzahl']
+    pressure_keywords = ['pressure', 'druck', 'bar','ArbDr','V13_SR_ArbDr_Z']
+    rpm_keywords = ['rpm', 'revolution', 'speed', 'drehzahl','Drehz','nach_Abgl_Z','V13_SR_Drehz_nach_Abgl_Z']
     
     pressure_col = None
     rpm_col = None
