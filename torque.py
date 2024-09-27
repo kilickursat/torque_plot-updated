@@ -55,16 +55,25 @@ def map_columns(df):
         return pd.to_numeric(df[col], errors='coerce').notnull().mean() > 0.5
 
     # Find working pressure column
-    pressure_keywords = ['pressure', 'arbdr', 'druck']
+    pressure_keywords = ['pressure', 'arbdr', 'druck','ArbDr','SR_ArbDr_Z']
     pressure_columns = [col for col in df.columns if any(keyword in col.lower() for keyword in pressure_keywords) and is_numeric_column(col)]
     if pressure_columns:
         column_mapping['Working pressure [bar]'] = pressure_columns[0]
+    else:
+        st.warning(f"No suitable column found for 'Working pressure [bar]'. Available columns: {', '.join(df.columns)}")
 
     # Find revolution column
-    revolution_keywords = ['revolution', 'drehz', 'speed', 'rpm']
+    revolution_keywords = ['revolution', 'drehz', 'speed', 'rpm','Drehz','Drehz_nach_Abgl_Z']
     revolution_columns = [col for col in df.columns if any(keyword in col.lower() for keyword in revolution_keywords) and is_numeric_column(col)]
     if revolution_columns:
         column_mapping['Revolution [rpm]'] = revolution_columns[0]
+    else:
+        st.warning(f"No suitable column found for 'Revolution [rpm]'. Available columns: {', '.join(df.columns)}")
+
+    if not column_mapping:
+        st.error("Could not identify any required columns. Please check your CSV file and column names.")
+    elif len(column_mapping) < 2:
+        st.error(f"Only identified {len(column_mapping)} out of 2 required columns. Please check your CSV file and column names.")
 
     return column_mapping
 
