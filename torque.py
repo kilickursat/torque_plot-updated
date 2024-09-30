@@ -201,36 +201,36 @@ def main():
     machine_specs_file = st.file_uploader("Upload Machine Specifications XLSX", type="xlsx")
 
     # Load machine specs if available
-    if machine_specs_file is not None:
-        try:
-            machine_specs = load_machine_specs(machine_specs_file)
-            machine_types = machine_specs['Projekt'].unique()
-            selected_machine = st.sidebar.selectbox("Select Machine Type", machine_types)
-            
-            machine_params = get_machine_params(machine_specs, selected_machine)
-            
-            # Display loaded parameters in a table with custom color
-            st.write("**Loaded Machine Parameters:**")
-            params_df = pd.DataFrame([machine_params])
-            
-            st.markdown(
-                f"""
-                <style>
-                .dataframe {{
-                    background-color: rgb(0, 62, 37);
-                    color: white;
-                }}
-                </style>
-                """,
-                unsafe_allow_html=True
-            )
-            st.dataframe(params_df)
-        except Exception as e:
-            st.error(f"An error occurred while processing the machine specifications: {str(e)}")
-            st.stop()
-    else:
-        st.warning("Please upload Machine Specifications XLSX file.")
-        return
+if machine_specs_file is not None:
+    try:
+        machine_specs = load_machine_specs(machine_specs_file)
+        machine_types = machine_specs['Projekt'].unique()
+        selected_machine = st.sidebar.selectbox("Select Machine Type", machine_types)
+        
+        machine_params = get_machine_params(machine_specs, selected_machine)
+        
+        # Display loaded parameters in a table with custom color
+        st.write("**Loaded Machine Parameters:**")
+        params_df = pd.DataFrame([machine_params])
+        
+        st.markdown(
+            f"""
+            <style>
+            .dataframe {{
+                background-color: rgb(0, 62, 37);
+                color: white;
+            }}
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+        st.dataframe(params_df)
+    except Exception as e:
+        st.error(f"An error occurred while processing the machine specifications: {str(e)}")
+        st.stop()
+else:
+    st.warning("Please upload Machine Specifications XLSX file.")
+    return
         
     # Sidebar for user inputs
     st.sidebar.header("Parameter Settings")
