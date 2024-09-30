@@ -182,7 +182,6 @@ def main():
     nu = st.sidebar.number_input("Efficiency coefficient", value=0.7, min_value=0.1, max_value=1.0)
     anomaly_threshold = st.sidebar.number_input("Anomaly threshold (bar)", value=250, min_value=100, max_value=500)
 
-    # Handle raw data upload (CSV or XLSX)
     if raw_data_file is not None:
         if raw_data_file.name.endswith(".csv"):
             df = pd.read_csv(raw_data_file, sep=';', decimal=',')
@@ -198,7 +197,10 @@ def main():
             df[pressure_col] = pd.to_numeric(df[pressure_col], errors='coerce')
             df = df.dropna(subset=[revolution_col, pressure_col])
 
-            # RPM Statistics
+            # Calculate torque
+            df['Calculated torque [kNm]'] = df[pressure_col] * machine_params['torque_constant']
+
+            # RPM and Torque Statistics
             rpm_stats = df[revolution_col].describe()
             torque_stats = df['Calculated torque [kNm]'].describe()
 
@@ -383,8 +385,8 @@ def main():
         st.info("The Anomaly Detection Results highlight points in the data where the machine's behavior deviates from expected patterns. "
                 "Anomalies are identified when the working pressure exceeds a defined threshold, which could indicate potential issues. "
                 "Outliers are data points that fall outside the normal range, which may also signal unusual conditions that warrant attention.")
-
-
+        else:
+            st.error("Could not find the required columns for pressure and revolution in the uploaded file.")
     else:
         st.info("Please upload a Raw Data file to begin the analysis.")
 
