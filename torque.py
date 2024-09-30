@@ -136,6 +136,14 @@ def add_logo():
         unsafe_allow_html=True,
     )
 
+
+def get_table_download_link(df, filename, text):
+    """Generate a download link for a pandas DataFrame."""
+    csv = df.to_csv(index=False)
+    b64 = base64.b64encode(csv.encode()).decode()  # some strings <-> bytes conversions necessary here
+    href = f'<a href="data:file/csv;base64,{b64}" download="{filename}">{text}</a>'
+    return href
+
 def main():
     set_page_config()
     set_background_color()
