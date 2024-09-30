@@ -289,7 +289,7 @@ def main():
                 # Generate RPM values for the torque curve
                 rpm_curve = np.linspace(0.1, machine_params['n1'], 1000)  # Avoid division by zero
 
-           fig = go.Figure()
+            fig = go.Figure()
 
             # Plot torque curves
             fig.add_trace(go.Scatter(x=rpm_curve[rpm_curve <= elbow_rpm_cont],
