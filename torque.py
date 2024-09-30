@@ -384,16 +384,7 @@ def main():
                 "Anomalies are identified when the working pressure exceeds a defined threshold, which could indicate potential issues. "
                 "Outliers are data points that fall outside the normal range, which may also signal unusual conditions that warrant attention.")
 
-            # Continue with plotting and analysis...
-            # Plotting code from the original example can be reused here.
-            
-            # Example code for plot:
-            # plt.plot(df[revolution_col], df['Calculated torque [kNm]'])
-            # st.pyplot()
 
-            # Continue analysis based on the user's specific need...
-        else:
-            st.error("Required sensor columns (pressure or revolution) not found in the uploaded data.")
     else:
         st.info("Please upload a Raw Data file to begin the analysis.")
 
