@@ -402,18 +402,18 @@ if pressure_col and revolution_col:
     st.sidebar.markdown(href, unsafe_allow_html=True)
 
     # Result Analysis
-    result_analysis_df = pd.DataFrame({
-        'Metric': ['Total data points', 'Normal data points', 'Anomaly data points', 'Percentage of anomalies',
-                   'Elbow point Max', 'Elbow point Cont', 'Torque Upper Whisker', 'Torque Lower Whisker',
-                   'Number of torque outliers', 'Percentage of torque outliers', 'RPM Upper Whisker', 'RPM Lower Whisker',
-                   'Number of RPM outliers', 'Percentage of RPM outliers'],
-        'Value': [len(df), len(normal_data), len(anomaly_data), f"{len(anomaly_data) / len(df) * 100:.2f}%",
-                  f"{elbow_rpm_max:.2f}", f"{elbow_rpm_cont:.2f}", f"{torque_upper_whisker:.2f}",
-                  f"{torque_lower_whisker:.2f}", len(torque_outliers),
-                  f"{len(torque_outliers) / len(df) * 100:.2f}%", f"{rpm_upper_whisker:.2f}",
-                  f"{rpm_lower_whisker:.2f}", len(rpm_outliers), f"{len(rpm_outliers) / len(df) * 100:.2f}%"]
-    })
-    st.sidebar.markdown(get_table_download_link(result_analysis_df, "result_analysis.csv", "Download Result Analysis"), unsafe_allow_html=True)
+                    result_analysis_df = pd.DataFrame({
+                        'Metric': ['Total data points', 'Normal data points', 'Anomaly data points', 'Percentage of anomalies',
+                                   'Elbow point Max', 'Elbow point Cont', 'Torque Upper Whisker', 'Torque Lower Whisker',
+                                   'Number of torque outliers', 'Percentage of torque outliers', 'RPM Upper Whisker', 'RPM Lower Whisker',
+                                   'Number of RPM outliers', 'Percentage of RPM outliers'],
+                        'Value': [len(df), len(normal_data), len(anomaly_data), f"{len(anomaly_data) / len(df) * 100:.2f}%",
+                                  f"{elbow_rpm_max:.2f}", f"{elbow_rpm_cont:.2f}", f"{torque_upper_whisker:.2f}",
+                                  f"{torque_lower_whisker:.2f}", len(torque_outliers),
+                                  f"{len(torque_outliers) / len(df) * 100:.2f}%", f"{rpm_upper_whisker:.2f}",
+                                  f"{rpm_lower_whisker:.2f}", len(rpm_outliers), f"{len(rpm_outliers) / len(df) * 100:.2f}%"]
+                    })
+                    st.sidebar.markdown(get_table_download_link(result_analysis_df, "result_analysis.csv", "Download Result Analysis"), unsafe_allow_html=True)
                 else:
                     st.warning("Please select both pressure and revolution columns to proceed with the analysis.")
             else:
