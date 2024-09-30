@@ -391,6 +391,52 @@ def main():
                               f"{rpm_lower_whisker:.2f}", len(rpm_outliers), f"{len(rpm_outliers) / len(df) * 100:.2f}%"]
                 })
                 st.sidebar.markdown(get_table_download_link(result_analysis_df, "result_analysis.csv", "Download Result Analysis"), unsafe_allow_html=True)
+                
+        # Display statistics
+        st.subheader("Data Statistics")
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.write("RPM Statistics:")
+            st.write(rpm_stats)
+
+        with col2:
+            st.write("Calculated Torque Statistics:")
+            st.write(df['Calculated torque [kNm]'].describe())
+
+        with col3:
+            st.write("Working Pressure Statistics:")
+            st.write(df['Working pressure [bar]'].describe())
+
+        # Anomaly Detection Results with Explanation
+        st.subheader("Anomaly Detection Results")
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.write(f"Total data points: {len(df)}")
+            st.write(f"Normal data points: {len(normal_data)}")
+            st.write(f"Anomaly data points: {len(anomaly_data)}")
+            st.write(f"Percentage of anomalies: {len(anomaly_data) / len(df) * 100:.2f}%")
+
+        with col2:
+            st.write(f"Elbow point Max: {elbow_rpm_max:.2f} rpm")
+            st.write(f"Elbow point Cont: {elbow_rpm_cont:.2f} rpm")
+
+        with col3:
+            st.write("Whisker and Outlier Information:")
+            st.write(f"Torque Upper Whisker: {torque_upper_whisker:.2f} kNm")
+            st.write(f"Torque Lower Whisker: {torque_lower_whisker:.2f} kNm")
+            st.write(f"Number of torque outliers: {len(torque_outliers)}")
+            st.write(f"Percentage of torque outliers: {len(torque_outliers) / len(df) * 100:.2f}%")
+            st.write(f"RPM Upper Whisker: {rpm_upper_whisker:.2f} rpm")
+            st.write(f"RPM Lower Whisker: {rpm_lower_whisker:.2f} rpm")
+            st.write(f"Number of RPM outliers: {len(rpm_outliers)}")
+            st.write(f"Percentage of RPM outliers: {len(rpm_outliers) / len(df) * 100:.2f}%")
+
+        # Short explanation for non-technical users
+        st.info("The Anomaly Detection Results highlight points in the data where the machine's behavior deviates from expected patterns. "
+                "Anomalies are identified when the working pressure exceeds a defined threshold, which could indicate potential issues. "
+                "Outliers are data points that fall outside the normal range, which may also signal unusual conditions that warrant attention.")
             else:
                 st.warning("Please select both pressure and revolution columns to proceed with the analysis.")
         else:
