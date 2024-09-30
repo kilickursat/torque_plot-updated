@@ -142,6 +142,58 @@ def get_table_download_link(df, filename, text):
     href = f'<a href="data:file/csv;base64,{b64}" download="{filename}">{text}</a>'
     return href
 
+
+# New functions for statistical display and explanation
+def display_statistics(df, revolution_col, pressure_col):
+    """Display statistics of RPM, Torque, and Pressure."""
+    st.subheader("Statistical Summary")
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.write("RPM Statistics:")
+        st.write(df[revolution_col].describe())
+
+    with col2:
+        st.write("Calculated Torque Statistics:")
+        st.write(df['Calculated torque [kNm]'].describe())
+
+    with col3:
+        st.write("Working Pressure Statistics:")
+        st.write(df[pressure_col].describe())
+
+def display_explanation(anomaly_threshold):
+    """Display an explanation of the results."""
+    st.subheader("Understanding the Results")
+    st.write(f"""
+    This analysis provides insights into the performance of the machine:
+
+    1. **Normal Data**: These are the typical operating points of the machine. They represent the standard working conditions and fall within expected ranges for revolution, torque, and pressure.
+
+    2. **Anomalies**: These are instances where the working pressure exceeds the set threshold (currently set to {anomaly_threshold} bar). Anomalies might indicate:
+       - Unusual operating conditions
+       - Potential issues with the machine
+       - Extreme workloads
+
+    3. **Outliers**: These are data points that fall significantly outside the normal range for either torque or RPM. Outliers may represent:
+       - Extreme operating conditions
+       - Measurement errors
+       - Temporary spikes in performance
+
+    The statistical summary shows:
+    - **Mean**: The average value, giving you a sense of the typical operating point.
+    - **Median (50%)**: The middle value when data is sorted, useful for understanding the central tendency without being affected by extreme values.
+    - **Standard Deviation (std)**: Measures the spread of the data. A larger standard deviation indicates more variability in the measurements.
+    - **Min and Max**: The lowest and highest values recorded, helping to understand the range of operation.
+    - **25%, 50%, 75% (Quartiles)**: These split the data into four equal parts, giving you an idea of the data's distribution.
+
+    Understanding these statistics can help identify:
+    - Typical operating ranges
+    - Unusual patterns in machine operation
+    - Potential areas for optimization or maintenance
+
+    If you notice a high number of anomalies or outliers, or if the statistics show unexpected values, it may be worth investigating further or consulting with a technical expert for a more detailed analysis.
+    """)
+
 def main():
     set_page_config()
     set_background_color()
@@ -313,32 +365,22 @@ def main():
                     xaxis_title='Revolution [1/min]',
                     yaxis_title='Torque [kNm]',
                     xaxis=dict(range=[0, x_axis_max]),
-                    yaxis=dict(range=[0, max(60, df['Calculated torque [kNm]'].max() * 1.1)]),
+                                        yaxis=dict(range=[0, max(60, df['Calculated torque [kNm]'].max() * 1.1)]),
                     legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5)
                 )
 
                 st.plotly_chart(fig, use_container_width=True)
 
-                # Display statistical summary
-                st.subheader("Statistical Summary")
-                col1, col2, col3 = st.columns(3)
+                # Display the statistical summary
+                display_statistics(df, revolution_col, pressure_col)
 
-                with col1:
-                    st.write("RPM Statistics:")
-                    st.write(rpm_stats)
-
-                with col2:
-                    st.write("Calculated Torque Statistics:")
-                    st.write(df['Calculated torque [kNm]'].describe())
-
-                with col3:
-                    st.write("Working Pressure Statistics:")
-                    st.write(df[pressure_col].describe())
+                # Provide an explanation of the analysis
+                display_explanation(anomaly_threshold)
 
                 # Download buttons for analysis results
                 st.sidebar.markdown("## Download Results")
                 stats_df = pd.DataFrame({
-                    'RPM': rpm_stats,
+                    'RPM': df[revolution_col].describe(),
                     'Calculated Torque': df['Calculated torque [kNm]'].describe(),
                     'Working Pressure': df[pressure_col].describe()
                 })
@@ -349,3 +391,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
