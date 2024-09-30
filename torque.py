@@ -201,8 +201,8 @@ def main():
     machine_specs_file = st.file_uploader("Upload Machine Specifications XLSX", type="xlsx")
 
     # Load machine specs if available
-if machine_specs_file is not None:
-    try:
+    if machine_specs_file is not None:
+        try:
         machine_specs = load_machine_specs(machine_specs_file)
         machine_types = machine_specs['Projekt'].unique()
         selected_machine = st.sidebar.selectbox("Select Machine Type", machine_types)
