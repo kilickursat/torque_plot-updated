@@ -26,26 +26,6 @@ def find_sensor_columns(df):
                     break
     return found_columns
 
-def display_column_selection(df):
-    st.write("Please select the columns for pressure and revolution data:")
-    
-    found_columns = find_sensor_columns(df)
-    
-    pressure_col = st.selectbox(
-        "Select pressure column",
-        options=[""] + list(df.columns),
-        index=0 if "pressure" not in found_columns else list(df.columns).index(found_columns["pressure"]) + 1,
-        key="pressure_column"
-    )
-    
-    revolution_col = st.selectbox(
-        "Select revolution column",
-        options=[""] + list(df.columns),
-        index=0 if "revolution" not in found_columns else list(df.columns).index(found_columns["revolution"]) + 1,
-        key="revolution_column"
-    )
-    
-    return pressure_col, revolution_col
 
 def load_machine_specs(file):
     """Load machine specifications from XLSX file."""
@@ -253,7 +233,8 @@ def main():
             display_columns_with_hover(df)
 
             # Allow user to select columns
-            pressure_col, revolution_col = display_column_selection(df)
+            pressure_col = st.selectbox("Select pressure column", options=df.columns)
+            revolution_col = st.selectbox("Select revolution column", options=df.columns)
             
             if pressure_col and revolution_col:
                 # Proceed with data processing and visualization
@@ -267,7 +248,7 @@ def main():
                 st.sidebar.write(f"Recommended value for x-axis based on the Max RPM in Data: {rpm_max_value:.2f}")
 
                 # Allow user to set x_axis_max
-                x_axis_max = st.sidebar.number_input("X-axis maximum", value=rpm_max_value, min_value=1.0, max_value=100.0)
+                x_axis_max = st.sidebar.number_input("X-axis maximum", value=float(rpm_max_value), min_value=1.0, max_value=float(rpm_max_value * 1.2))
 
                 # Filter data points between n2 and n1 rpm
                 df = df[(df[revolution_col] >= machine_params['n2']) & (df[revolution_col] <= machine_params['n1'])]
