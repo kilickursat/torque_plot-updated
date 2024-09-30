@@ -414,12 +414,14 @@ if pressure_col and revolution_col:
                   f"{rpm_lower_whisker:.2f}", len(rpm_outliers), f"{len(rpm_outliers) / len(df) * 100:.2f}%"]
     })
     st.sidebar.markdown(get_table_download_link(result_analysis_df, "result_analysis.csv", "Download Result Analysis"), unsafe_allow_html=True)
-else:
-    st.warning("Please select both pressure and revolution columns to proceed with the analysis.")
+                else:
+                    st.warning("Please select both pressure and revolution columns to proceed with the analysis.")
+            else:
+                st.error("Failed to load the file. Please check the format and try again.")
         else:
-            st.error("Failed to load the file. Please check the format and try again.")
+            st.info("Please upload a Raw Data file to begin the analysis.")
     else:
-        st.info("Please upload a Raw Data file to begin the analysis.")
+        st.warning("Please upload Machine Specifications XLSX file.")
 
 if __name__ == "__main__":
     main()
