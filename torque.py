@@ -29,11 +29,15 @@ def find_sensor_columns(df):
     return found_columns
 
 
-@st.cache_data
 def load_machine_specs(file):
     """Load machine specifications from XLSX file."""
     specs_df = pd.read_excel(file)
-    specs_df.columns = specs_df.columns.str.strip()
+    specs_df.columns = specs_df.columns.str.strip()  # Strip any leading/trailing whitespace and newlines
+    
+    # Display the columns in a more UX-friendly design
+    with st.expander("Columns in the Uploaded Excel File"):
+        st.dataframe(pd.DataFrame(specs_df.columns, columns=["Column Names"]))
+    
     return specs_df
 
 def get_machine_params(specs_df, machine_type):
@@ -147,7 +151,6 @@ def fig_to_base64(fig):
     img_str = base64.b64encode(buf.getvalue()).decode()
     return img_str
 
-@st.cache_data
 def load_data_file(file):
     """Loads a CSV or XLSX file and returns a pandas DataFrame."""
     if file.name.endswith(".csv"):
@@ -157,6 +160,7 @@ def load_data_file(file):
     else:
         st.error("Unsupported file format. Please upload a CSV or XLSX file.")
         return None
+    
     return df
 
 def display_columns_with_hover(df):
@@ -177,62 +181,29 @@ def get_column(df, sensor_name):
     return None
 
 
-import streamlit as st
-import numpy as np
-import pandas as pd
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import base64
-
-@st.cache_data
-def load_machine_specs(file):
-    """Load machine specifications from XLSX file."""
-    specs_df = pd.read_excel(file)
-    specs_df.columns = specs_df.columns.str.strip()
-    return specs_df
-
-@st.cache_data
-def load_data_file(file):
-    """Loads a CSV or XLSX file and returns a pandas DataFrame."""
-    if file.name.endswith(".csv"):
-        df = pd.read_csv(file, sep=';', decimal=',')
-    elif file.name.endswith(".xlsx"):
-        df = pd.read_excel(file)
-    else:
-        st.error("Unsupported file format. Please upload a CSV or XLSX file.")
-        return None
-    return df
-
-def set_page_config():
-    st.set_page_config(
-        page_title="Herrenknecht Torque Analysis",
-        page_icon="https://raw.githubusercontent.com/kilickursat/torque_plot-updated/main/Herrenknecht_logo.svg-1024x695.png",
-        layout="wide"
-    )
-
 def main():
     set_page_config()
+    set_background_color()
+    add_logo()
     
     st.title("TorqueVision: Herrenknecht's Advanced Analysis App")
-    st.markdown("Created by Kursat KILIC - Geotechnical Digitalization")
     
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        machine_specs_file = st.file_uploader("Upload Machine Specifications XLSX", type="xlsx")
-    
-    with col2:
-        raw_data_file = st.file_uploader("Upload Raw Data (CSV or XLSX)", type=["csv", "xlsx"])
+    # File uploaders for batch data
+    raw_data_file = st.file_uploader("Upload Raw Data (CSV or XLSX)", type=["csv", "xlsx"])
+    machine_specs_file = st.file_uploader("Upload Machine Specifications XLSX", type="xlsx")
 
-    if machine_specs_file is not None and raw_data_file is not None:
-        machine_specs = load_machine_specs(machine_specs_file)
-        df = load_data_file(raw_data_file)
-
-        if machine_specs is not None and df is not None:
+    # Load machine specs if available
+    if machine_specs_file is not None:
+        try:
+            machine_specs = load_machine_specs(machine_specs_file)
             machine_types = machine_specs['Projekt'].unique()
-            selected_machine = st.selectbox("Select Machine Type", machine_types)
+            selected_machine = st.sidebar.selectbox("Select Machine Type", machine_types)
             
             machine_params = get_machine_params(machine_specs, selected_machine)
+            
+            # Display loaded parameters in a table with custom color
+            st.write("**Loaded Machine Parameters:**")
+            params_df = pd.DataFrame([machine_params])
             
             st.markdown(
                 f"""
@@ -245,161 +216,223 @@ def main():
                 """,
                 unsafe_allow_html=True
             )
-            st.dataframe(pd.DataFrame([machine_params]))
+            st.dataframe(params_df)
+        except Exception as e:
+            st.error(f"An error occurred while processing the machine specifications: {str(e)}")
+            st.stop()
+    else:
+        st.warning("Please upload Machine Specifications XLSX file.")
+        return
+        
+    # Sidebar for user inputs
+    st.sidebar.header("Parameter Settings")
+    P_max = st.sidebar.number_input("Maximum power (kW)", value=132.0, min_value=1.0, max_value=500.0)
+    nu = st.sidebar.number_input("Efficiency coefficient", value=0.7, min_value=0.1, max_value=1.0)
+    anomaly_threshold = st.sidebar.number_input("Anomaly threshold (bar)", value=250, min_value=100, max_value=500)
 
+    if raw_data_file is not None:
+        df = load_data_file(raw_data_file)
+        
+        if df is not None:
+            # Display columns with hover-over functionality
+            display_columns_with_hover(df)
+
+            # Allow user to select columns
             pressure_col = st.selectbox("Select pressure column", options=df.columns)
             revolution_col = st.selectbox("Select revolution column", options=df.columns)
-
+            
             if pressure_col and revolution_col:
+                # Proceed with data processing and visualization
                 df[revolution_col] = pd.to_numeric(df[revolution_col], errors='coerce')
                 df[pressure_col] = pd.to_numeric(df[pressure_col], errors='coerce')
                 df = df.dropna(subset=[revolution_col, pressure_col])
 
-                # Calculate torque
-                df['Calculated torque [kNm]'] = df.apply(lambda row: calculate_torque(row, pressure_col, revolution_col, machine_params), axis=1)
+                # RPM Statistics
+                rpm_stats = df[revolution_col].describe()
+                rpm_max_value = rpm_stats['max']
+                st.sidebar.write(f"Recommended value for x-axis based on the Max RPM in Data: {rpm_max_value:.2f}")
 
-                # Anomaly detection and outlier calculation
-                anomaly_threshold = st.slider("Anomaly threshold (bar)", min_value=100, max_value=500, value=250)
+                # Allow user to set x_axis_max
+                x_axis_max = st.sidebar.number_input("X-axis maximum", value=float(rpm_max_value), min_value=1.0, max_value=float(rpm_max_value * 1.2))
+
+                # Filter data points between n2 and n1 rpm
+                df = df[(df[revolution_col] >= machine_params['n2']) & (df[revolution_col] <= machine_params['n1'])]
+
+                # Calculate torque
+                def calculate_torque_wrapper(row):
+                    working_pressure = row[pressure_col]
+                    current_speed = row[revolution_col]
+
+                    if current_speed < machine_params['n1']:
+                        torque = working_pressure * machine_params['torque_constant']
+                    else:
+                        torque = (machine_params['n1'] / current_speed) * machine_params['torque_constant'] * working_pressure
+
+                    return round(torque, 2)
+
+                df['Calculated torque [kNm]'] = df.apply(calculate_torque_wrapper, axis=1)
+
+                # Calculate whiskers and outliers for torque
+                torque_lower_whisker, torque_upper_whisker, torque_outliers = calculate_whisker_and_outliers(df['Calculated torque [kNm]'])
+                rpm_lower_whisker, rpm_upper_whisker, rpm_outliers = calculate_whisker_and_outliers(df[revolution_col])
+
+                # Anomaly detection based on working pressure
                 df['Is_Anomaly'] = df[pressure_col] >= anomaly_threshold
-                torque_lower_whisker, torque_upper_whisker = np.percentile(df['Calculated torque [kNm]'], [25, 75])
-                rpm_lower_whisker, rpm_upper_whisker = np.percentile(df[revolution_col], [25, 75])
+
+                # Function to calculate M max Vg2
+                def M_max_Vg2(rpm):
+                    return np.minimum(machine_params['M_max_Vg1'], (P_max * 60 * nu) / (2 * np.pi * rpm))
+
+                # Calculate the elbow points for the max and continuous torque
+                elbow_rpm_max = (P_max * 60 * nu) / (2 * np.pi * machine_params['M_max_Vg1'])
+                elbow_rpm_cont = (P_max * 60 * nu) / (2 * np.pi * machine_params['M_cont_value'])
+
+                # Generate RPM values for the torque curve
+                rpm_curve = np.linspace(0.1, machine_params['n1'], 1000)  # Avoid division by zero
 
                 # Create Plotly figure
-                fig = make_subplots(rows=1, cols=1, subplot_titles=[f'{selected_machine} - Torque Analysis'])
+                fig = go.Figure()
 
-                # Plot torque curves and data points
-                plot_torque_curves(fig, machine_params, df, revolution_col, pressure_col, anomaly_threshold, torque_lower_whisker, torque_upper_whisker, rpm_lower_whisker, rpm_upper_whisker)
+                # Plot torque curves
+                fig.add_trace(go.Scatter(x=rpm_curve[rpm_curve <= elbow_rpm_cont],
+                                         y=np.full_like(rpm_curve[rpm_curve <= elbow_rpm_cont], machine_params['M_cont_value']),
+                                         mode='lines', name='M cont Max [kNm]', line=dict(color='green', width=2)))
 
-                # Update layout for better visibility
+                fig.add_trace(go.Scatter(x=rpm_curve[rpm_curve <= elbow_rpm_max],
+                                         y=np.full_like(rpm_curve[rpm_curve <= elbow_rpm_max], machine_params['M_max_Vg1']),
+                                         mode='lines', name='M max Vg1 [kNm]', line=dict(color='red', width=2)))
+
+                fig.add_trace(go.Scatter(x=rpm_curve[rpm_curve <= machine_params['n1']],
+                                         y=M_max_Vg2(rpm_curve[rpm_curve <= machine_params['n1']]),
+                                         mode='lines', name='M max Vg2 [kNm]', line=dict(color='red', width=2, dash='dash')))
+
+                # Add vertical lines at elbow points
+                fig.add_vline(x=elbow_rpm_max, line_dash="dot", line_color="purple")
+                fig.add_vline(x=elbow_rpm_cont, line_dash="dot", line_color="orange")
+                fig.add_vline(x=machine_params['n1'], line_dash="dash", line_color="black")
+
+                # Separate normal and anomaly data
+                normal_data = df[~df['Is_Anomaly']]
+                anomaly_data = df[df['Is_Anomaly']]
+
+                # Separate outlier data
+                torque_outlier_data = df[df['Calculated torque [kNm]'].isin(torque_outliers)]
+                rpm_outlier_data = df[df[revolution_col].isin(rpm_outliers)]
+
+                # Plot data points
+                fig.add_trace(go.Scatter(x=normal_data[revolution_col], y=normal_data['Calculated torque [kNm]'],
+                                         mode='markers', name='Normal Data',
+                                         marker=dict(color=normal_data['Calculated torque [kNm]'], colorscale='Viridis', size=8)))
+
+                fig.add_trace(go.Scatter(x=anomaly_data[revolution_col], y=anomaly_data['Calculated torque [kNm]'],
+                                         mode='markers', name=f'Anomaly (Pressure ≥ {anomaly_threshold} bar)',
+                                         marker=dict(color='red', symbol='x', size=10)))
+
+                fig.add_trace(go.Scatter(x=torque_outlier_data[revolution_col], y=torque_outlier_data['Calculated torque [kNm]'],
+                                         mode='markers', name='Torque Outliers',
+                                         marker=dict(color='orange', symbol='diamond', size=10)))
+
+                fig.add_trace(go.Scatter(x=rpm_outlier_data[revolution_col], y=rpm_outlier_data['Calculated torque [kNm]'],
+                                         mode='markers', name='RPM Outliers',
+                                         marker=dict(color='purple', symbol='square', size=10)))
+
+                # Add horizontal lines for the torque whiskers
+                fig.add_hline(y=torque_upper_whisker, line_dash="dash", line_color="gray", annotation_text="Torque Upper Whisker")
+                fig.add_hline(y=torque_lower_whisker, line_dash="dot", line_color="gray", annotation_text="Torque Lower Whisker")
+
+                # Set plot layout
                 fig.update_layout(
-                    height=800,  # Increase the height of the plot
+                    title=f'{selected_machine} - Torque Analysis',
                     xaxis_title='Revolution [1/min]',
                     yaxis_title='Torque [kNm]',
-                    legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
+                    xaxis=dict(range=[0, x_axis_max]),
+                    yaxis=dict(range=[0, max(60, df['Calculated torque [kNm]'].max() * 1.1)]),
+                    legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5)
                 )
 
                 st.plotly_chart(fig, use_container_width=True)
 
-                display_statistics(df, revolution_col, pressure_col)
-                display_explanation(anomaly_threshold)
+                # Display statistical summary
+                st.subheader("Statistical Summary")
+                col1, col2, col3 = st.columns(3)
+
+                with col1:
+                    st.write("RPM Statistics:")
+                    st.write(rpm_stats)
+
+                with col2:
+                    st.write("Calculated Torque Statistics:")
+                    st.write(df['Calculated torque [kNm]'].describe())
+
+                with col3:
+                    st.write("Working Pressure Statistics:")
+                    st.write(df[pressure_col].describe())
+
+                # Explanation for non-technical users
+                st.subheader("Understanding the Results")
+                st.write("""
+                This analysis provides insights into the performance of the machine:
+
+                1. **Normal Data**: These are the typical operating points of the machine. They represent the standard working conditions and fall within expected ranges for revolution, torque, and pressure.
+
+                2. **Anomalies**: These are instances where the working pressure exceeds the set threshold (currently set to {anomaly_threshold} bar). Anomalies might indicate:
+                   - Unusual operating conditions
+                   - Potential issues with the machine
+                   - Extreme workloads
+
+                3. **Outliers**: These are data points that fall significantly outside the normal range for either torque or RPM. Outliers may represent:
+                   - Extreme operating conditions
+                   - Measurement errors
+                   - Temporary spikes in performance
+
+                The statistical summary shows:
+                - **Mean**: The average value, giving you a sense of the typical operating point.
+                - **Median (50%)**: The middle value when data is sorted, useful for understanding the central tendency without being affected by extreme values.
+                - **Standard Deviation (std)**: Measures the spread of the data. A larger standard deviation indicates more variability in the measurements.
+                - **Min and Max**: The lowest and highest values recorded, helping to understand the range of operation.
+                - **25%, 50%, 75% (Quartiles)**: These split the data into four equal parts, giving you an idea of the data's distribution.
+
+                Understanding these statistics can help identify:
+                - Typical operating ranges
+                - Unusual patterns in machine operation
+                - Potential areas for optimization or maintenance
+
+                If you notice a high number of anomalies or outliers, or if the statistics show unexpected values, it may be worth investigating further or consulting with a technical expert for a more detailed analysis.
+                """)
+
+                # Download buttons
+                st.sidebar.markdown("## Download Results")
+
+                # Statistical Analysis Results
+                stats_df = pd.DataFrame({
+                    'RPM': rpm_stats,
+                    'Calculated Torque': df['Calculated torque [kNm]'].describe(),
+                    'Working Pressure': df[pressure_col].describe()
+                })
+                st.sidebar.markdown(get_table_download_link(stats_df, "statistical_analysis.csv", "Download Statistical Analysis"), unsafe_allow_html=True)
+
+                # Plot
+                plot_data = fig.to_json()
+                b64 = base64.b64encode(plot_data.encode()).decode()
+                href = f'<a href="data:application/json;base64,{b64}" download="torque_analysis_plot.json">Download Plot Data</a>'
+                st.sidebar.markdown(href, unsafe_allow_html=True)
+
+                # Result Analysis
+                result_analysis_df = pd.DataFrame({
+                    'Metric': ['Total data points', 'Normal data points', 'Anomaly data points', 'Percentage of anomalies',
+                               'Elbow point Max', 'Elbow point Cont', 'Torque Upper Whisker', 'Torque Lower Whisker',
+                               'Number of torque outliers', 'Percentage of torque outliers', 'RPM Upper Whisker', 'RPM Lower Whisker',
+                               'Number of RPM outliers', 'Percentage of RPM outliers'],
+                    'Value': [len(df), len(normal_data), len(anomaly_data), f"{len(anomaly_data) / len(df) * 100:.2f}%",
+                              f"{elbow_rpm_max:.2f}", f"{elbow_rpm_cont:.2f}", f"{torque_upper_whisker:.2f}",
+                              f"{torque_lower_whisker:.2f}", len(torque_outliers),
+                              f"{len(torque_outliers) / len(df) * 100:.2f}%", f"{rpm_upper_whisker:.2f}",
+                              f"{rpm_lower_whisker:.2f}", len(rpm_outliers), f"{len(rpm_outliers) / len(df) * 100:.2f}%"]
+                })
+                st.sidebar.markdown(get_table_download_link(result_analysis_df, "result_analysis.csv", "Download Result Analysis"), unsafe_allow_html=True)
 
     else:
-        st.info("Please upload both Machine Specifications XLSX and Raw Data files to begin the analysis.")
-
-@st.cache_data
-def get_machine_params(specs_df, machine_type):
-    """Extract relevant machine parameters based on machine type."""
-    machine_data = specs_df[specs_df['Projekt'] == machine_type].iloc[0]
-    
-    param_mapping = {
-        'n1': ['n1[1/min]', 'n1 (1/min)', 'n1[rpm]'],
-        'n2': ['n2[1/min]', 'n2 (1/min)', 'n2[rpm]'],
-        'M_cont_value': ['M(dauer) [kNm]', 'M(dauer)[kNm]', 'M (dauer)'],
-        'M_max_Vg1': ['M(max)', 'M max', 'M (max)', 'M_max[kNm]', 'M(max)[kNm]'],
-        'torque_constant': ['Drehmomentumrechnung[kNm/bar]', 'Drehmomentumrechnung [kNm/bar]']
-    }
-
-    params = {}
-    for param, possible_names in param_mapping.items():
-        for name in possible_names:
-            if name in machine_data.index:
-                params[param] = machine_data[name]
-                break
-    
-    return params
-
-def calculate_torque(row, pressure_col, revolution_col, machine_params):
-    working_pressure = row[pressure_col]
-    current_speed = row[revolution_col]
-
-    if current_speed < machine_params['n1']:
-        torque = working_pressure * machine_params['torque_constant']
-    else:
-        torque = (machine_params['n1'] / current_speed) * machine_params['torque_constant'] * working_pressure
-
-    return round(torque, 2)
-
-def plot_torque_curves(fig, machine_params, df, revolution_col, pressure_col, anomaly_threshold, torque_lower_whisker, torque_upper_whisker, rpm_lower_whisker, rpm_upper_whisker):
-    P_max = 132.0  # You may want to make this a parameter
-    nu = 0.7  # You may want to make this a parameter
-
-    rpm_curve = np.linspace(0.1, machine_params['n1'], 1000)
-    
-    def M_max_Vg2(rpm):
-        return np.minimum(machine_params['M_max_Vg1'], (P_max * 60 * nu) / (2 * np.pi * rpm))
-
-    elbow_rpm_max = (P_max * 60 * nu) / (2 * np.pi * machine_params['M_max_Vg1'])
-    elbow_rpm_cont = (P_max * 60 * nu) / (2 * np.pi * machine_params['M_cont_value'])
-
-    # Plot torque curves
-    fig.add_trace(go.Scatter(x=rpm_curve[rpm_curve <= elbow_rpm_cont], y=np.full_like(rpm_curve[rpm_curve <= elbow_rpm_cont], machine_params['M_cont_value']), mode='lines', name='M cont Max [kNm]', line=dict(color='green', width=2)))
-    fig.add_trace(go.Scatter(x=rpm_curve[rpm_curve <= elbow_rpm_max], y=np.full_like(rpm_curve[rpm_curve <= elbow_rpm_max], machine_params['M_max_Vg1']), mode='lines', name='M max Vg1 [kNm]', line=dict(color='red', width=2)))
-    fig.add_trace(go.Scatter(x=rpm_curve[rpm_curve <= machine_params['n1']], y=M_max_Vg2(rpm_curve[rpm_curve <= machine_params['n1']]), mode='lines', name='M max Vg2 [kNm]', line=dict(color='red', width=2, dash='dash')))
-
-    # Add vertical lines at elbow points
-    fig.add_vline(x=elbow_rpm_max, line_dash="dot", line_color="purple")
-    fig.add_vline(x=elbow_rpm_cont, line_dash="dot", line_color="orange")
-    fig.add_vline(x=machine_params['n1'], line_dash="dash", line_color="black")
-
-    # Separate normal and anomaly data
-    normal_data = df[~df['Is_Anomaly']]
-    anomaly_data = df[df['Is_Anomaly']]
-
-    # Plot data points
-    fig.add_trace(go.Scatter(x=normal_data[revolution_col], y=normal_data['Calculated torque [kNm]'], mode='markers', name='Normal Data', marker=dict(color=normal_data['Calculated torque [kNm]'], colorscale='Viridis', size=8)))
-    fig.add_trace(go.Scatter(x=anomaly_data[revolution_col], y=anomaly_data['Calculated torque [kNm]'], mode='markers', name=f'Anomaly (Pressure ≥ {anomaly_threshold} bar)', marker=dict(color='red', symbol='x', size=10)))
-
-    # Add horizontal lines for the torque whiskers
-    fig.add_hline(y=torque_upper_whisker, line_dash="dash", line_color="gray", annotation_text="Torque Upper Whisker")
-    fig.add_hline(y=torque_lower_whisker, line_dash="dot", line_color="gray", annotation_text="Torque Lower Whisker")
-
-def display_statistics(df, revolution_col, pressure_col):
-    st.subheader("Statistical Summary")
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.write("RPM Statistics:")
-        st.write(df[revolution_col].describe())
-
-    with col2:
-        st.write("Calculated Torque Statistics:")
-        st.write(df['Calculated torque [kNm]'].describe())
-
-    with col3:
-        st.write("Working Pressure Statistics:")
-        st.write(df[pressure_col].describe())
-
-def display_explanation(anomaly_threshold):
-    st.subheader("Understanding the Results")
-    st.write(f"""
-    This analysis provides insights into the performance of the machine:
-
-    1. **Normal Data**: These are the typical operating points of the machine. They represent the standard working conditions and fall within expected ranges for revolution, torque, and pressure.
-
-    2. **Anomalies**: These are instances where the working pressure exceeds the set threshold (currently set to {anomaly_threshold} bar). Anomalies might indicate:
-       - Unusual operating conditions
-       - Potential issues with the machine
-       - Extreme workloads
-
-    3. **Outliers**: These are data points that fall significantly outside the normal range for either torque or RPM. Outliers may represent:
-       - Extreme operating conditions
-       - Measurement errors
-       - Temporary spikes in performance
-
-    The statistical summary shows:
-    - **Mean**: The average value, giving you a sense of the typical operating point.
-    - **Median (50%)**: The middle value when data is sorted, useful for understanding the central tendency without being affected by extreme values.
-    - **Standard Deviation (std)**: Measures the spread of the data. A larger standard deviation indicates more variability in the measurements.
-    - **Min and Max**: The lowest and highest values recorded, helping to understand the range of operation.
-    - **25%, 50%, 75% (Quartiles)**: These split the data into four equal parts, giving you an idea of the data's distribution.
-
-    Understanding these statistics can help identify:
-    - Typical operating ranges
-    - Unusual patterns in machine operation
-    - Potential areas for optimization or maintenance
-
-    If you notice a high number of anomalies or outliers, or if the statistics show unexpected values, it may be worth investigating further or consulting with a technical expert for a more detailed analysis.
-    """)
+        st.info("Please upload a Raw Data file to begin the analysis.")
 
 if __name__ == "__main__":
     main()
