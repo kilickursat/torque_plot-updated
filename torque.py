@@ -289,79 +289,79 @@ def main():
                 # Generate RPM values for the torque curve
                 rpm_curve = np.linspace(0.1, machine_params['n1'], 1000)  # Avoid division by zero
 
-            fig = go.Figure()
+                fig = go.Figure()
 
-            # Plot torque curves
-            fig.add_trace(go.Scatter(x=rpm_curve[rpm_curve <= elbow_rpm_cont],
+                # Plot torque curves
+                fig.add_trace(go.Scatter(x=rpm_curve[rpm_curve <= elbow_rpm_cont],
                                      y=np.full_like(rpm_curve[rpm_curve <= elbow_rpm_cont], machine_params['M_cont_value']),
                                      mode='lines', name='M cont Max [kNm]', line=dict(color='green', width=2)))
 
-            fig.add_trace(go.Scatter(x=rpm_curve[rpm_curve <= elbow_rpm_max],
+                fig.add_trace(go.Scatter(x=rpm_curve[rpm_curve <= elbow_rpm_max],
                                      y=np.full_like(rpm_curve[rpm_curve <= elbow_rpm_max], machine_params['M_max_Vg1']),
                                      mode='lines', name='M max Vg1 [kNm]', line=dict(color='red', width=2)))
 
-            fig.add_trace(go.Scatter(x=rpm_curve[rpm_curve <= machine_params['n1']],
+                fig.add_trace(go.Scatter(x=rpm_curve[rpm_curve <= machine_params['n1']],
                                      y=M_max_Vg2(rpm_curve[rpm_curve <= machine_params['n1']]),
                                      mode='lines', name='M max Vg2 [kNm]', line=dict(color='red', width=2, dash='dash')))
 
-            # Add vertical lines at elbow points
-            fig.add_vline(x=elbow_rpm_max, line_dash="dot", line_color="purple")
-            fig.add_vline(x=elbow_rpm_cont, line_dash="dot", line_color="orange")
-            fig.add_vline(x=machine_params['n1'], line_dash="dash", line_color="black")
+                # Add vertical lines at elbow points
+                fig.add_vline(x=elbow_rpm_max, line_dash="dot", line_color="purple")
+                fig.add_vline(x=elbow_rpm_cont, line_dash="dot", line_color="orange")
+                fig.add_vline(x=machine_params['n1'], line_dash="dash", line_color="black")
 
-            # Plot data points
-            fig.add_trace(go.Scatter(x=normal_data[revolution_col], y=normal_data['Calculated torque [kNm]'],
+                # Plot data points
+                fig.add_trace(go.Scatter(x=normal_data[revolution_col], y=normal_data['Calculated torque [kNm]'],
                                      mode='markers', name='Normal Data',
                                      marker=dict(color=normal_data['Calculated torque [kNm]'], colorscale='Viridis', size=8)))
 
-            fig.add_trace(go.Scatter(x=anomaly_data[revolution_col], y=anomaly_data['Calculated torque [kNm]'],
+                fig.add_trace(go.Scatter(x=anomaly_data[revolution_col], y=anomaly_data['Calculated torque [kNm]'],
                                      mode='markers', name=f'Anomaly (Pressure ≥ {anomaly_threshold} bar)',
                                      marker=dict(color='red', symbol='x', size=10)))
 
-            fig.add_trace(go.Scatter(x=torque_outlier_data[revolution_col], y=torque_outlier_data['Calculated torque [kNm]'],
+                fig.add_trace(go.Scatter(x=torque_outlier_data[revolution_col], y=torque_outlier_data['Calculated torque [kNm]'],
                                      mode='markers', name='Torque Outliers',
                                      marker=dict(color='orange', symbol='diamond', size=10)))
 
-            fig.add_trace(go.Scatter(x=rpm_outlier_data[revolution_col], y=rpm_outlier_data['Calculated torque [kNm]'],
+                fig.add_trace(go.Scatter(x=rpm_outlier_data[revolution_col], y=rpm_outlier_data['Calculated torque [kNm]'],
                                      mode='markers', name='RPM Outliers',
                                      marker=dict(color='purple', symbol='square', size=10)))
 
-            # Add horizontal lines for the torque whiskers
-            fig.add_hline(y=torque_upper_whisker, line_dash="dash", line_color="gray", annotation_text="Torque Upper Whisker")
-            fig.add_hline(y=torque_lower_whisker, line_dash="dot", line_color="gray", annotation_text="Torque Lower Whisker")
+                # Add horizontal lines for the torque whiskers
+                fig.add_hline(y=torque_upper_whisker, line_dash="dash", line_color="gray", annotation_text="Torque Upper Whisker")
+                fig.add_hline(y=torque_lower_whisker, line_dash="dot", line_color="gray", annotation_text="Torque Lower Whisker")
 
-            # Set plot layout
-            fig.update_layout(
-                title=f'{selected_machine} - Torque Analysis',
-                xaxis_title='Revolution [1/min]',
-                yaxis_title='Torque [kNm]',
-                xaxis=dict(range=[0, x_axis_max]),
-                yaxis=dict(range=[0, max(60, df['Calculated torque [kNm]'].max() * 1.1)]),
-                legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5)
-            )
+                # Set plot layout
+                fig.update_layout(
+                    title=f'{selected_machine} - Torque Analysis',
+                    xaxis_title='Revolution [1/min]',
+                    yaxis_title='Torque [kNm]',
+                    xaxis=dict(range=[0, x_axis_max]),
+                    yaxis=dict(range=[0, max(60, df['Calculated torque [kNm]'].max() * 1.1)]),
+                    legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5)
+                )
 
-            st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, use_container_width=True)
 
-            # Display statistical summary
-            st.subheader("Statistical Summary")
-            col1, col2, col3 = st.columns(3)
+                # Display statistical summary
+                st.subheader("Statistical Summary")
+                col1, col2, col3 = st.columns(3)
 
-            with col1:
-                st.write("RPM Statistics:")
-                st.write(rpm_stats)
+                with col1:
+                    st.write("RPM Statistics:")
+                    st.write(rpm_stats)
 
-            with col2:
-                st.write("Calculated Torque Statistics:")
-                st.write(df['Calculated torque [kNm]'].describe())
+                with col2:
+                    st.write("Calculated Torque Statistics:")
+                    st.write(df['Calculated torque [kNm]'].describe())
 
-            with col3:
-                st.write("Working Pressure Statistics:")
-                st.write(df[pressure_col].describe())
+                with col3:
+                    st.write("Working Pressure Statistics:")
+                    st.write(df[pressure_col].describe())
 
-            # Explanation for non-technical users
-            st.subheader("Understanding the Results")
-            st.write("""
-            This analysis provides insights into the performance of the machine:
+                # Explanation for non-technical users
+                st.subheader("Understanding the Results")
+                st.write("""
+                    This analysis provides insights into the performance of the machine:
 
             1. **Normal Data**: These are the typical operating points of the machine.
             2. **Anomalies**: These are instances where the working pressure exceeds the set threshold, which might indicate unusual operating conditions or potential issues.
