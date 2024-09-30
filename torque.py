@@ -180,6 +180,15 @@ def get_column(df, sensor_name):
             return col
     return None
 
+import streamlit as st
+import numpy as np
+import pandas as pd
+import io
+import base64
+import plotly.graph_objects as go
+
+# ... (keep the existing imports and helper functions)
+
 def main():
     set_page_config()
     set_background_color()
@@ -289,42 +298,51 @@ def main():
                 # Generate RPM values for the torque curve
                 rpm_curve = np.linspace(0.1, machine_params['n1'], 1000)  # Avoid division by zero
 
+                # Create Plotly figure
                 fig = go.Figure()
 
                 # Plot torque curves
                 fig.add_trace(go.Scatter(x=rpm_curve[rpm_curve <= elbow_rpm_cont],
-                                     y=np.full_like(rpm_curve[rpm_curve <= elbow_rpm_cont], machine_params['M_cont_value']),
-                                     mode='lines', name='M cont Max [kNm]', line=dict(color='green', width=2)))
+                                         y=np.full_like(rpm_curve[rpm_curve <= elbow_rpm_cont], machine_params['M_cont_value']),
+                                         mode='lines', name='M cont Max [kNm]', line=dict(color='green', width=2)))
 
                 fig.add_trace(go.Scatter(x=rpm_curve[rpm_curve <= elbow_rpm_max],
-                                     y=np.full_like(rpm_curve[rpm_curve <= elbow_rpm_max], machine_params['M_max_Vg1']),
-                                     mode='lines', name='M max Vg1 [kNm]', line=dict(color='red', width=2)))
+                                         y=np.full_like(rpm_curve[rpm_curve <= elbow_rpm_max], machine_params['M_max_Vg1']),
+                                         mode='lines', name='M max Vg1 [kNm]', line=dict(color='red', width=2)))
 
                 fig.add_trace(go.Scatter(x=rpm_curve[rpm_curve <= machine_params['n1']],
-                                     y=M_max_Vg2(rpm_curve[rpm_curve <= machine_params['n1']]),
-                                     mode='lines', name='M max Vg2 [kNm]', line=dict(color='red', width=2, dash='dash')))
+                                         y=M_max_Vg2(rpm_curve[rpm_curve <= machine_params['n1']]),
+                                         mode='lines', name='M max Vg2 [kNm]', line=dict(color='red', width=2, dash='dash')))
 
                 # Add vertical lines at elbow points
                 fig.add_vline(x=elbow_rpm_max, line_dash="dot", line_color="purple")
                 fig.add_vline(x=elbow_rpm_cont, line_dash="dot", line_color="orange")
                 fig.add_vline(x=machine_params['n1'], line_dash="dash", line_color="black")
 
+                # Separate normal and anomaly data
+                normal_data = df[~df['Is_Anomaly']]
+                anomaly_data = df[df['Is_Anomaly']]
+
+                # Separate outlier data
+                torque_outlier_data = df[df['Calculated torque [kNm]'].isin(torque_outliers)]
+                rpm_outlier_data = df[df[revolution_col].isin(rpm_outliers)]
+
                 # Plot data points
                 fig.add_trace(go.Scatter(x=normal_data[revolution_col], y=normal_data['Calculated torque [kNm]'],
-                                     mode='markers', name='Normal Data',
-                                     marker=dict(color=normal_data['Calculated torque [kNm]'], colorscale='Viridis', size=8)))
+                                         mode='markers', name='Normal Data',
+                                         marker=dict(color=normal_data['Calculated torque [kNm]'], colorscale='Viridis', size=8)))
 
                 fig.add_trace(go.Scatter(x=anomaly_data[revolution_col], y=anomaly_data['Calculated torque [kNm]'],
-                                     mode='markers', name=f'Anomaly (Pressure ≥ {anomaly_threshold} bar)',
-                                     marker=dict(color='red', symbol='x', size=10)))
+                                         mode='markers', name=f'Anomaly (Pressure ≥ {anomaly_threshold} bar)',
+                                         marker=dict(color='red', symbol='x', size=10)))
 
                 fig.add_trace(go.Scatter(x=torque_outlier_data[revolution_col], y=torque_outlier_data['Calculated torque [kNm]'],
-                                     mode='markers', name='Torque Outliers',
-                                     marker=dict(color='orange', symbol='diamond', size=10)))
+                                         mode='markers', name='Torque Outliers',
+                                         marker=dict(color='orange', symbol='diamond', size=10)))
 
                 fig.add_trace(go.Scatter(x=rpm_outlier_data[revolution_col], y=rpm_outlier_data['Calculated torque [kNm]'],
-                                     mode='markers', name='RPM Outliers',
-                                     marker=dict(color='purple', symbol='square', size=10)))
+                                         mode='markers', name='RPM Outliers',
+                                         marker=dict(color='purple', symbol='square', size=10)))
 
                 # Add horizontal lines for the torque whiskers
                 fig.add_hline(y=torque_upper_whisker, line_dash="dash", line_color="gray", annotation_text="Torque Upper Whisker")
@@ -361,19 +379,34 @@ def main():
                 # Explanation for non-technical users
                 st.subheader("Understanding the Results")
                 st.write("""
-                    This analysis provides insights into the performance of the machine:
+                This analysis provides insights into the performance of the machine:
 
-            1. **Normal Data**: These are the typical operating points of the machine.
-            2. **Anomalies**: These are instances where the working pressure exceeds the set threshold, which might indicate unusual operating conditions or potential issues.
-            3. **Outliers**: These are data points that fall significantly outside the normal range for either torque or RPM. They may represent extreme operating conditions or measurement errors.
+                1. **Normal Data**: These are the typical operating points of the machine. They represent the standard working conditions and fall within expected ranges for revolution, torque, and pressure.
 
-            The statistical summary shows:
-            - The central tendency (mean, median) of the data
-            - The spread of the data (standard deviation, min, max)
-            - The shape of the distribution (25th, 50th, 75th percentiles)
+                2. **Anomalies**: These are instances where the working pressure exceeds the set threshold (currently set to {anomaly_threshold} bar). Anomalies might indicate:
+                   - Unusual operating conditions
+                   - Potential issues with the machine
+                   - Extreme workloads
 
-            Understanding these statistics can help identify patterns in machine operation and potential areas for optimization or maintenance.
-            """)
+                3. **Outliers**: These are data points that fall significantly outside the normal range for either torque or RPM. Outliers may represent:
+                   - Extreme operating conditions
+                   - Measurement errors
+                   - Temporary spikes in performance
+
+                The statistical summary shows:
+                - **Mean**: The average value, giving you a sense of the typical operating point.
+                - **Median (50%)**: The middle value when data is sorted, useful for understanding the central tendency without being affected by extreme values.
+                - **Standard Deviation (std)**: Measures the spread of the data. A larger standard deviation indicates more variability in the measurements.
+                - **Min and Max**: The lowest and highest values recorded, helping to understand the range of operation.
+                - **25%, 50%, 75% (Quartiles)**: These split the data into four equal parts, giving you an idea of the data's distribution.
+
+                Understanding these statistics can help identify:
+                - Typical operating ranges
+                - Unusual patterns in machine operation
+                - Potential areas for optimization or maintenance
+
+                If you notice a high number of anomalies or outliers, or if the statistics show unexpected values, it may be worth investigating further or consulting with a technical expert for a more detailed analysis.
+                """)
 
                 # Download buttons
                 st.sidebar.markdown("## Download Results")
@@ -387,8 +420,9 @@ def main():
                 st.sidebar.markdown(get_table_download_link(stats_df, "statistical_analysis.csv", "Download Statistical Analysis"), unsafe_allow_html=True)
 
                 # Plot
-                plot_base64 = fig_to_base64(fig)
-                href = f'<a href="data:image/png;base64,{plot_base64}" download="torque_analysis_plot.png">Download Plot</a>'
+                plot_data = fig.to_json()
+                b64 = base64.b64encode(plot_data.encode()).decode()
+                href = f'<a href="data:application/json;base64,{b64}" download="torque_analysis_plot.json">Download Plot Data</a>'
                 st.sidebar.markdown(href, unsafe_allow_html=True)
 
                 # Result Analysis
