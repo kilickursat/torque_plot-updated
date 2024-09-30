@@ -402,7 +402,7 @@ if pressure_col and revolution_col:
     st.sidebar.markdown(href, unsafe_allow_html=True)
 
     # Result Analysis
-                    result_analysis_df = pd.DataFrame({
+    result_analysis_df = pd.DataFrame({
                         'Metric': ['Total data points', 'Normal data points', 'Anomaly data points', 'Percentage of anomalies',
                                    'Elbow point Max', 'Elbow point Cont', 'Torque Upper Whisker', 'Torque Lower Whisker',
                                    'Number of torque outliers', 'Percentage of torque outliers', 'RPM Upper Whisker', 'RPM Lower Whisker',
