@@ -386,8 +386,7 @@ def main():
                 "Anomalies are identified when the working pressure exceeds a defined threshold, which could indicate potential issues. "
                 "Outliers are data points that fall outside the normal range, which may also signal unusual conditions that warrant attention.")
         
-        else:
-            st.error("Could not find the required columns for pressure and revolution in the uploaded file.")
+
     else:
         st.info("Please upload a Raw Data file to begin the analysis.")
 
