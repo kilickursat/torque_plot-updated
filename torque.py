@@ -385,6 +385,7 @@ def main():
         st.info("The Anomaly Detection Results highlight points in the data where the machine's behavior deviates from expected patterns. "
                 "Anomalies are identified when the working pressure exceeds a defined threshold, which could indicate potential issues. "
                 "Outliers are data points that fall outside the normal range, which may also signal unusual conditions that warrant attention.")
+        
         else:
             st.error("Could not find the required columns for pressure and revolution in the uploaded file.")
     else:
