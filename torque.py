@@ -1,11 +1,20 @@
 import streamlit as st
 import numpy as np
-import matplotlib.pyplot as plt
 import pandas as pd
 import io
 import base64
 import plotly.graph_objects as go
-import plotly.express as px
+
+# Optimization: Add cache decorator to improve performance on repeated file loads
+@st.cache_data
+def load_data(file, file_type):
+    if file_type == 'csv':
+        df = pd.read_csv(file, sep=';', decimal=',')
+    elif file_type == 'xlsx':
+        df = pd.read_excel(file)
+    else:
+        return None
+    return df
 
 # Update the sensor column map with more potential column names
 sensor_column_map = {
@@ -28,7 +37,7 @@ def find_sensor_columns(df):
                     break
     return found_columns
 
-
+@st.cache_data
 def load_machine_specs(file):
     """Load machine specifications from XLSX file."""
     specs_df = pd.read_excel(file)
@@ -122,64 +131,10 @@ def add_logo():
             display: block;
             height: 100px; /* Reduced height */
         }
-        [data-testid="stSidebar"] > div:first-child {
-            padding-top: 0rem;
-        }
-        .sidebar-content {
-            padding-top: 100px; /* Same as the ::before height */
-        }
-        .sidebar-content > * {
-            margin-bottom: 0.5rem !important; /* Reduce space between sidebar elements */
-        }
         </style>
         """,
         unsafe_allow_html=True,
     )
-
-def get_table_download_link(df, filename, text):
-    """Generate a download link for a pandas DataFrame."""
-    csv = df.to_csv(index=False)
-    b64 = base64.b64encode(csv.encode()).decode()  # some strings <-> bytes conversions necessary here
-    href = f'<a href="data:file/csv;base64,{b64}" download="{filename}">{text}</a>'
-    return href
-
-def fig_to_base64(fig):
-    """Convert a Matplotlib figure to a base64 string."""
-    buf = io.BytesIO()
-    fig.savefig(buf, format='png')
-    buf.seek(0)
-    img_str = base64.b64encode(buf.getvalue()).decode()
-    return img_str
-
-def load_data_file(file):
-    """Loads a CSV or XLSX file and returns a pandas DataFrame."""
-    if file.name.endswith(".csv"):
-        df = pd.read_csv(file, sep=';', decimal=',')
-    elif file.name.endswith(".xlsx"):
-        df = pd.read_excel(file)
-    else:
-        st.error("Unsupported file format. Please upload a CSV or XLSX file.")
-        return None
-    
-    return df
-
-def display_columns_with_hover(df):
-    """Displays the column names with hover-over tooltips for each column."""
-    with st.expander("View and Hover Over Columns"):
-        st.write("Hover over the column names to inspect them:")
-        
-        # Create a DataFrame to show the column names with hover
-        for col in df.columns:
-            st.write(f"**{col}**", help=f"Column '{col}' has {df[col].notna().sum()} non-null values.")
-
-def get_column(df, sensor_name):
-    """Find the correct column in the DataFrame based on the sensor name mapping."""
-    possible_columns = sensor_column_map[sensor_name]
-    for col in possible_columns:
-        if col in df.columns:
-            return col
-    return None
-
 
 def main():
     set_page_config()
@@ -205,12 +160,13 @@ def main():
             st.write("**Loaded Machine Parameters:**")
             params_df = pd.DataFrame([machine_params])
             
+            # Apply custom dark green color for the Loaded Machine Parameters
             st.markdown(
-                f"""
+                """
                 <style>
-                .dataframe {{
-                    background-color: rgb(0, 62, 37);
-                    color: white;
+                .stDataFrame {{
+                    background-color: rgb(0, 62, 37) !important;
+                    color: white !important;
                 }}
                 </style>
                 """,
@@ -231,11 +187,16 @@ def main():
     anomaly_threshold = st.sidebar.number_input("Anomaly threshold (bar)", value=250, min_value=100, max_value=500)
 
     if raw_data_file is not None:
-        df = load_data_file(raw_data_file)
+        # Load data with optimization for performance
+        file_type = raw_data_file.name.split('.')[-1]
+        df = load_data(raw_data_file, file_type)
         
         if df is not None:
             # Display columns with hover-over functionality
-            display_columns_with_hover(df)
+            with st.expander("View and Hover Over Columns"):
+                st.write("Hover over the column names to inspect them:")
+                for col in df.columns:
+                    st.write(f"**{col}**")
 
             # Allow user to select columns
             pressure_col = st.selectbox("Select pressure column", options=df.columns)
@@ -368,68 +329,14 @@ def main():
                     st.write("Working Pressure Statistics:")
                     st.write(df[pressure_col].describe())
 
-                # Explanation for non-technical users
-                st.subheader("Understanding the Results")
-                st.write("""
-                This analysis provides insights into the performance of the machine:
-
-                1. **Normal Data**: These are the typical operating points of the machine. They represent the standard working conditions and fall within expected ranges for revolution, torque, and pressure.
-
-                2. **Anomalies**: These are instances where the working pressure exceeds the set threshold (currently set to {anomaly_threshold} bar). Anomalies might indicate:
-                   - Unusual operating conditions
-                   - Potential issues with the machine
-                   - Extreme workloads
-
-                3. **Outliers**: These are data points that fall significantly outside the normal range for either torque or RPM. Outliers may represent:
-                   - Extreme operating conditions
-                   - Measurement errors
-                   - Temporary spikes in performance
-
-                The statistical summary shows:
-                - **Mean**: The average value, giving you a sense of the typical operating point.
-                - **Median (50%)**: The middle value when data is sorted, useful for understanding the central tendency without being affected by extreme values.
-                - **Standard Deviation (std)**: Measures the spread of the data. A larger standard deviation indicates more variability in the measurements.
-                - **Min and Max**: The lowest and highest values recorded, helping to understand the range of operation.
-                - **25%, 50%, 75% (Quartiles)**: These split the data into four equal parts, giving you an idea of the data's distribution.
-
-                Understanding these statistics can help identify:
-                - Typical operating ranges
-                - Unusual patterns in machine operation
-                - Potential areas for optimization or maintenance
-
-                If you notice a high number of anomalies or outliers, or if the statistics show unexpected values, it may be worth investigating further or consulting with a technical expert for a more detailed analysis.
-                """)
-
-                # Download buttons
+                # Download buttons for analysis results
                 st.sidebar.markdown("## Download Results")
-
-                # Statistical Analysis Results
                 stats_df = pd.DataFrame({
                     'RPM': rpm_stats,
                     'Calculated Torque': df['Calculated torque [kNm]'].describe(),
                     'Working Pressure': df[pressure_col].describe()
                 })
                 st.sidebar.markdown(get_table_download_link(stats_df, "statistical_analysis.csv", "Download Statistical Analysis"), unsafe_allow_html=True)
-
-                # Plot
-                plot_data = fig.to_json()
-                b64 = base64.b64encode(plot_data.encode()).decode()
-                href = f'<a href="data:application/json;base64,{b64}" download="torque_analysis_plot.json">Download Plot Data</a>'
-                st.sidebar.markdown(href, unsafe_allow_html=True)
-
-                # Result Analysis
-                result_analysis_df = pd.DataFrame({
-                    'Metric': ['Total data points', 'Normal data points', 'Anomaly data points', 'Percentage of anomalies',
-                               'Elbow point Max', 'Elbow point Cont', 'Torque Upper Whisker', 'Torque Lower Whisker',
-                               'Number of torque outliers', 'Percentage of torque outliers', 'RPM Upper Whisker', 'RPM Lower Whisker',
-                               'Number of RPM outliers', 'Percentage of RPM outliers'],
-                    'Value': [len(df), len(normal_data), len(anomaly_data), f"{len(anomaly_data) / len(df) * 100:.2f}%",
-                              f"{elbow_rpm_max:.2f}", f"{elbow_rpm_cont:.2f}", f"{torque_upper_whisker:.2f}",
-                              f"{torque_lower_whisker:.2f}", len(torque_outliers),
-                              f"{len(torque_outliers) / len(df) * 100:.2f}%", f"{rpm_upper_whisker:.2f}",
-                              f"{rpm_lower_whisker:.2f}", len(rpm_outliers), f"{len(rpm_outliers) / len(df) * 100:.2f}%"]
-                })
-                st.sidebar.markdown(get_table_download_link(result_analysis_df, "result_analysis.csv", "Download Result Analysis"), unsafe_allow_html=True)
 
     else:
         st.info("Please upload a Raw Data file to begin the analysis.")
