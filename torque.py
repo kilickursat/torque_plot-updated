@@ -1,7 +1,6 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-import io
 import base64
 import plotly.graph_objects as go
 
@@ -135,7 +134,6 @@ def add_logo():
         """,
         unsafe_allow_html=True,
     )
-
 
 def get_table_download_link(df, filename, text):
     """Generate a download link for a pandas DataFrame."""
