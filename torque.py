@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import base64
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 # Optimization: Add cache decorator to improve performance on repeated file loads
 @st.cache_data
@@ -41,11 +42,6 @@ def load_machine_specs(file):
     """Load machine specifications from XLSX file."""
     specs_df = pd.read_excel(file)
     specs_df.columns = specs_df.columns.str.strip()  # Strip any leading/trailing whitespace and newlines
-    
-    # Display the columns in a more UX-friendly design
-    with st.expander("Columns in the Uploaded Excel File"):
-        st.dataframe(pd.DataFrame(specs_df.columns, columns=["Column Names"]))
-    
     return specs_df
 
 def get_machine_params(specs_df, machine_type):
@@ -142,8 +138,6 @@ def get_table_download_link(df, filename, text):
     href = f'<a href="data:file/csv;base64,{b64}" download="{filename}">{text}</a>'
     return href
 
-
-# New functions for statistical display and explanation
 def display_statistics(df, revolution_col, pressure_col):
     """Display statistics of RPM, Torque, and Pressure."""
     st.subheader("Statistical Summary")
@@ -222,10 +216,18 @@ def main():
             st.markdown(
                 """
                 <style>
-                .stDataFrame {{
+                .stDataFrame {
                     background-color: rgb(0, 62, 37) !important;
                     color: white !important;
-                }}
+                }
+                .stDataFrame th {
+                    background-color: rgb(0, 62, 37) !important;
+                    color: white !important;
+                }
+                .stDataFrame td {
+                    background-color: rgb(0, 62, 37) !important;
+                    color: white !important;
+                }
                 </style>
                 """,
                 unsafe_allow_html=True
@@ -250,15 +252,12 @@ def main():
         df = load_data(raw_data_file, file_type)
         
         if df is not None:
-            # Display columns with hover-over functionality
-            with st.expander("View and Hover Over Columns"):
-                st.write("Hover over the column names to inspect them:")
-                for col in df.columns:
-                    st.write(f"**{col}**")
-
+            # Find sensor columns
+            sensor_columns = find_sensor_columns(df)
+            
             # Allow user to select columns
-            pressure_col = st.selectbox("Select pressure column", options=df.columns)
-            revolution_col = st.selectbox("Select revolution column", options=df.columns)
+            pressure_col = st.selectbox("Select pressure column", options=df.columns, index=df.columns.get_loc(sensor_columns.get('pressure', df.columns[0])))
+            revolution_col = st.selectbox("Select revolution column", options=df.columns, index=df.columns.get_loc(sensor_columns.get('revolution', df.columns[0])))
             
             if pressure_col and revolution_col:
                 # Proceed with data processing and visualization
@@ -310,7 +309,7 @@ def main():
                 rpm_curve = np.linspace(0.1, machine_params['n1'], 1000)  # Avoid division by zero
 
                 # Create Plotly figure
-                fig = go.Figure()
+                fig = make_subplots(rows=1, cols=1)
 
                 # Plot torque curves
                 fig.add_trace(go.Scatter(x=rpm_curve[rpm_curve <= elbow_rpm_cont],
@@ -365,7 +364,7 @@ def main():
                     xaxis_title='Revolution [1/min]',
                     yaxis_title='Torque [kNm]',
                     xaxis=dict(range=[0, x_axis_max]),
-                                        yaxis=dict(range=[0, max(60, df['Calculated torque [kNm]'].max() * 1.1)]),
+                    yaxis=dict(range=[0, max(60, df['Calculated torque [kNm]'].max() * 1.1)]),
                     legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5)
                 )
 
@@ -391,4 +390,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
