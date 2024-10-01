@@ -8,13 +8,25 @@ from plotly.subplots import make_subplots
 # Optimization: Add cache decorator to improve performance on repeated file loads
 @st.cache_data
 def load_data(file, file_type):
-    if file_type == 'csv':
-        df = pd.read_csv(file, sep=';', decimal=',')
-    elif file_type == 'xlsx':
-        df = pd.read_excel(file)
-    else:
+    try:
+        if file_type == 'csv':
+            # Try different separators and encodings
+            for sep in [';', ',']:
+                for encoding in ['utf-8', 'iso-8859-1']:
+                    try:
+                        df = pd.read_csv(file, sep=sep, encoding=encoding, decimal=',')
+                        return df
+                    except:
+                        pass
+            raise ValueError("Unable to read CSV file with tried separators and encodings")
+        elif file_type == 'xlsx':
+            df = pd.read_excel(file)
+            return df
+        else:
+            raise ValueError("Unsupported file type")
+    except Exception as e:
+        st.error(f"Error loading file: {str(e)}")
         return None
-    return df
 
 # Update the sensor column map with more potential column names
 sensor_column_map = {
@@ -208,31 +220,54 @@ def main():
             
             machine_params = get_machine_params(machine_specs, selected_machine)
             
-            # Display loaded parameters in a table with custom color
-            st.write("**Loaded Machine Parameters:**")
-            params_df = pd.DataFrame([machine_params])
+            # Convert the machine parameters to a DataFrame
+            params_df = pd.DataFrame([machine_params])   
+            # Create a styled HTML table with thicker borders
+            styled_table = params_df.style.set_table_styles([
+                {'selector': 'th', 'props': [('border', '2px solid black'), ('padding', '5px')]},
+                {'selector': 'td', 'props': [('border', '2px solid black'), ('padding', '5px')]},
+                {'selector': '', 'props': [('border-collapse', 'collapse')]}
+            ]).to_html()
             
-            # Apply custom dark green color for the Loaded Machine Parameters
+            # Remove the unwanted CSS that appears above the table
+            styled_table = styled_table.split('</style>')[-1]
+            
+            # Display the styled table
             st.markdown(
-                """
+                f"""
                 <style>
-                .stDataFrame {
-                    background-color: rgb(0, 62, 37) !important;
-                    color: white !important;
-                }
-                .stDataFrame th {
-                    background-color: rgb(0, 62, 37) !important;
-                    color: white !important;
-                }
-                .stDataFrame td {
-                    background-color: rgb(0, 62, 37) !important;
-                    color: white !important;
-                }
+                table {{
+                    border-collapse: collapse;
+                    margin: 25px 0;
+                    font-size: 0.9em;
+                    font-family: sans-serif;
+                    min-width: 400px;
+                    box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
+                }}
+                table thead tr {{
+                    background-color: rgb(0, 62, 37);
+                    color: #ffffff;
+                    text-align: left;
+                }}
+                table th,
+                table td {{
+                    padding: 12px 15px;
+                    border: 2px solid black;
+                }}
+                table tbody tr {{
+                    border-bottom: 1px solid #dddddd;
+                }}
+                table tbody tr:nth-of-type(even) {{
+                    background-color: #f3f3f3;
+                }}
+                table tbody tr:last-of-type {{
+                    border-bottom: 2px solid rgb(0, 62, 37);
+                }}
                 </style>
+                {styled_table}
                 """,
                 unsafe_allow_html=True
             )
-            st.dataframe(params_df)
         except Exception as e:
             st.error(f"An error occurred while processing the machine specifications: {str(e)}")
             st.stop()
@@ -248,7 +283,7 @@ def main():
 
     if raw_data_file is not None:
         # Load data with optimization for performance
-        file_type = raw_data_file.name.split('.')[-1]
+        file_type = raw_data_file.name.split('.')[-1].lower()
         df = load_data(raw_data_file, file_type)
         
         if df is not None:
@@ -264,6 +299,7 @@ def main():
                 df[revolution_col] = pd.to_numeric(df[revolution_col], errors='coerce')
                 df[pressure_col] = pd.to_numeric(df[pressure_col], errors='coerce')
                 df = df.dropna(subset=[revolution_col, pressure_col])
+
 
                 # RPM Statistics
                 rpm_stats = df[revolution_col].describe()
