@@ -344,21 +344,32 @@ def main():
                 # Generate RPM values for the torque curve
                 rpm_curve = np.linspace(0.1, machine_params['n1'], 1000)  # Avoid division by zero
 
+                # Calculate the y-value where vertical lines should stop
+                max_y_value = max(M_max_Vg2(elbow_rpm_max), M_max_Vg2(elbow_rpm_cont), M_max_Vg2(machine_params['n1']))
+                
                 # Create Plotly figure
                 fig = make_subplots(rows=1, cols=1)
-
+                
                 # Plot torque curves
                 fig.add_trace(go.Scatter(x=rpm_curve[rpm_curve <= elbow_rpm_cont],
                                          y=np.full_like(rpm_curve[rpm_curve <= elbow_rpm_cont], machine_params['M_cont_value']),
                                          mode='lines', name='M cont Max [kNm]', line=dict(color='green', width=2)))
-
+                
                 fig.add_trace(go.Scatter(x=rpm_curve[rpm_curve <= elbow_rpm_max],
                                          y=np.full_like(rpm_curve[rpm_curve <= elbow_rpm_max], machine_params['M_max_Vg1']),
                                          mode='lines', name='M max Vg1 [kNm]', line=dict(color='red', width=2)))
-
+                
                 fig.add_trace(go.Scatter(x=rpm_curve[rpm_curve <= machine_params['n1']],
                                          y=M_max_Vg2(rpm_curve[rpm_curve <= machine_params['n1']]),
                                          mode='lines', name='M max Vg2 [kNm]', line=dict(color='red', width=2, dash='dash')))
+                
+                # Add truncated vertical lines at elbow points
+                fig.add_shape(type="line", x0=elbow_rpm_max, y0=0, x1=elbow_rpm_max, y1=M_max_Vg2(elbow_rpm_max),
+                              line=dict(color="purple", width=1, dash="dot"))
+                fig.add_shape(type="line", x0=elbow_rpm_cont, y0=0, x1=elbow_rpm_cont, y1=M_max_Vg2(elbow_rpm_cont),
+                              line=dict(color="orange", width=1, dash="dot"))
+                fig.add_shape(type="line", x0=machine_params['n1'], y0=0, x1=machine_params['n1'], y1=M_max_Vg2(machine_params['n1']),
+                              line=dict(color="black", width=1, dash="dash"))
 
                 # Add vertical lines at elbow points
                 fig.add_vline(x=elbow_rpm_max, line_dash="dot", line_color="purple")
@@ -401,7 +412,8 @@ def main():
                     yaxis_title='Torque [kNm]',
                     xaxis=dict(range=[0, x_axis_max]),
                     yaxis=dict(range=[0, max(60, df['Calculated torque [kNm]'].max() * 1.1)]),
-                    legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5)
+                    legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5),
+                    height=800
                 )
 
                 st.plotly_chart(fig, use_container_width=True)
