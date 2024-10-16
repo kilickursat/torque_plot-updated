@@ -371,10 +371,7 @@ def main():
                 fig.add_shape(type="line", x0=machine_params['n1'], y0=0, x1=machine_params['n1'], y1=M_max_Vg2(machine_params['n1']),
                               line=dict(color="black", width=1, dash="dash"))
 
-                # Add vertical lines at elbow points
-                fig.add_vline(x=elbow_rpm_max, line_dash="dot", line_color="purple")
-                fig.add_vline(x=elbow_rpm_cont, line_dash="dot", line_color="orange")
-                fig.add_vline(x=machine_params['n1'], line_dash="dash", line_color="black")
+
 
                 # Separate normal and anomaly data
                 normal_data = df[~df['Is_Anomaly']]
