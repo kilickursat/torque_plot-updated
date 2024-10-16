@@ -344,26 +344,31 @@ def main():
                 # Generate RPM values for the torque curve
                 rpm_curve = np.linspace(0.1, machine_params['n1'], 1000)  # Avoid division by zero
 
-                # Create Plotly figure
                 fig = make_subplots(rows=1, cols=1)
-
+            
                 # Plot torque curves
                 fig.add_trace(go.Scatter(x=rpm_curve[rpm_curve <= elbow_rpm_cont],
                                          y=np.full_like(rpm_curve[rpm_curve <= elbow_rpm_cont], machine_params['M_cont_value']),
                                          mode='lines', name='M cont Max [kNm]', line=dict(color='green', width=2)))
-
+            
                 fig.add_trace(go.Scatter(x=rpm_curve[rpm_curve <= elbow_rpm_max],
                                          y=np.full_like(rpm_curve[rpm_curve <= elbow_rpm_max], machine_params['M_max_Vg1']),
                                          mode='lines', name='M max Vg1 [kNm]', line=dict(color='red', width=2)))
-
+            
                 fig.add_trace(go.Scatter(x=rpm_curve[rpm_curve <= machine_params['n1']],
                                          y=M_max_Vg2(rpm_curve[rpm_curve <= machine_params['n1']]),
                                          mode='lines', name='M max Vg2 [kNm]', line=dict(color='red', width=2, dash='dash')))
-
-                # Add vertical lines at elbow points
-                fig.add_vline(x=elbow_rpm_max, line_dash="dot", line_color="purple")
-                fig.add_vline(x=elbow_rpm_cont, line_dash="dot", line_color="orange")
-                fig.add_vline(x=machine_params['n1'], line_dash="dash", line_color="black")
+            
+                # Calculate the y-values for the vertical lines
+                y_max_vg2 = M_max_Vg2(np.array([elbow_rpm_max, elbow_rpm_cont, machine_params['n1']]))
+            
+                # Add truncated vertical lines at elbow points
+                fig.add_trace(go.Scatter(x=[elbow_rpm_max, elbow_rpm_max], y=[0, y_max_vg2[0]],
+                                         mode='lines', line=dict(color='purple', width=1, dash='dot'), showlegend=False))
+                fig.add_trace(go.Scatter(x=[elbow_rpm_cont, elbow_rpm_cont], y=[0, y_max_vg2[1]],
+                                         mode='lines', line=dict(color='orange', width=1, dash='dot'), showlegend=False))
+                fig.add_trace(go.Scatter(x=[machine_params['n1'], machine_params['n1']], y=[0, y_max_vg2[2]],
+                                         mode='lines', line=dict(color='black', width=1, dash='dash'), showlegend=False))
 
                 # Separate normal and anomaly data
                 normal_data = df[~df['Is_Anomaly']]
@@ -394,16 +399,19 @@ def main():
                 fig.add_hline(y=torque_upper_whisker, line_dash="dash", line_color="gray", annotation_text="Torque Upper Whisker")
                 fig.add_hline(y=torque_lower_whisker, line_dash="dot", line_color="gray", annotation_text="Torque Lower Whisker")
 
-                # Set plot layout
+                # Set plot layout with adjusted dimensions
                 fig.update_layout(
                     title=f'{selected_machine} - Torque Analysis',
                     xaxis_title='Revolution [1/min]',
                     yaxis_title='Torque [kNm]',
                     xaxis=dict(range=[0, x_axis_max]),
                     yaxis=dict(range=[0, max(60, df['Calculated torque [kNm]'].max() * 1.1)]),
-                    legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5)
+                    legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5),
+                    width=1000,  # Adjust this value to change the width
+                    height=800,  # Adjust this value to change the height
+                    margin=dict(l=50, r=50, t=100, b=100)  # Adjust margins as needed
                 )
-
+            
                 st.plotly_chart(fig, use_container_width=True)
 
                 # Display the statistical summary
