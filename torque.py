@@ -409,8 +409,8 @@ def main():
                     yaxis_title='Torque [kNm]',
                     xaxis=dict(range=[0, x_axis_max]),
                     yaxis=dict(range=[0, max(60, df['Calculated torque [kNm]'].max() * 1.1)]),
-                    legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.3),
-                    height=500
+                    legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5),
+                    height=600
                 )
 
                 st.plotly_chart(fig, use_container_width=True)
