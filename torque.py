@@ -4,6 +4,7 @@ import pandas as pd
 import base64
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import datetime
 
 # Optimization: Add cache decorator to improve performance on repeated file loads
 @st.cache_data
@@ -167,15 +168,15 @@ def display_statistics(df, revolution_col, pressure_col, thrust_force_col=None):
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.write("RPM Statistics:")
+        st.write("**RPM Statistics:**")
         st.write(df[revolution_col].describe())
 
     with col2:
-        st.write("Calculated Torque Statistics:")
+        st.write("**Calculated Torque Statistics:**")
         st.write(df['Calculated torque [kNm]'].describe())
 
     with col3:
-        st.write("Working Pressure Statistics:")
+        st.write("**Working Pressure Statistics:**")
         st.write(df[pressure_col].describe())
 
     if thrust_force_col is not None and 'Thrust Force per Cutting Ring' in df.columns:
@@ -454,6 +455,8 @@ def original_page():
 
     else:
         st.info("Please upload a Raw Data file to begin the analysis.")
+    st.title("TorqueVision: Herrenknecht's Advanced Analysis App")
+    st.write("The original analysis page is under development.")
 
 def advanced_page():
     st.title("Advanced Analysis")
@@ -589,7 +592,7 @@ def advanced_page():
             # Ask the user to select the original time unit
             time_unit = st.selectbox("Select Original Time Unit for Time Column", options=["10 milliseconds", "milliseconds", "seconds", "minutes", "hours"], index=0)
 
-            # Convert the time column to a consistent unit (milliseconds)
+            # Convert the time column to total milliseconds
             if time_unit == "10 milliseconds":
                 df['Time_in_ms'] = df[time_col] * 10
             elif time_unit == "milliseconds":
@@ -601,35 +604,33 @@ def advanced_page():
             elif time_unit == "hours":
                 df['Time_in_ms'] = df[time_col] * 3600 * 1000
 
-            # Allow the user to select the desired time unit for analysis and plotting
-            analysis_time_unit = st.selectbox("Select Time Unit for Analysis and Plots", options=["milliseconds", "seconds", "minutes", "hours"], index=1)
+            # Convert 'Time_in_ms' to timedelta
+            df['Elapsed_Time'] = pd.to_timedelta(df['Time_in_ms'], unit='ms')
 
-            # Convert 'Time_in_ms' to the selected analysis time unit
-            if analysis_time_unit == "milliseconds":
-                df['Time'] = df['Time_in_ms']
-            elif analysis_time_unit == "seconds":
-                df['Time'] = df['Time_in_ms'] / 1000
-            elif analysis_time_unit == "minutes":
-                df['Time'] = df['Time_in_ms'] / (60 * 1000)
-            elif analysis_time_unit == "hours":
-                df['Time'] = df['Time_in_ms'] / (3600 * 1000)
+            # Display the time range
+            min_time = df['Elapsed_Time'].min()
+            max_time = df['Elapsed_Time'].max()
+            st.write(f"Data time range: {str(min_time)} to {str(max_time)}")
 
-            # Display the time range based on the selected analysis time unit
-            min_time = df['Time'].min()
-            max_time = df['Time'].max()
-            st.write(f"Data time range: {min_time:.2f} to {max_time:.2f} {analysis_time_unit}")
+            # Time range slider using total seconds for the slider values
+            total_seconds = df['Elapsed_Time'].dt.total_seconds()
+            min_seconds = total_seconds.min()
+            max_seconds = total_seconds.max()
 
-            # Time range slider
+            # Allow the user to select the time range in a human-readable format
+            def format_time(seconds):
+                return str(datetime.timedelta(seconds=seconds))
+
             time_range = st.slider(
                 "Select Time Range",
-                min_value=float(min_time),
-                max_value=float(max_time),
-                value=(float(min_time), float(max_time)),
-                format="%.2f"
+                min_value=float(min_seconds),
+                max_value=float(max_seconds),
+                value=(float(min_seconds), float(max_seconds)),
+                format_func=format_time
             )
 
             # Filter data based on selected time range
-            df = df[(df['Time'] >= time_range[0]) & (df['Time'] <= time_range[1])]
+            df = df[(total_seconds >= time_range[0]) & (total_seconds <= time_range[1])]
 
             # Proceed with data processing
             # Ensure numeric columns are numeric
@@ -706,23 +707,49 @@ def advanced_page():
 
             for i, (col_name, display_name, color) in enumerate(features, start=1):
                 fig_time.add_trace(go.Scatter(
-                    x=df['Time'], y=df[col_name],
+                    x=df['Elapsed_Time'], y=df[col_name],
                     mode='lines', name=display_name,
                     line=dict(color=color)
                 ), row=i, col=1)
                 fig_time.update_yaxes(title_text=display_name, row=i, col=1)
 
-            # Update x-axis title to reflect the selected time unit
-            fig_time.update_xaxes(title_text=f'Time [{analysis_time_unit}]', row=num_features, col=1)
-
+            # Update x-axis with formatted time
             fig_time.update_layout(
                 height=300 * num_features,
                 showlegend=False
             )
+
+            # Format x-axis tick labels
+            fig_time.update_xaxes(
+                title_text='Elapsed Time',
+                tickformat='%H:%M:%S',
+                tickmode='auto',
+                nticks=20
+            )
+
             st.plotly_chart(fig_time, use_container_width=True)
 
-            # [Rest of your analysis and plotting code, ensuring all time axes use df['Time']]
-            # Include torque plot and any other visualizations as needed
+            # **Add the statistical summary display here**
+            display_statistics(df, revolution_col, pressure_col, thrust_force_col)
+
+            # Additional Statistical Features
+            st.subheader("Additional Statistical Features")
+
+            # Advance Rate
+            st.write("**Advance Rate Statistics:**")
+            st.write(df[advance_rate_col].describe())
+
+            # Calculated Penetration Rate
+            st.write("**Penetration Rate Statistics (Calculated):**")
+            st.write(df['Calculated Penetration Rate'].describe())
+
+            # Thrust Force at the Cutting Head
+            st.write("**Thrust Force at the Cutting Head Statistics:**")
+            st.write(df[thrust_force_col].describe())
+
+            # Thrust Force per Cutting Ring
+            st.write("**Thrust Force per Cutting Ring Statistics:**")
+            st.write(df['Thrust Force per Cutting Ring'].describe())
 
             # Provide explanations and annotations
             st.write("""
@@ -756,3 +783,4 @@ def advanced_page():
 
 if __name__ == "__main__":
     main()
+
