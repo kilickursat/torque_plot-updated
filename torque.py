@@ -34,7 +34,6 @@ sensor_column_map = {
     "revolution": ["Revolution [rpm]", "AzV.V13_SR_Drehz_nach_Abgl_Z | DB 60.DBD 30", "Vitesse [rpm]", "Revoluciones [rpm]", "RPM", "Speed", "Rotation Speed"],
     "time": ["Time", "Timestamp", "DateTime", "Date", "Zeit"],
     "advance_rate": ["Advance Rate", "Vorschubgeschwindigkeit", "Avance", "Rate of Penetration", "ROP", "Advance [m/min]", "Advance [mm/min]"],
-    "penetration_rate": ["Penetration Rate", "Penetration Speed", "Eindringgeschwindigkeit", "Penetration [m/min]", "Penetration [mm/min]"],
     "thrust_force": ["Thrust Force", "Thrust", "Vorschubkraft", "Force", "Force at Cutting Head", "Thrust Force [kN]"]
 }
 
@@ -552,7 +551,7 @@ def advanced_page():
             sensor_columns = find_sensor_columns(df)
 
             # Check for required columns and allow user to select if not found
-            required_columns = ['pressure', 'revolution', 'time', 'advance_rate', 'penetration_rate', 'thrust_force']
+            required_columns = ['pressure', 'revolution', 'time', 'advance_rate', 'thrust_force']
             for col in required_columns:
                 if col not in sensor_columns:
                     st.warning(f"Column for {col} not found in data.")
@@ -563,9 +562,9 @@ def advanced_page():
             df[time_col] = pd.to_datetime(df[time_col], errors='coerce')
             df = df.dropna(subset=[time_col])
 
-            # Perform data filtration based on time
-            min_time = df[time_col].min()
-            max_time = df[time_col].max()
+            # Convert min_time and max_time to Python datetime objects
+            min_time = df[time_col].min().to_pydatetime()
+            max_time = df[time_col].max().to_pydatetime()
             st.write(f"Data time range: {min_time} to {max_time}")
 
             time_range = st.slider("Select Time Range", min_value=min_time, max_value=max_time, value=(min_time, max_time), format="YYYY-MM-DD HH:mm:ss")
@@ -577,15 +576,17 @@ def advanced_page():
             pressure_col = sensor_columns['pressure']
             revolution_col = sensor_columns['revolution']
             advance_rate_col = sensor_columns['advance_rate']
-            penetration_rate_col = sensor_columns['penetration_rate']
             thrust_force_col = sensor_columns['thrust_force']
 
             # Ensure numeric columns are numeric
-            for col in [pressure_col, revolution_col, advance_rate_col, penetration_rate_col, thrust_force_col]:
+            for col in [pressure_col, revolution_col, advance_rate_col, thrust_force_col]:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
 
             # Drop rows with NaNs in these columns
-            df = df.dropna(subset=[pressure_col, revolution_col, advance_rate_col, penetration_rate_col, thrust_force_col])
+            df = df.dropna(subset=[pressure_col, revolution_col, advance_rate_col, thrust_force_col])
+
+            # Calculate Penetration Rate as Advance Rate divided by Revolution
+            df['Calculated Penetration Rate'] = df[advance_rate_col] / df[revolution_col]
 
             # RPM Statistics
             rpm_stats = df[revolution_col].describe()
@@ -710,11 +711,12 @@ def advanced_page():
             st.write("**Advance Rate Statistics:**")
             st.write(df[advance_rate_col].describe())
 
-            # Penetration Rate
-            st.write("**Penetration Rate Statistics:**")
-            st.write(df[penetration_rate_col].describe())
+            # Calculated Penetration Rate
+            st.write("**Penetration Rate Statistics (Calculated):**")
+            st.write(df['Calculated Penetration Rate'].describe())
 
             # Thrust Force at the Cutting Head
+            thrust_force_col = sensor_columns['thrust_force']
             st.write("**Thrust Force at the Cutting Head Statistics:**")
             st.write(df[thrust_force_col].describe())
 
@@ -725,10 +727,10 @@ def advanced_page():
             fig_adv.update_layout(xaxis_title='Time', yaxis_title='Advance Rate', width=800, height=400)
             st.plotly_chart(fig_adv, use_container_width=True)
 
-            # Plot Penetration Rate over Time
-            st.subheader("Penetration Rate over Time")
+            # Plot Calculated Penetration Rate over Time
+            st.subheader("Penetration Rate over Time (Calculated)")
             fig_pen = go.Figure()
-            fig_pen.add_trace(go.Scatter(x=df[time_col], y=df[penetration_rate_col], mode='lines', name='Penetration Rate'))
+            fig_pen.add_trace(go.Scatter(x=df[time_col], y=df['Calculated Penetration Rate'], mode='lines', name='Penetration Rate'))
             fig_pen.update_layout(xaxis_title='Time', yaxis_title='Penetration Rate', width=800, height=400)
             st.plotly_chart(fig_pen, use_container_width=True)
 
@@ -744,7 +746,7 @@ def advanced_page():
             **Interpretation Guide:**
 
             - **Advance Rate**: Indicates the speed at which the machine is advancing. Fluctuations may indicate changes in ground conditions or operational parameters.
-            - **Penetration Rate**: Reflects how quickly the cutting head is penetrating the material. Useful for assessing efficiency.
+            - **Penetration Rate**: Calculated as Advance Rate divided by Revolution. Reflects how efficiently the machine penetrates the material per revolution.
             - **Thrust Force**: Represents the force applied at the cutting head. High values may indicate hard ground or potential mechanical issues.
 
             Use the visualizations to monitor trends and identify any unusual patterns that may require further investigation.
@@ -757,7 +759,7 @@ def advanced_page():
                 'Calculated Torque': df['Calculated torque [kNm]'].describe(),
                 'Working Pressure': df[pressure_col].describe(),
                 'Advance Rate': df[advance_rate_col].describe(),
-                'Penetration Rate': df[penetration_rate_col].describe(),
+                'Penetration Rate (Calculated)': df['Calculated Penetration Rate'].describe(),
                 'Thrust Force': df[thrust_force_col].describe()
             })
             st.sidebar.markdown(get_table_download_link(stats_df, "advanced_statistical_analysis.csv", "Download Statistical Analysis"), unsafe_allow_html=True)
