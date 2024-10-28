@@ -32,7 +32,7 @@ def load_data(file, file_type):
 sensor_column_map = {
     "pressure": ["Working pressure [bar]", "AzV.V13_SR_ArbDr_Z | DB 60.DBD 26", "Pression [bar]", "Presión [bar]", "Pressure", "Pressure [bar]", "Working Pressure"],
     "revolution": ["Revolution [rpm]", "AzV.V13_SR_Drehz_nach_Abgl_Z | DB 60.DBD 30", "Vitesse [rpm]", "Revoluciones [rpm]", "RPM", "Speed", "Rotation Speed"],
-    "time": ["Time", "Timestamp", "DateTime", "Date", "Zeit"],
+    "time": ["Time", "Timestamp", "DateTime", "Date", "Zeit", "Relativzeit", "Uhrzeit", "Datum"],
     "advance_rate": ["Advance Rate", "Vorschubgeschwindigkeit", "Avance", "Rate of Penetration", "ROP", "Advance [m/min]", "Advance [mm/min]"],
     "thrust_force": ["Thrust Force", "Thrust", "Vorschubkraft", "Force", "Force at Cutting Head", "Thrust Force [kN]"]
 }
@@ -550,15 +550,44 @@ def advanced_page():
             # Find sensor columns
             sensor_columns = find_sensor_columns(df)
 
-            # Check for required columns and allow user to select if not found
-            required_columns = ['pressure', 'revolution', 'time', 'advance_rate', 'thrust_force']
-            for col in required_columns:
-                if col not in sensor_columns:
-                    st.warning(f"Column for {col} not found in data.")
-                    sensor_columns[col] = st.selectbox(f"Select column for {col}", options=df.columns)
+            # Allow user to select columns if not found or adjust selections
+            st.subheader("Select Sensor Columns")
+            # Time Column
+            if 'time' in sensor_columns:
+                default_time_col = sensor_columns['time']
+            else:
+                default_time_col = df.columns[0]
+            time_col = st.selectbox("Select Time Column", options=df.columns, index=df.columns.get_loc(default_time_col))
+
+            # Pressure Column
+            if 'pressure' in sensor_columns:
+                default_pressure_col = sensor_columns['pressure']
+            else:
+                default_pressure_col = df.columns[1]
+            pressure_col = st.selectbox("Select Pressure Column", options=df.columns, index=df.columns.get_loc(default_pressure_col))
+
+            # Revolution Column
+            if 'revolution' in sensor_columns:
+                default_revolution_col = sensor_columns['revolution']
+            else:
+                default_revolution_col = df.columns[2]
+            revolution_col = st.selectbox("Select Revolution Column", options=df.columns, index=df.columns.get_loc(default_revolution_col))
+
+            # Advance Rate Column
+            if 'advance_rate' in sensor_columns:
+                default_advance_rate_col = sensor_columns['advance_rate']
+            else:
+                default_advance_rate_col = df.columns[3]
+            advance_rate_col = st.selectbox("Select Advance Rate Column", options=df.columns, index=df.columns.get_loc(default_advance_rate_col))
+
+            # Thrust Force Column
+            if 'thrust_force' in sensor_columns:
+                default_thrust_force_col = sensor_columns['thrust_force']
+            else:
+                default_thrust_force_col = df.columns[4]
+            thrust_force_col = st.selectbox("Select Thrust Force Column", options=df.columns, index=df.columns.get_loc(default_thrust_force_col))
 
             # Ensure time column is datetime
-            time_col = sensor_columns['time']
             df[time_col] = pd.to_datetime(df[time_col], errors='coerce')
             df = df.dropna(subset=[time_col])
 
@@ -573,10 +602,6 @@ def advanced_page():
             df = df[(df[time_col] >= time_range[0]) & (df[time_col] <= time_range[1])]
 
             # Proceed with data processing
-            pressure_col = sensor_columns['pressure']
-            revolution_col = sensor_columns['revolution']
-            advance_rate_col = sensor_columns['advance_rate']
-            thrust_force_col = sensor_columns['thrust_force']
 
             # Ensure numeric columns are numeric
             for col in [pressure_col, revolution_col, advance_rate_col, thrust_force_col]:
@@ -584,6 +609,9 @@ def advanced_page():
 
             # Drop rows with NaNs in these columns
             df = df.dropna(subset=[pressure_col, revolution_col, advance_rate_col, thrust_force_col])
+
+            # Remove rows where revolution is zero to avoid division by zero
+            df = df[df[revolution_col] != 0]
 
             # Calculate Penetration Rate as Advance Rate divided by Revolution
             df['Calculated Penetration Rate'] = df[advance_rate_col] / df[revolution_col]
@@ -716,7 +744,6 @@ def advanced_page():
             st.write(df['Calculated Penetration Rate'].describe())
 
             # Thrust Force at the Cutting Head
-            thrust_force_col = sensor_columns['thrust_force']
             st.write("**Thrust Force at the Cutting Head Statistics:**")
             st.write(df[thrust_force_col].describe())
 
