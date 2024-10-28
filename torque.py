@@ -472,7 +472,7 @@ def advanced_page():
 
     # File uploaders for batch data
     raw_data_file = st.file_uploader("Upload Raw Data (CSV or XLSX)", type=["csv", "xlsx"])
-    machine_specs_file = st.file_uploader("Upload Machine Specifications: XLSX (MM-Baureuhenliste) or CSV format accepted", type=["xlsx", "csv"])
+    machine_specs_file = st.file_uploader("Upload Machine Specifications: XLSX (MM-Baureihenliste) or CSV format accepted", type=["xlsx", "csv"])
 
     # Load machine specs if available
     if machine_specs_file is not None:
@@ -593,7 +593,14 @@ def advanced_page():
             thrust_force_col = st.selectbox("Select Thrust Force Column", options=df.columns, index=df.columns.get_loc(default_thrust_force_col))
 
             # Ensure time column is datetime
-            df[time_col] = pd.to_datetime(df[time_col], errors='coerce')
+            df[time_col] = pd.to_datetime(df[time_col], errors='coerce', infer_datetime_format=True)
+            # If time column parsing results in NaT, try parsing as Unix timestamp
+            if df[time_col].isnull().all():
+                df[time_col] = pd.to_datetime(df[time_col], unit='s', errors='coerce')
+            # If still NaT, try parsing as milliseconds
+            if df[time_col].isnull().all():
+                df[time_col] = pd.to_datetime(df[time_col], unit='ms', errors='coerce')
+            # Drop rows where time is NaT
             df = df.dropna(subset=[time_col])
 
             # Convert min_time and max_time to Python datetime objects
@@ -759,11 +766,8 @@ def advanced_page():
             st.write("**Thrust Force per Cutting Ring Statistics:**")
             st.write(df['Thrust Force per Cutting Ring'].describe())
 
-            # Plot multiple features over Time with different colors
+            # Plot features over Time as subplots
             st.subheader("Features over Time")
-            fig_time = go.Figure()
-
-            # Define a list of features and their colors
             features = [
                 (advance_rate_col, 'Advance Rate', 'blue'),
                 ('Calculated Penetration Rate', 'Penetration Rate', 'green'),
@@ -773,20 +777,21 @@ def advanced_page():
                 (pressure_col, 'Working Pressure', 'cyan')
             ]
 
-            # Add traces for each feature
-            for col_name, display_name, color in features:
+            num_features = len(features)
+            fig_time = make_subplots(rows=num_features, cols=1, shared_xaxes=True, vertical_spacing=0.02)
+
+            for i, (col_name, display_name, color) in enumerate(features, start=1):
                 fig_time.add_trace(go.Scatter(
                     x=df[time_col], y=df[col_name],
                     mode='lines', name=display_name,
                     line=dict(color=color)
-                ))
+                ), row=i, col=1)
+                fig_time.update_yaxes(title_text=display_name, row=i, col=1)
 
             fig_time.update_layout(
-                xaxis_title='Time',
-                yaxis_title='Value',
-                width=1000,
-                height=600,
-                legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
+                xaxis=dict(title='Time'),
+                height=300 * num_features,
+                showlegend=False
             )
             st.plotly_chart(fig_time, use_container_width=True)
 
