@@ -173,7 +173,7 @@ def get_table_download_link(df, filename, text):
     href = f'<a href="data:file/csv;base64,{b64}" download="{filename}">{text}</a>'
     return href
 
-def display_statistics(df, revolution_col, pressure_col, thrust_force_col):
+def display_statistics(df, revolution_col, pressure_col, thrust_force_col=None):
     """Display statistics of RPM, Torque, Pressure, and Thrust Force per Cutting Ring."""
     st.subheader("Statistical Summary")
     col1, col2, col3 = st.columns(3)
@@ -190,9 +190,9 @@ def display_statistics(df, revolution_col, pressure_col, thrust_force_col):
         st.write("Working Pressure Statistics:")
         st.write(df[pressure_col].describe())
 
-    # Display Thrust Force per Cutting Ring statistics
-    st.write("**Thrust Force per Cutting Ring Statistics:**")
-    st.write(df['Thrust Force per Cutting Ring'].describe())
+    if thrust_force_col is not None and 'Thrust Force per Cutting Ring' in df.columns:
+        st.write("**Thrust Force per Cutting Ring Statistics:**")
+        st.write(df['Thrust Force per Cutting Ring'].describe())
 
 def display_explanation(anomaly_threshold):
     """Display an explanation of the results."""
@@ -450,7 +450,7 @@ def original_page():
                 st.plotly_chart(fig, use_container_width=True)
 
                 # Display the statistical summary
-                display_statistics(df, revolution_col, pressure_col, thrust_force_col=None)
+                display_statistics(df, revolution_col, pressure_col)
 
                 # Provide an explanation of the analysis
                 display_explanation(anomaly_threshold)
@@ -759,33 +759,36 @@ def advanced_page():
             st.write("**Thrust Force per Cutting Ring Statistics:**")
             st.write(df['Thrust Force per Cutting Ring'].describe())
 
-            # Plot Advance Rate over Time
-            st.subheader("Advance Rate over Time")
-            fig_adv = go.Figure()
-            fig_adv.add_trace(go.Scatter(x=df[time_col], y=df[advance_rate_col], mode='lines', name='Advance Rate'))
-            fig_adv.update_layout(xaxis_title='Time', yaxis_title='Advance Rate', width=800, height=400)
-            st.plotly_chart(fig_adv, use_container_width=True)
+            # Plot multiple features over Time with different colors
+            st.subheader("Features over Time")
+            fig_time = go.Figure()
 
-            # Plot Calculated Penetration Rate over Time
-            st.subheader("Penetration Rate over Time (Calculated)")
-            fig_pen = go.Figure()
-            fig_pen.add_trace(go.Scatter(x=df[time_col], y=df['Calculated Penetration Rate'], mode='lines', name='Penetration Rate'))
-            fig_pen.update_layout(xaxis_title='Time', yaxis_title='Penetration Rate', width=800, height=400)
-            st.plotly_chart(fig_pen, use_container_width=True)
+            # Define a list of features and their colors
+            features = [
+                (advance_rate_col, 'Advance Rate', 'blue'),
+                ('Calculated Penetration Rate', 'Penetration Rate', 'green'),
+                (thrust_force_col, 'Thrust Force', 'red'),
+                ('Thrust Force per Cutting Ring', 'Thrust Force per Cutting Ring', 'orange'),
+                (revolution_col, 'Revolution', 'purple'),
+                (pressure_col, 'Working Pressure', 'cyan')
+            ]
 
-            # Plot Thrust Force over Time
-            st.subheader("Thrust Force at the Cutting Head over Time")
-            fig_thrust = go.Figure()
-            fig_thrust.add_trace(go.Scatter(x=df[time_col], y=df[thrust_force_col], mode='lines', name='Thrust Force'))
-            fig_thrust.update_layout(xaxis_title='Time', yaxis_title='Thrust Force', width=800, height=400)
-            st.plotly_chart(fig_thrust, use_container_width=True)
+            # Add traces for each feature
+            for col_name, display_name, color in features:
+                fig_time.add_trace(go.Scatter(
+                    x=df[time_col], y=df[col_name],
+                    mode='lines', name=display_name,
+                    line=dict(color=color)
+                ))
 
-            # Plot Thrust Force per Cutting Ring over Time
-            st.subheader("Thrust Force per Cutting Ring over Time")
-            fig_tfcr = go.Figure()
-            fig_tfcr.add_trace(go.Scatter(x=df[time_col], y=df['Thrust Force per Cutting Ring'], mode='lines', name='Thrust Force per Cutting Ring'))
-            fig_tfcr.update_layout(xaxis_title='Time', yaxis_title='Thrust Force per Cutting Ring', width=800, height=400)
-            st.plotly_chart(fig_tfcr, use_container_width=True)
+            fig_time.update_layout(
+                xaxis_title='Time',
+                yaxis_title='Value',
+                width=1000,
+                height=600,
+                legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
+            )
+            st.plotly_chart(fig_time, use_container_width=True)
 
             # Provide explanations and annotations
             st.write("""
@@ -795,6 +798,8 @@ def advanced_page():
             - **Penetration Rate**: Calculated as Advance Rate divided by Revolution. Reflects how efficiently the machine penetrates the material per revolution.
             - **Thrust Force**: Represents the force applied at the cutting head. High values may indicate hard ground or potential mechanical issues.
             - **Thrust Force per Cutting Ring**: This metric normalizes the thrust force by the number of cutting rings, providing insight into the load per ring.
+            - **Revolution**: The rotational speed of the cutting head. Variations can affect penetration rate and torque.
+            - **Working Pressure**: The pressure at which the machine is operating. Sudden changes might indicate anomalies or operational adjustments.
 
             Use the visualizations to monitor trends and identify any unusual patterns that may require further investigation.
             """)
