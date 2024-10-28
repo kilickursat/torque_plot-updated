@@ -601,8 +601,12 @@ def advanced_page():
             # Ask the user to select the unit of the time column
             time_unit = st.selectbox("Select Time Unit for Time Column", options=["seconds", "milliseconds", "minutes", "hours"], index=0)
 
-            # Convert time column to datetime
+            # Convert time column to timedelta
             df['Parsed_Time'] = pd.to_timedelta(df[time_col], unit=time_unit)
+
+            # Round Parsed_Time to milliseconds to prevent nanoseconds issues
+            df['Parsed_Time'] = df['Parsed_Time'].dt.round('ms')
+
             # Assuming the start time is arbitrary, set it to zero or a fixed date
             start_time = pd.Timestamp('2020-01-01')  # You can adjust this as needed
             df['Time'] = start_time + df['Parsed_Time']
