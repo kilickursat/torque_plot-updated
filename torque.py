@@ -32,9 +32,8 @@ def load_data(file, file_type):
 sensor_column_map = {
     "pressure": ["Working pressure [bar]", "AzV.V13_SR_ArbDr_Z | DB 60.DBD 26", "Pression [bar]", "Presión [bar]", "Pressure", "Pressure [bar]", "Working Pressure"],
     "revolution": ["Revolution [rpm]", "AzV.V13_SR_Drehz_nach_Abgl_Z | DB 60.DBD 30", "Vitesse [rpm]", "Revoluciones [rpm]", "RPM", "Speed", "Rotation Speed"],
-    "time": ["Time", "Timestamp", "DateTime", "Date", "Zeit"],
+    "time": ["Time", "Timestamp", "DateTime", "Date", "Zeit", "Relativzeit", "Uhrzeit", "Datum"],
     "advance_rate": ["Advance Rate", "Vorschubgeschwindigkeit", "Avance", "Rate of Penetration", "ROP", "Advance [m/min]", "Advance [mm/min]"],
-    "penetration_rate": ["Penetration Rate", "Penetration Speed", "Eindringgeschwindigkeit", "Penetration [m/min]", "Penetration [mm/min]"],
     "thrust_force": ["Thrust Force", "Thrust", "Vorschubkraft", "Force", "Force at Cutting Head", "Thrust Force [kN]"]
 }
 
@@ -551,21 +550,50 @@ def advanced_page():
             # Find sensor columns
             sensor_columns = find_sensor_columns(df)
 
-            # Check for required columns and allow user to select if not found
-            required_columns = ['pressure', 'revolution', 'time', 'advance_rate', 'penetration_rate', 'thrust_force']
-            for col in required_columns:
-                if col not in sensor_columns:
-                    st.warning(f"Column for {col} not found in data.")
-                    sensor_columns[col] = st.selectbox(f"Select column for {col}", options=df.columns)
+            # Allow user to select columns if not found or adjust selections
+            st.subheader("Select Sensor Columns")
+            # Time Column
+            if 'time' in sensor_columns:
+                default_time_col = sensor_columns['time']
+            else:
+                default_time_col = df.columns[0]
+            time_col = st.selectbox("Select Time Column", options=df.columns, index=df.columns.get_loc(default_time_col))
+
+            # Pressure Column
+            if 'pressure' in sensor_columns:
+                default_pressure_col = sensor_columns['pressure']
+            else:
+                default_pressure_col = df.columns[1]
+            pressure_col = st.selectbox("Select Pressure Column", options=df.columns, index=df.columns.get_loc(default_pressure_col))
+
+            # Revolution Column
+            if 'revolution' in sensor_columns:
+                default_revolution_col = sensor_columns['revolution']
+            else:
+                default_revolution_col = df.columns[2]
+            revolution_col = st.selectbox("Select Revolution Column", options=df.columns, index=df.columns.get_loc(default_revolution_col))
+
+            # Advance Rate Column
+            if 'advance_rate' in sensor_columns:
+                default_advance_rate_col = sensor_columns['advance_rate']
+            else:
+                default_advance_rate_col = df.columns[3]
+            advance_rate_col = st.selectbox("Select Advance Rate Column", options=df.columns, index=df.columns.get_loc(default_advance_rate_col))
+
+            # Thrust Force Column
+            if 'thrust_force' in sensor_columns:
+                default_thrust_force_col = sensor_columns['thrust_force']
+            else:
+                default_thrust_force_col = df.columns[4]
+            thrust_force_col = st.selectbox("Select Thrust Force Column", options=df.columns, index=df.columns.get_loc(default_thrust_force_col))
 
             # Ensure time column is datetime
-            time_col = sensor_columns['time']
             df[time_col] = pd.to_datetime(df[time_col], errors='coerce')
             df = df.dropna(subset=[time_col])
 
-            # Perform data filtration based on time
-            min_time = df[time_col].min()
-            max_time = df[time_col].max()
+            # Convert min_time and max_time to Python datetime objects
+            min_time = df[time_col].min().to_pydatetime()
+            max_time = df[time_col].max().to_pydatetime()
             st.write(f"Data time range: {min_time} to {max_time}")
 
             time_range = st.slider("Select Time Range", min_value=min_time, max_value=max_time, value=(min_time, max_time), format="YYYY-MM-DD HH:mm:ss")
@@ -574,18 +602,19 @@ def advanced_page():
             df = df[(df[time_col] >= time_range[0]) & (df[time_col] <= time_range[1])]
 
             # Proceed with data processing
-            pressure_col = sensor_columns['pressure']
-            revolution_col = sensor_columns['revolution']
-            advance_rate_col = sensor_columns['advance_rate']
-            penetration_rate_col = sensor_columns['penetration_rate']
-            thrust_force_col = sensor_columns['thrust_force']
 
             # Ensure numeric columns are numeric
-            for col in [pressure_col, revolution_col, advance_rate_col, penetration_rate_col, thrust_force_col]:
+            for col in [pressure_col, revolution_col, advance_rate_col, thrust_force_col]:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
 
             # Drop rows with NaNs in these columns
-            df = df.dropna(subset=[pressure_col, revolution_col, advance_rate_col, penetration_rate_col, thrust_force_col])
+            df = df.dropna(subset=[pressure_col, revolution_col, advance_rate_col, thrust_force_col])
+
+            # Remove rows where revolution is zero to avoid division by zero
+            df = df[df[revolution_col] != 0]
+
+            # Calculate Penetration Rate as Advance Rate divided by Revolution
+            df['Calculated Penetration Rate'] = df[advance_rate_col] / df[revolution_col]
 
             # RPM Statistics
             rpm_stats = df[revolution_col].describe()
@@ -710,9 +739,9 @@ def advanced_page():
             st.write("**Advance Rate Statistics:**")
             st.write(df[advance_rate_col].describe())
 
-            # Penetration Rate
-            st.write("**Penetration Rate Statistics:**")
-            st.write(df[penetration_rate_col].describe())
+            # Calculated Penetration Rate
+            st.write("**Penetration Rate Statistics (Calculated):**")
+            st.write(df['Calculated Penetration Rate'].describe())
 
             # Thrust Force at the Cutting Head
             st.write("**Thrust Force at the Cutting Head Statistics:**")
@@ -725,10 +754,10 @@ def advanced_page():
             fig_adv.update_layout(xaxis_title='Time', yaxis_title='Advance Rate', width=800, height=400)
             st.plotly_chart(fig_adv, use_container_width=True)
 
-            # Plot Penetration Rate over Time
-            st.subheader("Penetration Rate over Time")
+            # Plot Calculated Penetration Rate over Time
+            st.subheader("Penetration Rate over Time (Calculated)")
             fig_pen = go.Figure()
-            fig_pen.add_trace(go.Scatter(x=df[time_col], y=df[penetration_rate_col], mode='lines', name='Penetration Rate'))
+            fig_pen.add_trace(go.Scatter(x=df[time_col], y=df['Calculated Penetration Rate'], mode='lines', name='Penetration Rate'))
             fig_pen.update_layout(xaxis_title='Time', yaxis_title='Penetration Rate', width=800, height=400)
             st.plotly_chart(fig_pen, use_container_width=True)
 
@@ -744,7 +773,7 @@ def advanced_page():
             **Interpretation Guide:**
 
             - **Advance Rate**: Indicates the speed at which the machine is advancing. Fluctuations may indicate changes in ground conditions or operational parameters.
-            - **Penetration Rate**: Reflects how quickly the cutting head is penetrating the material. Useful for assessing efficiency.
+            - **Penetration Rate**: Calculated as Advance Rate divided by Revolution. Reflects how efficiently the machine penetrates the material per revolution.
             - **Thrust Force**: Represents the force applied at the cutting head. High values may indicate hard ground or potential mechanical issues.
 
             Use the visualizations to monitor trends and identify any unusual patterns that may require further investigation.
@@ -757,7 +786,7 @@ def advanced_page():
                 'Calculated Torque': df['Calculated torque [kNm]'].describe(),
                 'Working Pressure': df[pressure_col].describe(),
                 'Advance Rate': df[advance_rate_col].describe(),
-                'Penetration Rate': df[penetration_rate_col].describe(),
+                'Penetration Rate (Calculated)': df['Calculated Penetration Rate'].describe(),
                 'Thrust Force': df[thrust_force_col].describe()
             })
             st.sidebar.markdown(get_table_download_link(stats_df, "advanced_statistical_analysis.csv", "Download Statistical Analysis"), unsafe_allow_html=True)
