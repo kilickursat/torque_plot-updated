@@ -232,8 +232,74 @@ def main():
 def original_page():
     st.title("Original Analysis")
 
-    # File uploader for raw data
+    # File uploaders for raw data and machine specifications
     raw_data_file = st.file_uploader("Upload Raw Data (CSV or XLSX)", type=["csv", "xlsx"])
+    machine_specs_file = st.file_uploader("Upload Machine Specifications (CSV or XLSX)", type=["csv", "xlsx"])
+
+    # Load machine specs if available
+    if machine_specs_file is not None:
+        try:
+            file_type = machine_specs_file.name.split('.')[-1].lower()
+            machine_specs = load_machine_specs(machine_specs_file, file_type)
+            machine_types = machine_specs['Projekt'].unique()
+            selected_machine = st.sidebar.selectbox("Select Machine Type", machine_types)
+
+            machine_params = get_machine_params(machine_specs, selected_machine)
+
+            # Display machine parameters
+            params_df = pd.DataFrame([machine_params])
+            # Create a styled HTML table with thicker borders
+            styled_table = params_df.style.set_table_styles([
+                {'selector': 'th', 'props': [('border', '2px solid black'), ('padding', '5px')]},
+                {'selector': 'td', 'props': [('border', '2px solid black'), ('padding', '5px')]},
+                {'selector': '', 'props': [('border-collapse', 'collapse')]}
+            ]).to_html()
+
+            # Remove the unwanted CSS that appears above the table
+            styled_table = styled_table.split('</style>')[-1]
+
+            # Display the styled table
+            st.markdown(
+                f"""
+                <style>
+                table {{
+                    border-collapse: collapse;
+                    margin: 25px 0;
+                    font-size: 0.9em;
+                    font-family: sans-serif;
+                    min-width: 400px;
+                    box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
+                }}
+                table thead tr {{
+                    background-color: rgb(0, 62, 37);
+                    color: #ffffff;
+                    text-align: left;
+                }}
+                table th,
+                table td {{
+                    padding: 12px 15px;
+                    border: 2px solid black;
+                }}
+                table tbody tr {{
+                    border-bottom: 1px solid #dddddd;
+                }}
+                table tbody tr:nth-of-type(even) {{
+                    background-color: #f3f3f3;
+                }}
+                table tbody tr:last-of-type {{
+                    border-bottom: 2px solid rgb(0, 62, 37);
+                }}
+                </style>
+                {styled_table}
+                """,
+                unsafe_allow_html=True
+            )
+        except Exception as e:
+            st.error(f"An error occurred while processing the machine specifications: {str(e)}")
+            st.stop()
+    else:
+        st.warning("Please upload Machine Specifications file.")
+        return
 
     if raw_data_file is not None:
         # Load data
@@ -291,13 +357,8 @@ def original_page():
             # Remove rows where revolution is zero to avoid division by zero
             df = df[df[revolution_col] != 0]
 
-            # Allow user to input torque constant
-            torque_constant = st.number_input(
-                "Enter Torque Constant (kNm/bar)",
-                value=1.0,
-                min_value=0.0,
-                format="%.4f"
-            )
+            # Use torque constant from machine parameters
+            torque_constant = machine_params['torque_constant']
 
             # Calculate torque as pressure * torque_constant
             df['Calculated torque [kNm]'] = df[pressure_col] * torque_constant
@@ -342,6 +403,7 @@ def original_page():
 
     else:
         st.info("Please upload a Raw Data file to begin the analysis.")
+
 
 def advanced_page():
     st.title("Advanced Analysis")
@@ -497,25 +559,29 @@ def advanced_page():
             max_time = df['Elapsed_Time'].max()
             st.write(f"Data time range: {str(min_time)} to {str(max_time)}")
 
-            # Time range slider using total seconds for the slider values
+            # Time range selection using select_slider
             total_seconds = df['Elapsed_Time'].dt.total_seconds()
-            min_seconds = total_seconds.min()
-            max_seconds = total_seconds.max()
+            unique_seconds = sorted(total_seconds.unique())
 
-            # Allow the user to select the time range in a human-readable format
+            # Limit the number of options for performance if necessary
+            max_options = 1000  # Adjust as needed
+            if len(unique_seconds) > max_options:
+                unique_seconds = np.linspace(min_seconds, max_seconds, max_options)
+
             def format_time(seconds):
                 return str(datetime.timedelta(seconds=seconds))
 
-            time_range = st.slider(
+            time_range = st.select_slider(
                 "Select Time Range",
-                min_value=float(min_seconds),
-                max_value=float(max_seconds),
-                value=(float(min_seconds), float(max_seconds)),
+                options=unique_seconds,
+                value=(unique_seconds[0], unique_seconds[-1]),
                 format_func=format_time
             )
 
             # Filter data based on selected time range
             df = df[(total_seconds >= time_range[0]) & (total_seconds <= time_range[1])]
+
+
 
             # Proceed with data processing
             # Ensure numeric columns are numeric
