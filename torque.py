@@ -592,26 +592,30 @@ def advanced_page():
                 default_thrust_force_col = df.columns[4]
             thrust_force_col = st.selectbox("Select Thrust Force Column", options=df.columns, index=df.columns.get_loc(default_thrust_force_col))
 
-            # Ensure time column is datetime
-            df[time_col] = pd.to_datetime(df[time_col], errors='coerce', infer_datetime_format=True)
-            # If time column parsing results in NaT, try parsing as Unix timestamp
+            # Ensure time column is appropriately parsed
+            df[time_col] = pd.to_numeric(df[time_col], errors='coerce')
             if df[time_col].isnull().all():
-                df[time_col] = pd.to_datetime(df[time_col], unit='s', errors='coerce')
-            # If still NaT, try parsing as milliseconds
-            if df[time_col].isnull().all():
-                df[time_col] = pd.to_datetime(df[time_col], unit='ms', errors='coerce')
-            # Drop rows where time is NaT
-            df = df.dropna(subset=[time_col])
+                st.error(f"The selected time column '{time_col}' cannot be converted to numeric values.")
+                return
+
+            # Ask the user to select the unit of the time column
+            time_unit = st.selectbox("Select Time Unit for Time Column", options=["seconds", "milliseconds", "minutes", "hours"], index=0)
+
+            # Convert time column to datetime
+            df['Parsed_Time'] = pd.to_timedelta(df[time_col], unit=time_unit)
+            # Assuming the start time is arbitrary, set it to zero or a fixed date
+            start_time = pd.Timestamp('2020-01-01')  # You can adjust this as needed
+            df['Time'] = start_time + df['Parsed_Time']
 
             # Convert min_time and max_time to Python datetime objects
-            min_time = df[time_col].min().to_pydatetime()
-            max_time = df[time_col].max().to_pydatetime()
+            min_time = df['Time'].min().to_pydatetime()
+            max_time = df['Time'].max().to_pydatetime()
             st.write(f"Data time range: {min_time} to {max_time}")
 
             time_range = st.slider("Select Time Range", min_value=min_time, max_value=max_time, value=(min_time, max_time), format="YYYY-MM-DD HH:mm:ss")
 
             # Filter data
-            df = df[(df[time_col] >= time_range[0]) & (df[time_col] <= time_range[1])]
+            df = df[(df['Time'] >= time_range[0]) & (df['Time'] <= time_range[1])]
 
             # Proceed with data processing
 
@@ -782,7 +786,7 @@ def advanced_page():
 
             for i, (col_name, display_name, color) in enumerate(features, start=1):
                 fig_time.add_trace(go.Scatter(
-                    x=df[time_col], y=df[col_name],
+                    x=df['Time'], y=df[col_name],
                     mode='lines', name=display_name,
                     line=dict(color=color)
                 ), row=i, col=1)
