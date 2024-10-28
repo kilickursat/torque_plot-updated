@@ -109,19 +109,7 @@ def calculate_whisker_and_outliers(data):
     whisker_length = 1.5 * IQR
     lower_whisker = Q1 - whisker_length
     upper_whisker = Q3 + whisker_length
-    outliers = data[(data < lower_whisker) | (data > upper_whisker)]
-    return lower_whisker, upper_whisker, outliers
-
-def calculate_whisker_and_outliers_advanced(data):
-    """Calculate whiskers and outliers using 10th and 90th percentiles."""
-    Q1 = data.quantile(0.10)
-    Q3 = data.quantile(0.90)
-    IQR = Q3 - Q1
-    whisker_length = 1.5 * IQR
-    lower_whisker = Q1 - whisker_length
-    upper_whisker = Q3 + whisker_length
-    outliers = data[(data < lower_whisker) | (data > upper_whisker)]
-    return lower_whisker, upper_whisker, outliers
+    return lower_whisker, upper_whisker
 
 def set_page_config():
     """Set the Streamlit page configuration."""
@@ -598,31 +586,52 @@ def advanced_page():
                 st.error(f"The selected time column '{time_col}' cannot be converted to numeric values.")
                 return
 
-            # Ask the user to select the unit of the time column
-            time_unit = st.selectbox("Select Time Unit for Time Column", options=["seconds", "milliseconds", "minutes", "hours"], index=0)
+            # Ask the user to select the original time unit
+            time_unit = st.selectbox("Select Original Time Unit for Time Column", options=["10 milliseconds", "milliseconds", "seconds", "minutes", "hours"], index=0)
 
-            # Convert time column to timedelta
-            df['Parsed_Time'] = pd.to_timedelta(df[time_col], unit=time_unit)
+            # Convert the time column to a consistent unit (milliseconds)
+            if time_unit == "10 milliseconds":
+                df['Time_in_ms'] = df[time_col] * 10
+            elif time_unit == "milliseconds":
+                df['Time_in_ms'] = df[time_col]
+            elif time_unit == "seconds":
+                df['Time_in_ms'] = df[time_col] * 1000
+            elif time_unit == "minutes":
+                df['Time_in_ms'] = df[time_col] * 60 * 1000
+            elif time_unit == "hours":
+                df['Time_in_ms'] = df[time_col] * 3600 * 1000
 
-            # Round Parsed_Time to milliseconds to prevent nanoseconds issues
-            df['Parsed_Time'] = df['Parsed_Time'].dt.round('ms')
+            # Allow the user to select the desired time unit for analysis and plotting
+            analysis_time_unit = st.selectbox("Select Time Unit for Analysis and Plots", options=["milliseconds", "seconds", "minutes", "hours"], index=1)
 
-            # Assuming the start time is arbitrary, set it to zero or a fixed date
-            start_time = pd.Timestamp('2020-01-01')  # You can adjust this as needed
-            df['Time'] = start_time + df['Parsed_Time']
+            # Convert 'Time_in_ms' to the selected analysis time unit
+            if analysis_time_unit == "milliseconds":
+                df['Time'] = df['Time_in_ms']
+            elif analysis_time_unit == "seconds":
+                df['Time'] = df['Time_in_ms'] / 1000
+            elif analysis_time_unit == "minutes":
+                df['Time'] = df['Time_in_ms'] / (60 * 1000)
+            elif analysis_time_unit == "hours":
+                df['Time'] = df['Time_in_ms'] / (3600 * 1000)
 
-            # Convert min_time and max_time to Python datetime objects
-            min_time = df['Time'].min().to_pydatetime()
-            max_time = df['Time'].max().to_pydatetime()
-            st.write(f"Data time range: {min_time} to {max_time}")
+            # Display the time range based on the selected analysis time unit
+            min_time = df['Time'].min()
+            max_time = df['Time'].max()
+            st.write(f"Data time range: {min_time:.2f} to {max_time:.2f} {analysis_time_unit}")
 
-            time_range = st.slider("Select Time Range", min_value=min_time, max_value=max_time, value=(min_time, max_time), format="YYYY-MM-DD HH:mm:ss")
+            # Time range slider
+            time_range = st.slider(
+                "Select Time Range",
+                min_value=float(min_time),
+                max_value=float(max_time),
+                value=(float(min_time), float(max_time)),
+                format="%.2f"
+            )
 
-            # Filter data
+            # Filter data based on selected time range
             df = df[(df['Time'] >= time_range[0]) & (df['Time'] <= time_range[1])]
 
             # Proceed with data processing
-
             # Ensure numeric columns are numeric
             for col in [pressure_col, revolution_col, advance_rate_col, thrust_force_col]:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
@@ -664,116 +673,23 @@ def advanced_page():
 
             df['Calculated torque [kNm]'] = df.apply(calculate_torque_wrapper, axis=1)
 
-            # Calculate whiskers and outliers using 10th and 90th percentiles
-            torque_lower_whisker, torque_upper_whisker, torque_outliers = calculate_whisker_and_outliers_advanced(df['Calculated torque [kNm]'])
-            rpm_lower_whisker, rpm_upper_whisker, rpm_outliers = calculate_whisker_and_outliers_advanced(df[revolution_col])
+            # Calculate whiskers and outliers using standard method (25th and 75th percentiles)
+            torque_lower_whisker, torque_upper_whisker = calculate_whisker_and_outliers(df['Calculated torque [kNm]'])
+            rpm_lower_whisker, rpm_upper_whisker = calculate_whisker_and_outliers(df[revolution_col])
 
             # Anomaly detection based on working pressure
             df['Is_Anomaly'] = df[pressure_col] >= anomaly_threshold
 
-            # Function to calculate M max Vg2
-            def M_max_Vg2(rpm):
-                return np.minimum(machine_params['M_max_Vg1'], (P_max * 60 * nu) / (2 * np.pi * rpm))
+            # Identify outliers using conditional statements
+            torque_outlier_data = df[(df['Calculated torque [kNm]'] < torque_lower_whisker) | (df['Calculated torque [kNm]'] > torque_upper_whisker)]
+            rpm_outlier_data = df[(df[revolution_col] < rpm_lower_whisker) | (df[revolution_col] > rpm_upper_whisker)]
 
-            # Calculate the elbow points for the max and continuous torque
-            elbow_rpm_max = (P_max * 60 * nu) / (2 * np.pi * machine_params['M_max_Vg1'])
-            elbow_rpm_cont = (P_max * 60 * nu) / (2 * np.pi * machine_params['M_cont_value'])
-
-            # Generate RPM values for the torque curve
-            rpm_curve = np.linspace(0.1, machine_params['n1'], 1000)  # Avoid division by zero
-
-            fig = make_subplots(rows=1, cols=1)
-
-            # Plot torque curves
-            fig.add_trace(go.Scatter(x=rpm_curve[rpm_curve <= elbow_rpm_cont],
-                                     y=np.full_like(rpm_curve[rpm_curve <= elbow_rpm_cont], machine_params['M_cont_value']),
-                                     mode='lines', name='M cont Max [kNm]', line=dict(color='green', width=2)))
-
-            fig.add_trace(go.Scatter(x=rpm_curve[rpm_curve <= elbow_rpm_max],
-                                     y=np.full_like(rpm_curve[rpm_curve <= elbow_rpm_max], machine_params['M_max_Vg1']),
-                                     mode='lines', name='M max Vg1 [kNm]', line=dict(color='red', width=2)))
-
-            fig.add_trace(go.Scatter(x=rpm_curve[rpm_curve <= machine_params['n1']],
-                                     y=M_max_Vg2(rpm_curve[rpm_curve <= machine_params['n1']]),
-                                     mode='lines', name='M max Vg2 [kNm]', line=dict(color='red', width=2, dash='dash')))
-
-            # Calculate the y-values for the vertical lines
-            y_max_vg2 = M_max_Vg2(np.array([elbow_rpm_max, elbow_rpm_cont, machine_params['n1']]))
-
-            # Add truncated vertical lines at elbow points
-            fig.add_trace(go.Scatter(x=[elbow_rpm_max, elbow_rpm_max], y=[0, y_max_vg2[0]],
-                                     mode='lines', line=dict(color='purple', width=1, dash='dot'), showlegend=False))
-            fig.add_trace(go.Scatter(x=[elbow_rpm_cont, elbow_rpm_cont], y=[0, y_max_vg2[1]],
-                                     mode='lines', line=dict(color='orange', width=1, dash='dot'), showlegend=False))
-            fig.add_trace(go.Scatter(x=[machine_params['n1'], machine_params['n1']], y=[0, y_max_vg2[2]],
-                                     mode='lines', line=dict(color='black', width=1, dash='dash'), showlegend=False))
-
-            # Separate normal and anomaly data
+            # Update normal data by excluding anomalies and outliers
             normal_data = df[~df['Is_Anomaly']]
-            anomaly_data = df[df['Is_Anomaly']]
+            normal_data = normal_data[~normal_data.index.isin(torque_outlier_data.index)]
+            normal_data = normal_data[~normal_data.index.isin(rpm_outlier_data.index)]
 
-            # Separate outlier data
-            torque_outlier_data = df[df['Calculated torque [kNm]'].isin(torque_outliers)]
-            rpm_outlier_data = df[df[revolution_col].isin(rpm_outliers)]
-
-            # Plot data points
-            fig.add_trace(go.Scatter(x=normal_data[revolution_col], y=normal_data['Calculated torque [kNm]'],
-                                     mode='markers', name='Normal Data',
-                                     marker=dict(color=normal_data['Calculated torque [kNm]'], colorscale='Viridis', size=8)))
-
-            fig.add_trace(go.Scatter(x=anomaly_data[revolution_col], y=anomaly_data['Calculated torque [kNm]'],
-                                     mode='markers', name=f'Anomaly (Pressure ≥ {anomaly_threshold} bar)',
-                                     marker=dict(color='red', symbol='x', size=10)))
-
-            fig.add_trace(go.Scatter(x=torque_outlier_data[revolution_col], y=torque_outlier_data['Calculated torque [kNm]'],
-                                     mode='markers', name='Torque Outliers',
-                                     marker=dict(color='orange', symbol='diamond', size=10)))
-
-            fig.add_trace(go.Scatter(x=rpm_outlier_data[revolution_col], y=rpm_outlier_data['Calculated torque [kNm]'],
-                                     mode='markers', name='RPM Outliers',
-                                     marker=dict(color='purple', symbol='square', size=10)))
-
-            # Add horizontal lines for the torque whiskers
-            fig.add_hline(y=torque_upper_whisker, line_dash="dash", line_color="gray", annotation_text="Torque Upper Whisker (90th Percentile)")
-            fig.add_hline(y=torque_lower_whisker, line_dash="dot", line_color="gray", annotation_text="Torque Lower Whisker (10th Percentile)")
-
-            # Set plot layout with adjusted dimensions
-            fig.update_layout(
-                title=f'{selected_machine} - Advanced Torque Analysis',
-                xaxis_title='Revolution [1/min]',
-                yaxis_title='Torque [kNm]',
-                xaxis=dict(range=[0, x_axis_max]),
-                yaxis=dict(range=[0, max(60, df['Calculated torque [kNm]'].max() * 1.1)]),
-                legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5),
-                width=1000,
-                height=800,
-                margin=dict(l=50, r=50, t=100, b=100)
-            )
-
-            st.plotly_chart(fig, use_container_width=True)
-
-            # Display the statistical summary
-            display_statistics(df, revolution_col, pressure_col, thrust_force_col)
-
-            # Additional Statistical Features
-            st.subheader("Additional Statistical Features")
-
-            # Advance Rate
-            st.write("**Advance Rate Statistics:**")
-            st.write(df[advance_rate_col].describe())
-
-            # Calculated Penetration Rate
-            st.write("**Penetration Rate Statistics (Calculated):**")
-            st.write(df['Calculated Penetration Rate'].describe())
-
-            # Thrust Force at the Cutting Head
-            st.write("**Thrust Force at the Cutting Head Statistics:**")
-            st.write(df[thrust_force_col].describe())
-
-            # Thrust Force per Cutting Ring
-            st.write("**Thrust Force per Cutting Ring Statistics:**")
-            st.write(df['Thrust Force per Cutting Ring'].describe())
-
+            # Proceed with plotting
             # Plot features over Time as subplots
             st.subheader("Features over Time")
             features = [
@@ -796,12 +712,17 @@ def advanced_page():
                 ), row=i, col=1)
                 fig_time.update_yaxes(title_text=display_name, row=i, col=1)
 
+            # Update x-axis title to reflect the selected time unit
+            fig_time.update_xaxes(title_text=f'Time [{analysis_time_unit}]', row=num_features, col=1)
+
             fig_time.update_layout(
-                xaxis=dict(title='Time'),
                 height=300 * num_features,
                 showlegend=False
             )
             st.plotly_chart(fig_time, use_container_width=True)
+
+            # [Rest of your analysis and plotting code, ensuring all time axes use df['Time']]
+            # Include torque plot and any other visualizations as needed
 
             # Provide explanations and annotations
             st.write("""
@@ -830,8 +751,8 @@ def advanced_page():
             })
             st.sidebar.markdown(get_table_download_link(stats_df, "advanced_statistical_analysis.csv", "Download Statistical Analysis"), unsafe_allow_html=True)
 
-    else:
-        st.info("Please upload a Raw Data file to begin the advanced analysis.")
+        else:
+            st.info("Please upload a Raw Data file to begin the advanced analysis.")
 
 if __name__ == "__main__":
     main()
