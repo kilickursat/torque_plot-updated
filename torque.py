@@ -561,6 +561,8 @@ def advanced_page():
 
             # Time range selection using select_slider
             total_seconds = df['Elapsed_Time'].dt.total_seconds()
+            min_seconds = total_seconds.min()
+            max_seconds = total_seconds.max()
             unique_seconds = sorted(total_seconds.unique())
 
             # Limit the number of options for performance if necessary
@@ -580,8 +582,6 @@ def advanced_page():
 
             # Filter data based on selected time range
             df = df[(total_seconds >= time_range[0]) & (total_seconds <= time_range[1])]
-
-
 
             # Proceed with data processing
             # Ensure numeric columns are numeric
@@ -731,6 +731,7 @@ def advanced_page():
 
         else:
             st.info("Please upload a Raw Data file to begin the advanced analysis.")
+
 
 if __name__ == "__main__":
     main()
