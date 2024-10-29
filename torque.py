@@ -474,6 +474,8 @@ def original_page():
 
 
 
+
+
 def advanced_page():
     st.title("Advanced Analysis")
 
@@ -757,7 +759,7 @@ def advanced_page():
                 & (df[revolution_col] <= n1)
             ]
 
-            # Calculate torque
+            # Calculate torque using the provided method
             def calculate_torque_wrapper(row):
                 working_pressure = row[pressure_col]
                 current_speed = row[revolution_col]
@@ -792,7 +794,7 @@ def advanced_page():
             # Anomaly detection based on working pressure
             df["Is_Anomaly"] = df[pressure_col] >= anomaly_threshold
 
-            # Function to calculate M max Vg2
+            # Function to calculate M_max_Vg2
             def M_max_Vg2(rpm):
                 return np.minimum(
                     machine_params["M_max_Vg1"],
@@ -948,12 +950,15 @@ def advanced_page():
                 annotation_text="Torque Lower Whisker (10th Percentile)",
             )
 
+            # Determine maximum value for x-axis
+            x_axis_max = max(df[revolution_col].max(), machine_params["n1"]) * 1.1
+
             # Set plot layout with adjusted dimensions
             fig.update_layout(
                 title=f"{selected_machine} - Advanced Torque Analysis",
                 xaxis_title="Revolution [1/min]",
                 yaxis_title="Torque [kNm]",
-                xaxis=dict(range=[0, max(df[revolution_col].max(), machine_params["n1"]) * 1.1]),
+                xaxis=dict(range=[0, x_axis_max]),
                 yaxis=dict(
                     range=[
                         0,
@@ -974,284 +979,356 @@ def advanced_page():
 
             st.plotly_chart(fig, use_container_width=True)
 
+        except KeyError as ke:
+            st.error(f"Missing expected column: {ke}")
+            st.stop()
+        except Exception as e:
+            st.error(f"An error occurred while calculating derived metrics: {str(e)}")
+            st.stop()
+
         # --------------------- Features over Time Visualization ---------------------
-        st.subheader("Features over Time")
+        try:
+            st.subheader("Features over Time")
 
-        # Define the features with their display names and colors
-        features_time = [
-            {"column": advance_rate_col, "display_name": "Advance Rate", "color": "blue"},
-            {"column": "Calculated Penetration Rate", "display_name": "Penetration Rate", "color": "green"},
-            {"column": thrust_force_col, "display_name": "Thrust Force", "color": "red"},
-            {"column": "Thrust Force per Cutting Ring", "display_name": "Thrust Force per Cutting Ring", "color": "orange"},
-            {"column": revolution_col, "display_name": "Revolution", "color": "purple"},
-            {"column": pressure_col, "display_name": "Working Pressure", "color": "cyan"},
-            {"column": "Calculated torque [kNm]", "display_name": "Calculated Torque [kNm]", "color": "magenta"},
-        ]
+            # Define the features with their display names and colors
+            features_time = [
+                {"column": advance_rate_col, "display_name": "Advance Rate", "color": "blue"},
+                {"column": "Calculated Penetration Rate", "display_name": "Penetration Rate", "color": "green"},
+                {"column": thrust_force_col, "display_name": "Thrust Force", "color": "red"},
+                {"column": "Thrust Force per Cutting Ring", "display_name": "Thrust Force per Cutting Ring", "color": "orange"},
+                {"column": revolution_col, "display_name": "Revolution", "color": "purple"},
+                {"column": pressure_col, "display_name": "Working Pressure", "color": "cyan"},
+                {"column": "Calculated torque [kNm]", "display_name": "Calculated Torque [kNm]", "color": "magenta"},
+            ]
 
-        num_features_time = len(features_time)
+            # Calculate Penetration Rate
+            df["Calculated Penetration Rate"] = df[advance_rate_col] / df[revolution_col]
+            df["Calculated Penetration Rate"].replace([np.inf, -np.inf], np.nan, inplace=True)
 
-        # Rolling Window Slider for Time
-        window_size_time = st.sidebar.slider(
-            "Select Rolling Window Size for Mean Calculation (Time)",
-            min_value=10,
-            max_value=1000,
-            value=100,
-            step=10,
-            help="Adjust the window size to smooth the data. A larger window provides a smoother mean."
-        )
+            # Calculate Thrust Force per Cutting Ring
+            if num_cutting_rings > 0:
+                df["Thrust Force per Cutting Ring"] = df[thrust_force_col] / num_cutting_rings
+            else:
+                st.error("Number of Cutting Rings must be greater than zero.")
+                st.stop()
 
-        # Toggle for Mean Lines
-        show_means_time = st.checkbox(
-            "Show Rolling Mean Values (Time)",
-            value=True,
-            help="Toggle the visibility of rolling mean lines for time-based features."
-        )
+            # Add 'Calculated torque [kNm]' already calculated above
 
-        # Calculate rolling means for each feature
-        for feature in features_time:
-            df[f"{feature['column']}_time_mean"] = df[feature['column']].rolling(
-                window=window_size_time, min_periods=1
-            ).mean()
+            # Define the number of features
+            num_features_time = len(features_time)
 
-        # Create subplots without titles
-        fig_time = make_subplots(
-            rows=2*num_features_time,  # Two rows per feature
-            cols=1,
-            shared_xaxes=True,
-            vertical_spacing=0.02,  # Reduced spacing for a cleaner look
-            subplot_titles=None  # No subplot titles
-        )
-
-        # Iterate through each feature and add traces
-        for i, feature in enumerate(features_time, start=1):
-            # Original Feature Plot on odd rows
-            fig_time.add_trace(
-                go.Scatter(
-                    x=df["Time_unit"],
-                    y=df[feature["column"]],
-                    mode="lines",
-                    name=feature["display_name"],
-                    line=dict(color=feature["color"]),
-                ),
-                row=2*i-1,
-                col=1,
+            # Rolling Window Slider for Time
+            window_size_time = st.sidebar.slider(
+                "Select Rolling Window Size for Mean Calculation (Time)",
+                min_value=10,
+                max_value=1000,
+                value=100,
+                step=10,
+                help="Adjust the window size to smooth the data. A larger window provides a smoother mean."
             )
-            # Update y-axis for original feature
-            fig_time.update_yaxes(title_text=feature["display_name"], row=2*i-1, col=1)
 
-            # Rolling Mean Plot on even rows
-            if show_means_time:
-                fig_time.add_trace(
-                    go.Scatter(
-                        x=df["Time_unit"],
-                        y=df[f"{feature['column']}_time_mean"],
-                        mode="lines",
-                        name=f"{feature['display_name']} Rolling Mean",
-                        line=dict(color=feature["color"], dash="dash"),
-                    ),
-                    row=2*i,
-                    col=1,
-                )
-                # Update y-axis for rolling mean
-                fig_time.update_yaxes(title_text=f"{feature['display_name']} Rolling Mean", row=2*i, col=1)
+            # Toggle for Mean Lines
+            show_means_time = st.checkbox(
+                "Show Rolling Mean Values (Time)",
+                value=True,
+                help="Toggle the visibility of rolling mean lines for time-based features."
+            )
 
-        # Update overall layout
-        fig_time.update_layout(
-            xaxis_title=f"Time ({time_unit})",
-            height=300 * 2 * num_features_time,  # 300 pixels per subplot row
-            showlegend=False,
-            title_text="Features over Time (Original and Rolling Mean)",  # Main plot title
-        )
+            # Calculate rolling means for each feature
+            for feature in features_time:
+                if feature['column'] in df.columns:
+                    df[f"{feature['column']}_time_mean"] = df[feature['column']].rolling(
+                        window=window_size_time, min_periods=1
+                    ).mean()
+                else:
+                    st.warning(f"Column '{feature['column']}' not found in the dataset.")
+                    df[f"{feature['column']}_time_mean"] = np.nan
 
-        # Display the plot
-        st.plotly_chart(fig_time, use_container_width=True)
+            # Create subplots without titles
+            fig_time = make_subplots(
+                rows=2*num_features_time,  # Two rows per feature
+                cols=1,
+                shared_xaxes=True,
+                vertical_spacing=0.02,  # Reduced spacing for a cleaner look
+                subplot_titles=None  # No subplot titles
+            )
 
-        # Provide explanations and annotations
-        st.write(
-            """
-            **Interpretation Guide:**
+            # Iterate through each feature and add traces
+            for i, feature in enumerate(features_time, start=1):
+                # Original Feature Plot on odd rows
+                if feature['column'] in df.columns:
+                    fig_time.add_trace(
+                        go.Scatter(
+                            x=df["Time_unit"],
+                            y=df[feature["column"]],
+                            mode="lines",
+                            name=feature["display_name"],
+                            line=dict(color=feature["color"]),
+                        ),
+                        row=2*i-1,
+                        col=1,
+                    )
+                    # Update y-axis for original feature
+                    fig_time.update_yaxes(title_text=feature["display_name"], row=2*i-1, col=1)
 
-            - **Advance Rate**: Indicates the speed at which the machine is advancing. Fluctuations may indicate changes in ground conditions or operational parameters.
-            - **Penetration Rate**: Calculated as Advance Rate divided by Revolution. Reflects how efficiently the machine penetrates the material per revolution.
-            - **Thrust Force**: Represents the force applied at the cutting head. High values may indicate hard ground or potential mechanical issues.
-            - **Thrust Force per Cutting Ring**: This metric normalizes the thrust force by the number of cutting rings, providing insight into the load per ring.
-            - **Revolution**: The rotational speed of the cutting head. Variations can affect penetration rate and torque.
-            - **Working Pressure**: The pressure at which the machine is operating. Sudden changes might indicate anomalies or operational adjustments.
-            - **Calculated Torque [kNm]**: Represents the torque calculated based on machine parameters. High or fluctuating values may indicate mechanical stress or inefficiencies.
+                    # Rolling Mean Plot on even rows
+                    if show_means_time:
+                        fig_time.add_trace(
+                            go.Scatter(
+                                x=df["Time_unit"],
+                                y=df[f"{feature['column']}_time_mean"],
+                                mode="lines",
+                                name=f"{feature['display_name']} Rolling Mean",
+                                line=dict(color=feature["color"], dash="dash"),
+                            ),
+                            row=2*i,
+                            col=1,
+                        )
+                        # Update y-axis for rolling mean
+                        fig_time.update_yaxes(title_text=f"{feature['display_name']} Rolling Mean", row=2*i, col=1)
+                else:
+                    st.warning(f"Column '{feature['column']}' not found in the dataset.")
 
-            Use the visualizations to monitor trends and identify any unusual patterns that may require further investigation.
-            """
-        )
+            # Update overall layout
+            fig_time.update_layout(
+                xaxis_title=f"Time ({time_unit})",
+                height=300 * 2 * num_features_time,  # 300 pixels per subplot row
+                showlegend=False,
+                title_text="Features over Time (Original and Rolling Mean)",  # Main plot title
+            )
+
+            # Display the plot
+            st.plotly_chart(fig_time, use_container_width=True)
+
+            # Provide explanations and annotations
+            st.write(
+                """
+                **Interpretation Guide:**
+
+                - **Advance Rate**: Indicates the speed at which the machine is advancing. Fluctuations may indicate changes in ground conditions or operational parameters.
+                - **Penetration Rate**: Calculated as Advance Rate divided by Revolution. Reflects how efficiently the machine penetrates the material per revolution.
+                - **Thrust Force**: Represents the force applied at the cutting head. High values may indicate hard ground or potential mechanical issues.
+                - **Thrust Force per Cutting Ring**: This metric normalizes the thrust force by the number of cutting rings, providing insight into the load per ring.
+                - **Revolution**: The rotational speed of the cutting head. Variations can affect penetration rate and torque.
+                - **Working Pressure**: The pressure at which the machine is operating. Sudden changes might indicate anomalies or operational adjustments.
+                - **Calculated Torque [kNm]**: Represents the torque calculated based on machine parameters. High or fluctuating values may indicate mechanical stress or inefficiencies.
+
+                Use the visualizations to monitor trends and identify any unusual patterns that may require further investigation.
+                """
+            )
+        except KeyError as ke:
+            st.error(f"Missing expected column during time-based features plotting: {ke}")
+            st.stop()
+        except Exception as e:
+            st.error(f"An error occurred during time-based features plotting: {str(e)}")
+            st.stop()
 
         # --------------------- Features over Distance/Chainage Visualization ---------------------
-        st.subheader("Features over Distance/Chainage")
+        try:
+            st.subheader("Features over Distance/Chainage")
 
-        # Define the features with their display names and colors
-        features_distance = [
-            {"column": advance_rate_col, "display_name": "Advance Rate", "color": "blue"},
-            {"column": "Calculated Penetration Rate", "display_name": "Penetration Rate", "color": "green"},
-            {"column": thrust_force_col, "display_name": "Thrust Force", "color": "red"},
-            {"column": "Thrust Force per Cutting Ring", "display_name": "Thrust Force per Cutting Ring", "color": "orange"},
-            {"column": revolution_col, "display_name": "Revolution", "color": "purple"},
-            {"column": pressure_col, "display_name": "Working Pressure", "color": "cyan"},
-            {"column": "Calculated torque [kNm]", "display_name": "Calculated Torque [kNm]", "color": "magenta"},
-        ]
+            # Define the features with their display names and colors
+            features_distance = [
+                {"column": advance_rate_col, "display_name": "Advance Rate", "color": "blue"},
+                {"column": "Calculated Penetration Rate", "display_name": "Penetration Rate", "color": "green"},
+                {"column": thrust_force_col, "display_name": "Thrust Force", "color": "red"},
+                {"column": "Thrust Force per Cutting Ring", "display_name": "Thrust Force per Cutting Ring", "color": "orange"},
+                {"column": revolution_col, "display_name": "Revolution", "color": "purple"},
+                {"column": pressure_col, "display_name": "Working Pressure", "color": "cyan"},
+                {"column": "Calculated torque [kNm]", "display_name": "Calculated Torque [kNm]", "color": "magenta"},
+            ]
 
-        num_features_distance = len(features_distance)
+            # Calculate rolling means for distance-based features
+            num_features_distance = len(features_distance)
 
-        # Rolling Window Slider for Distance
-        window_size_distance = st.sidebar.slider(
-            "Select Rolling Window Size for Mean Calculation (Distance)",
-            min_value=10,
-            max_value=1000,
-            value=100,
-            step=10,
-            help="Adjust the window size to smooth the data. A larger window provides a smoother mean."
-        )
-
-        # Toggle for Mean Lines
-        show_means_distance = st.checkbox(
-            "Show Rolling Mean Values (Distance)",
-            value=True,
-            help="Toggle the visibility of rolling mean lines for distance-based features."
-        )
-
-        # Sort the dataframe by Distance/Chainage to avoid zigzag lines
-        df = df.sort_values(by=distance_col)
-
-        # Calculate rolling means for each feature
-        for feature in features_distance:
-            df[f"{feature['column']}_distance_mean"] = df[feature['column']].rolling(
-                window=window_size_distance, min_periods=1
-            ).mean()
-
-        # Create subplots without titles
-        fig_distance = make_subplots(
-            rows=2*num_features_distance,  # Two rows per feature
-            cols=1,
-            shared_xaxes=True,
-            vertical_spacing=0.02,  # Reduced spacing for a cleaner look
-            subplot_titles=None  # No subplot titles
-        )
-
-        # Iterate through each feature and add traces
-        for i, feature in enumerate(features_distance, start=1):
-            # Original Feature Plot on odd rows
-            fig_distance.add_trace(
-                go.Scatter(
-                    x=df[distance_col],
-                    y=df[feature["column"]],
-                    mode="lines",
-                    name=feature["display_name"],
-                    line=dict(color=feature["color"]),
-                ),
-                row=2*i-1,
-                col=1,
+            # Rolling Window Slider for Distance
+            window_size_distance = st.sidebar.slider(
+                "Select Rolling Window Size for Mean Calculation (Distance)",
+                min_value=10,
+                max_value=1000,
+                value=100,
+                step=10,
+                help="Adjust the window size to smooth the data. A larger window provides a smoother mean."
             )
-            # Update y-axis for original feature
-            fig_distance.update_yaxes(title_text=feature["display_name"], row=2*i-1, col=1)
 
-            # Rolling Mean Plot on even rows
-            if show_means_distance:
-                fig_distance.add_trace(
-                    go.Scatter(
-                        x=df[distance_col],
-                        y=df[f"{feature['column']}_distance_mean"],
-                        mode="lines",
-                        name=f"{feature['display_name']} Rolling Mean",
-                        line=dict(color=feature["color"], dash="dash"),
-                    ),
-                    row=2*i,
-                    col=1,
-                )
-                # Update y-axis for rolling mean
-                fig_distance.update_yaxes(title_text=f"{feature['display_name']} Rolling Mean", row=2*i, col=1)
+            # Toggle for Mean Lines
+            show_means_distance = st.checkbox(
+                "Show Rolling Mean Values (Distance)",
+                value=True,
+                help="Toggle the visibility of rolling mean lines for distance-based features."
+            )
 
-        # Update overall layout
-        fig_distance.update_layout(
-            xaxis_title=f"Distance/Chainage ({distance_unit})",
-            height=300 * 2 * num_features_distance,  # 300 pixels per subplot row
-            showlegend=False,
-            title_text="Features over Distance/Chainage (Original and Rolling Mean)",  # Main plot title
-        )
+            # Sort the dataframe by Distance/Chainage to avoid zigzag lines
+            df = df.sort_values(by=distance_col)
 
-        # Display the plot
-        st.plotly_chart(fig_distance, use_container_width=True)
+            # Calculate rolling means for each feature
+            for feature in features_distance:
+                if feature['column'] in df.columns:
+                    df[f"{feature['column']}_distance_mean"] = df[feature['column']].rolling(
+                        window=window_size_distance, min_periods=1
+                    ).mean()
+                else:
+                    st.warning(f"Column '{feature['column']}' not found in the dataset.")
+                    df[f"{feature['column']}_distance_mean"] = np.nan
 
-        # Provide explanations and annotations
-        st.write(
-            """
-            **Interpretation Guide:**
+            # Create subplots without titles
+            fig_distance = make_subplots(
+                rows=2*num_features_distance,  # Two rows per feature
+                cols=1,
+                shared_xaxes=True,
+                vertical_spacing=0.02,  # Reduced spacing for a cleaner look
+                subplot_titles=None  # No subplot titles
+            )
 
-            - **Advance Rate**: Indicates the speed at which the machine is advancing. Fluctuations may indicate changes in ground conditions or operational parameters.
-            - **Penetration Rate**: Calculated as Advance Rate divided by Revolution. Reflects how efficiently the machine penetrates the material per revolution.
-            - **Thrust Force**: Represents the force applied at the cutting head. High values may indicate hard ground or potential mechanical issues.
-            - **Thrust Force per Cutting Ring**: This metric normalizes the thrust force by the number of cutting rings, providing insight into the load per ring.
-            - **Revolution**: The rotational speed of the cutting head. Variations can affect penetration rate and torque.
-            - **Working Pressure**: The pressure at which the machine is operating. Sudden changes might indicate anomalies or operational adjustments.
-            - **Calculated Torque [kNm]**: Represents the torque calculated based on machine parameters. High or fluctuating values may indicate mechanical stress or inefficiencies.
+            # Iterate through each feature and add traces
+            for i, feature in enumerate(features_distance, start=1):
+                # Original Feature Plot on odd rows
+                if feature['column'] in df.columns:
+                    fig_distance.add_trace(
+                        go.Scatter(
+                            x=df[distance_col],
+                            y=df[feature["column"]],
+                            mode="lines",
+                            name=feature["display_name"],
+                            line=dict(color=feature["color"]),
+                        ),
+                        row=2*i-1,
+                        col=1,
+                    )
+                    # Update y-axis for original feature
+                    fig_distance.update_yaxes(title_text=feature["display_name"], row=2*i-1, col=1)
 
-            Use the visualizations to monitor trends and identify any unusual patterns that may require further investigation.
-            """
-        )
+                    # Rolling Mean Plot on even rows
+                    if show_means_distance:
+                        fig_distance.add_trace(
+                            go.Scatter(
+                                x=df[distance_col],
+                                y=df[f"{feature['column']}_distance_mean"],
+                                mode="lines",
+                                name=f"{feature['display_name']} Rolling Mean",
+                                line=dict(color=feature["color"], dash="dash"),
+                            ),
+                            row=2*i,
+                            col=1,
+                        )
+                        # Update y-axis for rolling mean
+                        fig_distance.update_yaxes(title_text=f"{feature['display_name']} Rolling Mean", row=2*i, col=1)
+                else:
+                    st.warning(f"Column '{feature['column']}' not found in the dataset.")
 
-        # --------------------- Statistical Summaries and Download Links ---------------------
-        st.subheader("Statistical Summaries")
+            # Update overall layout
+            fig_distance.update_layout(
+                xaxis_title=f"Distance/Chainage ({distance_unit})",
+                height=300 * 2 * num_features_distance,  # 300 pixels per subplot row
+                showlegend=False,
+                title_text="Features over Distance/Chainage (Original and Rolling Mean)",  # Main plot title
+            )
 
-        # Statistical Summary for Time-based Features
-        st.write("**Time-based Features Statistics:**")
-        display_statistics(df, revolution_col, pressure_col, thrust_force_col)
+            # Display the plot
+            st.plotly_chart(fig_distance, use_container_width=True)
 
-        # Statistical Summary for Distance-based Features
-        st.write("**Distance/Chainage-based Features Statistics:**")
-        display_statistics(df, revolution_col, pressure_col, thrust_force_col)
+            # Provide explanations and annotations
+            st.write(
+                """
+                **Interpretation Guide:**
 
-        # --------------------- Additional Statistical Features ---------------------
-        st.subheader("Additional Statistical Features")
+                - **Advance Rate**: Indicates the speed at which the machine is advancing. Fluctuations may indicate changes in ground conditions or operational parameters.
+                - **Penetration Rate**: Calculated as Advance Rate divided by Revolution. Reflects how efficiently the machine penetrates the material per revolution.
+                - **Thrust Force**: Represents the force applied at the cutting head. High values may indicate hard ground or potential mechanical issues.
+                - **Thrust Force per Cutting Ring**: This metric normalizes the thrust force by the number of cutting rings, providing insight into the load per ring.
+                - **Revolution**: The rotational speed of the cutting head. Variations can affect penetration rate and torque.
+                - **Working Pressure**: The pressure at which the machine is operating. Sudden changes might indicate anomalies or operational adjustments.
+                - **Calculated Torque [kNm]**: Represents the torque calculated based on machine parameters. High or fluctuating values may indicate mechanical stress or inefficiencies.
 
-        # Advance Rate
-        st.write("**Advance Rate Statistics:**")
-        st.write(df[advance_rate_col].describe())
+                Use the visualizations to monitor trends and identify any unusual patterns that may require further investigation.
+                """
+            )
+        except KeyError as ke:
+            st.error(f"Missing expected column during distance-based features plotting: {ke}")
+            st.stop()
+        except Exception as e:
+            st.error(f"An error occurred during distance-based features plotting: {str(e)}")
+            st.stop()
 
-        # Calculated Penetration Rate
-        st.write("**Penetration Rate Statistics (Calculated):**")
-        st.write(df["Calculated Penetration Rate"].describe())
+    # --------------------- Statistical Summaries and Download Links ---------------------
+        try:
+            st.subheader("Statistical Summaries")
 
-        # Thrust Force at the Cutting Head
-        st.write("**Thrust Force at the Cutting Head Statistics:**")
-        st.write(df[thrust_force_col].describe())
+            # Statistical Summary for Time-based Features
+            st.write("**Time-based Features Statistics:**")
+            display_statistics(df, revolution_col, pressure_col, thrust_force_col)
 
-        # Thrust Force per Cutting Ring
-        st.write("**Thrust Force per Cutting Ring Statistics:**")
-        st.write(df["Thrust Force per Cutting Ring"].describe())
+            # Statistical Summary for Distance-based Features
+            st.write("**Distance/Chainage-based Features Statistics:**")
+            display_statistics(df, revolution_col, pressure_col, thrust_force_col)
+        except KeyError as ke:
+            st.error(f"Missing expected column during statistical summaries: {ke}")
+            st.stop()
+        except Exception as e:
+            st.error(f"An error occurred during statistical summaries: {str(e)}")
+            st.stop()
 
-        # Calculated Torque [kNm]
-        st.write("**Calculated Torque [kNm] Statistics:**")
-        if "Calculated torque [kNm]" in df.columns:
-            st.write(df["Calculated torque [kNm]"].describe())
-        else:
-            st.warning("The column 'Calculated torque [kNm]' does not exist in the dataset.")
+    # --------------------- Additional Statistical Features ---------------------
+        try:
+            st.subheader("Additional Statistical Features")
 
-        # --------------------- Download Buttons ---------------------
-        st.sidebar.markdown("## Download Results")
-        stats_df = pd.DataFrame(
-            {
-                "RPM": df[revolution_col].describe(),
-                "Calculated Torque [kNm]": df["Calculated torque [kNm]"].describe(),
-                "Working Pressure": df[pressure_col].describe(),
-                "Advance Rate": df[advance_rate_col].describe(),
-                "Penetration Rate (Calculated)": df["Calculated Penetration Rate"].describe(),
-                "Thrust Force": df[thrust_force_col].describe(),
-                "Thrust Force per Cutting Ring": df["Thrust Force per Cutting Ring"].describe(),
-            }
-        )
-        st.sidebar.markdown(
-            get_table_download_link(
-                stats_df, "advanced_statistical_analysis.csv", "Download Statistical Analysis"
-            ),
-            unsafe_allow_html=True,
-        )
+            # Advance Rate
+            st.write("**Advance Rate Statistics:**")
+            st.write(df[advance_rate_col].describe())
 
+            # Calculated Penetration Rate
+            st.write("**Penetration Rate Statistics (Calculated):**")
+            st.write(df["Calculated Penetration Rate"].describe())
+
+            # Thrust Force at the Cutting Head
+            st.write("**Thrust Force at the Cutting Head Statistics:**")
+            st.write(df[thrust_force_col].describe())
+
+            # Thrust Force per Cutting Ring
+            st.write("**Thrust Force per Cutting Ring Statistics:**")
+            st.write(df["Thrust Force per Cutting Ring"].describe())
+
+            # Calculated Torque [kNm]
+            st.write("**Calculated Torque [kNm] Statistics:**")
+            if "Calculated torque [kNm]" in df.columns:
+                st.write(df["Calculated torque [kNm]"].describe())
+            else:
+                st.warning("The column 'Calculated torque [kNm]' does not exist in the dataset.")
+        except KeyError as ke:
+            st.error(f"Missing expected column during additional statistical features: {ke}")
+            st.stop()
+        except Exception as e:
+            st.error(f"An error occurred during additional statistical features: {str(e)}")
+            st.stop()
+
+    # --------------------- Download Buttons ---------------------
+        try:
+            st.sidebar.markdown("## Download Results")
+            stats_df = pd.DataFrame(
+                {
+                    "RPM": df[revolution_col].describe(),
+                    "Calculated Torque [kNm]": df["Calculated torque [kNm]"].describe(),
+                    "Working Pressure": df[pressure_col].describe(),
+                    "Advance Rate": df[advance_rate_col].describe(),
+                    "Penetration Rate (Calculated)": df["Calculated Penetration Rate"].describe(),
+                    "Thrust Force": df[thrust_force_col].describe(),
+                    "Thrust Force per Cutting Ring": df["Thrust Force per Cutting Ring"].describe(),
+                }
+            )
+            st.sidebar.markdown(
+                get_table_download_link(
+                    stats_df, "advanced_statistical_analysis.csv", "Download Statistical Analysis"
+                ),
+                unsafe_allow_html=True,
+            )
+        except KeyError as ke:
+            st.error(f"Missing expected column during download link creation: {ke}")
+            st.stop()
+        except Exception as e:
+            st.error(f"An error occurred during download link creation: {str(e)}")
+            st.stop()
+
+# --------------------- End of advanced_page ---------------------
 
 
 
