@@ -472,6 +472,8 @@ def original_page():
 
 
 
+
+
 def advanced_page():
     st.title("Advanced Analysis")
 
@@ -1250,7 +1252,6 @@ def advanced_page():
             unsafe_allow_html=True,
         )
 
-# --------------------- End of advanced_page ---------------------
 
 
 
