@@ -1054,7 +1054,6 @@ def advanced_page():
             st.write(df["Thrust Force per Cutting Ring"].describe())
 
             # Plot features over Time as separate subplots
-            # Plot features over Time as separate subplots
             st.subheader("Features over Time")
             
             # Define the features with their display names and colors
@@ -1091,12 +1090,8 @@ def advanced_page():
                 rows=2*num_features,  # Two rows per feature
                 cols=1,
                 shared_xaxes=True,
-                vertical_spacing=0.05,
-                subplot_titles=[
-                    f"{feature['display_name']}" for feature in features
-                ] + [
-                    f"{feature['display_name']} - Rolling Mean" for feature in features
-                ]
+                vertical_spacing=0.02,  # Reduced spacing for a cleaner look
+                subplot_titles=None  # No subplot titles
             )
             
             # Iterate through each feature and add traces
@@ -1135,9 +1130,9 @@ def advanced_page():
             # Update overall layout
             fig_time.update_layout(
                 xaxis_title=f"Time ({time_unit})",
-                height=300 * 2 * num_features,  # 300 pixels per subplot
+                height=300 * 2 * num_features,  # 300 pixels per subplot row
                 showlegend=False,
-                title_text="Features over Time (Original and Rolling Mean)",
+                title_text="Features over Time (Original and Rolling Mean)",  # Main plot title
             )
             
             # Display the plot
