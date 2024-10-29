@@ -657,12 +657,12 @@ def advanced_page():
 
             # Display the maximum value in the time column for debugging
             max_time_value = df[time_col].max()
-            st.write(f"**Maximum value in the time column (`{time_col}`):** {max_time_value}")
+            st.write(f"**Maximum value in the time column (`{time_col}`):** {max_time_value} {time_unit}")
 
             # Ask the user to select the unit of the time column
             time_unit = st.selectbox(
                 "Select Time Unit for Time Column",
-                options=["seconds", "milliseconds", "minutes", "hours"],
+                options=["milliseconds", "seconds", "minutes", "hours"],
                 index=0,
                 help="Choose the unit that matches the time data in your dataset."
             )
@@ -677,7 +677,8 @@ def advanced_page():
             # Display the maximum allowed value for debugging
             st.write(f"**Maximum allowed value for '{time_unit}':** {max_allowed_value}")
 
-            if df[time_col].max() > max_allowed_value:
+            # Compare the converted Time_unit, not the original time_col
+            if df["Time_unit"].max() > max_allowed_value:
                 st.error(
                     f"The values in the time column exceed the maximum allowed for the selected unit '{time_unit}'. Please check the data or select a different unit."
                 )
@@ -693,7 +694,7 @@ def advanced_page():
             # Round Parsed_Time to milliseconds to prevent nanoseconds issues
             df["Parsed_Time"] = df["Parsed_Time"].dt.round("ms")
 
-            # Create a numeric Time_unit column based on selected unit
+            # Create a numeric Time_unit column based on selected time unit
             if time_unit == "milliseconds":
                 df["Time_unit"] = df["Parsed_Time"].dt.total_seconds() * 1000
             elif time_unit == "seconds":
@@ -706,10 +707,20 @@ def advanced_page():
             # Sort the dataframe by Time_unit
             df = df.sort_values("Time_unit")
 
-            # Convert min_time and max_time to numeric based on selected unit
+            # Calculate min and max time
             min_time_unit = df["Time_unit"].min()
             max_time_unit = df["Time_unit"].max()
-            st.write(f"Data time range: {min_time_unit:.2f} {time_unit} to {max_time_unit:.2f} {time_unit}")
+
+            # Display the time range in numeric format
+            st.write(f"**Data time range:** {min_time_unit:.2f} {time_unit} to {max_time_unit:.2f} {time_unit}")
+
+            # Convert numeric Time_unit back to timedelta for human-readable format
+            df["Human_Readable_Time"] = pd.to_timedelta(df["Time_unit"], unit=time_unit)
+
+            # Display the time range in human-readable format
+            min_hr_time = df["Human_Readable_Time"].min()
+            max_hr_time = df["Human_Readable_Time"].max()
+            st.write(f"**Data time range (Human Readable):** {min_hr_time} to {max_hr_time}")
 
             # Define the format for the slider based on the time unit
             slider_format = "%.2f"
@@ -1080,7 +1091,6 @@ def advanced_page():
             )
 
             st.plotly_chart(fig_time, use_container_width=True)
-
             # Provide explanations and annotations
             st.write(
                 """
