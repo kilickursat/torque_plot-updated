@@ -4,7 +4,9 @@ import pandas as pd
 import base64
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import base64 
+from datetime import timedelta
+
+
 
 # Optimization: Add cache decorator to improve performance on repeated file loads
 @st.cache_data
@@ -469,6 +471,38 @@ def original_page():
         st.info("Please upload a Raw Data file to begin the analysis.")
 
 
+# Helper Function Defined Outside
+def format_timedelta(td):
+    """
+    Convert a pandas Timedelta to a human-readable string.
+    
+    Parameters:
+        td (pd.Timedelta): The timedelta object to format.
+        
+    Returns:
+        str: A formatted string representing the timedelta.
+    """
+    total_seconds = int(td.total_seconds())
+    days, remainder = divmod(total_seconds, 86400)  # 86400 seconds in a day
+    hours, remainder = divmod(remainder, 3600)      # 3600 seconds in an hour
+    minutes, seconds = divmod(remainder, 60)        # 60 seconds in a minute
+    fractional_seconds = td.microseconds / 1_000_000  # Convert microseconds to seconds
+
+    formatted_time = ""
+    if days > 0:
+        formatted_time += f"{days} day{'s' if days != 1 else ''}, "
+    if hours > 0:
+        formatted_time += f"{hours} hour{'s' if hours != 1 else ''}, "
+    if minutes > 0:
+        formatted_time += f"{minutes} minute{'s' if minutes != 1 else ''}, "
+
+    # Combine seconds and fractional seconds
+    total_sec = seconds + fractional_seconds
+    formatted_time += f"{total_sec:.2f} second{'s' if total_sec != 1 else ''}"
+
+    return formatted_time
+
+# Main Function
 def advanced_page():
     st.title("Advanced Analysis")
 
@@ -702,7 +736,7 @@ def advanced_page():
             min_time_unit = df["Time_unit"].min()
             max_time_unit = df["Time_unit"].max()
 
-            # Display the time range in numeric format
+            # Display the time range in numeric format (seconds)
             st.write(f"**Data time range:** {min_time_unit:.2f} seconds to {max_time_unit:.2f} seconds")
 
             # Convert numeric Time_unit back to timedelta for human-readable format
@@ -712,9 +746,9 @@ def advanced_page():
                 st.error(f"Error converting Time_unit to timedelta: {e}")
                 return
 
-            # Display the time range in human-readable format
-            min_hr_time = df["Human_Readable_Time"].min()
-            max_hr_time = df["Human_Readable_Time"].max()
+            # Format the min and max times using the external helper function
+            min_hr_time = format_timedelta(df["Human_Readable_Time"].min())
+            max_hr_time = format_timedelta(df["Human_Readable_Time"].max())
             st.write(f"**Data time range (Human Readable):** {min_hr_time} to {max_hr_time}")
 
             # Define the format for the slider based on the time unit
@@ -1021,13 +1055,15 @@ def advanced_page():
 
             # Plot features over Time as separate subplots
             st.subheader("Features over Time")
+
+            # Define the features with their display names and colors
             features = [
-                (advance_rate_col, "Advance Rate", "blue"),
-                ("Calculated Penetration Rate", "Penetration Rate", "green"),
-                (thrust_force_col, "Thrust Force", "red"),
-                ("Thrust Force per Cutting Ring", "Thrust Force per Cutting Ring", "orange"),
-                (revolution_col, "Revolution", "purple"),
-                (pressure_col, "Working Pressure", "cyan"),
+                {"column": advance_rate_col, "display_name": "Advance Rate", "color": "blue"},
+                {"column": "Calculated Penetration Rate", "display_name": "Penetration Rate", "color": "green"},
+                {"column": thrust_force_col, "display_name": "Thrust Force", "color": "red"},
+                {"column": "Thrust Force per Cutting Ring", "display_name": "Thrust Force per Cutting Ring", "color": "orange"},
+                {"column": revolution_col, "display_name": "Revolution", "color": "purple"},
+                {"column": pressure_col, "display_name": "Working Pressure", "color": "cyan"},
             ]
 
             num_features = len(features)
@@ -1052,45 +1088,47 @@ def advanced_page():
                 shared_xaxes=True,
                 vertical_spacing=0.05,
                 subplot_titles=[
-                    f"{display_name}" for _, display_name, _ in features
+                    f"{feature['display_name']}" for feature in features
                 ] + [
-                    f"{display_name} - Mean" for _, display_name, _ in features
+                    f"{feature['display_name']} - Mean" for feature in features
                 ]
             )
 
             # Calculate rolling means for each feature
-            for col_name, display_name, color in features:
-                df[f"{col_name}_mean"] = df[col_name].rolling(window=window_size, min_periods=1).mean()
+            for feature in features:
+                df[f"{feature['column']}_mean"] = df[feature['column']].rolling(window=window_size, min_periods=1).mean()
 
-            for i, (col_name, display_name, color) in enumerate(features, start=1):
+            for i, feature in enumerate(features, start=1):
                 # Original Feature Plot on odd rows
                 fig_time.add_trace(
                     go.Scatter(
                         x=df["Time_unit"],
-                        y=df[col_name],
+                        y=df[feature["column"]],
                         mode="lines",
-                        name=display_name,
-                        line=dict(color=color),
+                        name=feature["display_name"],
+                        line=dict(color=feature["color"]),
                     ),
                     row=2*i-1,
                     col=1,
                 )
-                fig_time.update_yaxes(title_text=display_name, row=2*i-1, col=1)
+                # Update y-axis for original feature
+                fig_time.update_yaxes(title_text=feature["display_name"], row=2*i-1, col=1)
 
                 # Mean Feature Plot on even rows
                 if show_means:
                     fig_time.add_trace(
                         go.Scatter(
                             x=df["Time_unit"],
-                            y=df[f"{col_name}_mean"],
+                            y=df[f"{feature['column']}_mean"],
                             mode="lines",
-                            name=f"{display_name} Mean",
-                            line=dict(color=color, dash="dash"),
+                            name=f"{feature['display_name']} Mean",
+                            line=dict(color=feature["color"], dash="dash"),
                         ),
                         row=2*i,
                         col=1,
                     )
-                    fig_time.update_yaxes(title_text=f"{display_name} Mean", row=2*i, col=1)
+                    # Update y-axis for mean feature
+                    fig_time.update_yaxes(title_text=f"{feature['display_name']} Mean", row=2*i, col=1)
 
             fig_time.update_layout(
                 xaxis_title=f"Time ({time_unit})",
@@ -1137,6 +1175,9 @@ def advanced_page():
                 unsafe_allow_html=True,
             )
 
+# Correct the main function call
+if __name__ == "__main__":
+    advanced_page()
 
 
 if __name__ == "__main__":
