@@ -664,25 +664,40 @@ def advanced_page():
             # Round Parsed_Time to milliseconds to prevent nanoseconds issues
             df["Parsed_Time"] = df["Parsed_Time"].dt.round("ms")
 
-            # Assuming the start time is arbitrary, set it to zero or a fixed date
-            start_time = pd.Timestamp("2020-01-01")  # You can adjust this as needed
-            df["Time"] = start_time + df["Parsed_Time"]
+            # Create a numeric Time_unit column based on selected time unit
+            if time_unit == "milliseconds":
+                df["Time_unit"] = df["Parsed_Time"].dt.total_seconds() * 1000
+            elif time_unit == "seconds":
+                df["Time_unit"] = df["Parsed_Time"].dt.total_seconds()
+            elif time_unit == "minutes":
+                df["Time_unit"] = df["Parsed_Time"].dt.total_seconds() / 60
+            elif time_unit == "hours":
+                df["Time_unit"] = df["Parsed_Time"].dt.total_seconds() / 3600
 
-            # Convert min_time and max_time to Python datetime objects
-            min_time = df["Time"].min().to_pydatetime()
-            max_time = df["Time"].max().to_pydatetime()
-            st.write(f"Data time range: {min_time} to {max_time}")
+            # Sort the dataframe by Time_unit
+            df = df.sort_values("Time_unit")
+
+            # Convert min_time and max_time to numeric based on selected unit
+            min_time_unit = df["Time_unit"].min()
+            max_time_unit = df["Time_unit"].max()
+            st.write(f"Data time range: {min_time_unit:.2f} {time_unit} to {max_time_unit:.2f} {time_unit}")
+
+            # Define the format for the slider based on the time unit
+            if time_unit in ["milliseconds", "seconds", "minutes", "hours"]:
+                slider_format = "%.2f"
+            else:
+                slider_format = None
 
             time_range = st.slider(
                 "Select Time Range",
-                min_value=min_time,
-                max_value=max_time,
-                value=(min_time, max_time),
-                format="YYYY-MM-DD HH:mm:ss",
+                min_value=float(min_time_unit),
+                max_value=float(max_time_unit),
+                value=(float(min_time_unit), float(max_time_unit)),
+                format=slider_format,
             )
 
-            # Filter data
-            df = df[(df["Time"] >= time_range[0]) & (df["Time"] <= time_range[1])]
+            # Filter data based on the selected time range
+            df = df[(df["Time_unit"] >= time_range[0]) & (df["Time_unit"] <= time_range[1])]
 
             # Ensure numeric columns are numeric
             for col in [
@@ -987,10 +1002,15 @@ def advanced_page():
                 vertical_spacing=0.02,
             )
 
+            # Calculate rolling means for each feature
+            for col_name, display_name, color in features:
+                df[f"{col_name}_mean"] = df[col_name].rolling(window=100).mean()
+
             for i, (col_name, display_name, color) in enumerate(features, start=1):
+                # Original Feature
                 fig_time.add_trace(
                     go.Scatter(
-                        x=df["Time"],
+                        x=df["Time_unit"],
                         y=df[col_name],
                         mode="lines",
                         name=display_name,
@@ -999,10 +1019,22 @@ def advanced_page():
                     row=i,
                     col=1,
                 )
+                # Rolling Mean
+                fig_time.add_trace(
+                    go.Scatter(
+                        x=df["Time_unit"],
+                        y=df[f"{col_name}_mean"],
+                        mode="lines",
+                        name=f"{display_name} Mean",
+                        line=dict(color=color, dash="dash"),
+                    ),
+                    row=i,
+                    col=1,
+                )
                 fig_time.update_yaxes(title_text=display_name, row=i, col=1)
 
             fig_time.update_layout(
-                xaxis=dict(title="Time"),
+                xaxis=dict(title=f"Time ({time_unit})"),
                 height=300 * num_features,
                 showlegend=False,
             )
@@ -1050,4 +1082,6 @@ def advanced_page():
 
 if __name__ == "__main__":
     main()
+
+
 
