@@ -470,6 +470,8 @@ def original_page():
     else:
         st.info("Please upload a Raw Data file to begin the analysis.")
 
+
+
 def advanced_page():
     st.title("Advanced Analysis")
 
@@ -598,21 +600,21 @@ def advanced_page():
         # Find sensor columns
         sensor_columns = find_sensor_columns(df)
 
-        # --------------------- Select Time and Distance Columns ---------------------
+        # --------------------- Select Sensor Columns ---------------------
         st.subheader("Select Sensor Columns")
 
         # Get list of numeric columns to prevent selection of non-numeric columns
         numeric_columns = df.select_dtypes(include=['number']).columns.tolist()
 
+        if not numeric_columns:
+            st.error("No numeric columns available in the uploaded data.")
+            st.stop()
+
         # Time Column
         if "time" in sensor_columns and sensor_columns["time"] in numeric_columns:
             default_time_col = sensor_columns["time"]
         else:
-            default_time_col = numeric_columns[0] if numeric_columns else None
-
-        if default_time_col is None:
-            st.error("No numeric columns available for Time Column selection.")
-            st.stop()
+            default_time_col = numeric_columns[0]
 
         time_col = st.selectbox(
             "Select Time Column",
@@ -639,6 +641,7 @@ def advanced_page():
             default_pressure_col = sensor_columns["pressure"]
         else:
             default_pressure_col = numeric_columns[2] if len(numeric_columns) > 2 else numeric_columns[0]
+
         pressure_col = st.selectbox(
             "Select Pressure Column",
             options=numeric_columns,
@@ -651,6 +654,7 @@ def advanced_page():
             default_revolution_col = sensor_columns["revolution"]
         else:
             default_revolution_col = numeric_columns[3] if len(numeric_columns) > 3 else numeric_columns[0]
+
         revolution_col = st.selectbox(
             "Select Revolution Column",
             options=numeric_columns,
@@ -663,6 +667,7 @@ def advanced_page():
             default_advance_rate_col = sensor_columns["advance_rate"]
         else:
             default_advance_rate_col = numeric_columns[4] if len(numeric_columns) > 4 else numeric_columns[0]
+
         advance_rate_col = st.selectbox(
             "Select Advance Rate Column",
             options=numeric_columns,
@@ -675,6 +680,7 @@ def advanced_page():
             default_thrust_force_col = sensor_columns["thrust_force"]
         else:
             default_thrust_force_col = numeric_columns[5] if len(numeric_columns) > 5 else numeric_columns[0]
+
         thrust_force_col = st.selectbox(
             "Select Thrust Force Column",
             options=numeric_columns,
@@ -741,34 +747,230 @@ def advanced_page():
 
         # --------------------- Calculate Derived Metrics ---------------------
         try:
-            # Calculate Calculated Penetration Rate (Advance Rate / Revolution)
-            df["Calculated Penetration Rate"] = df[advance_rate_col] / df[revolution_col]
-            # Handle division by zero by replacing infinite values with NaN
-            df["Calculated Penetration Rate"].replace([np.inf, -np.inf], np.nan, inplace=True)
+            # Filter data points between n2 and n1 rpm
+            n2 = machine_params.get("n2", df[revolution_col].min())
+            n1 = machine_params.get("n1", df[revolution_col].max())
+            df = df[
+                (df[revolution_col] >= n2)
+                & (df[revolution_col] <= n1)
+            ]
 
-            # Calculate Thrust Force per Cutting Ring
-            if num_cutting_rings > 0:
-                df["Thrust Force per Cutting Ring"] = df[thrust_force_col] / num_cutting_rings
-            else:
-                st.error("Number of Cutting Rings must be greater than zero.")
-                st.stop()
+            # Calculate torque
+            def calculate_torque_wrapper(row):
+                working_pressure = row[pressure_col]
+                current_speed = row[revolution_col]
 
-            # Calculate Calculated Torque [kNm]
-            # Assuming Calculated Torque [kNm] = (P_max * 60) / (2 * pi * Revolutions) / 1000
-            # Ensure revolution_col is not zero to prevent division by zero
-            df["Calculated torque [kNm]"] = (P_max * 60) / (2 * np.pi * df[revolution_col])
-            df["Calculated torque [kNm]"] = df["Calculated torque [kNm]"] / 1000  # Convert to kNm
+                if current_speed < machine_params["n1"]:
+                    torque = working_pressure * machine_params["torque_constant"]
+                else:
+                    torque = (
+                        (machine_params["n1"] / current_speed)
+                        * machine_params["torque_constant"]
+                        * working_pressure
+                    )
 
-            # Handle any potential NaN or infinite values
-            df["Calculated torque [kNm]"].replace([np.inf, -np.inf], np.nan, inplace=True)
+                return round(torque, 2)
 
-            # Check if 'Calculated torque [kNm]' has all NaN values
-            if df["Calculated torque [kNm]"].isnull().all():
-                st.error("Calculated torque [kNm] contains all NaN values. Please check the Revolution Column data.")
-                st.stop()
-        except Exception as e:
-            st.error(f"An error occurred while calculating derived metrics: {str(e)}")
-            st.stop()
+            df["Calculated torque [kNm]"] = df.apply(
+                calculate_torque_wrapper, axis=1
+            )
+
+            # Calculate whiskers and outliers using 10th and 90th percentiles
+            (
+                torque_lower_whisker,
+                torque_upper_whisker,
+                torque_outliers,
+            ) = calculate_whisker_and_outliers_advanced(df["Calculated torque [kNm]"])
+            (
+                rpm_lower_whisker,
+                rpm_upper_whisker,
+                rpm_outliers,
+            ) = calculate_whisker_and_outliers_advanced(df[revolution_col])
+
+            # Anomaly detection based on working pressure
+            df["Is_Anomaly"] = df[pressure_col] >= anomaly_threshold
+
+            # Function to calculate M max Vg2
+            def M_max_Vg2(rpm):
+                return np.minimum(
+                    machine_params["M_max_Vg1"],
+                    (P_max * 60 * nu) / (2 * np.pi * rpm),
+                )
+
+            # Calculate the elbow points for the max and continuous torque
+            elbow_rpm_max = (P_max * 60 * nu) / (2 * np.pi * machine_params["M_max_Vg1"])
+            elbow_rpm_cont = (
+                P_max * 60 * nu
+            ) / (2 * np.pi * machine_params["M_cont_value"])
+
+            # Generate RPM values for the torque curve
+            rpm_curve = np.linspace(0.1, machine_params["n1"], 1000)  # Avoid division by zero
+
+            fig = make_subplots(rows=1, cols=1)
+
+            # Plot torque curves
+            fig.add_trace(
+                go.Scatter(
+                    x=rpm_curve[rpm_curve <= elbow_rpm_cont],
+                    y=np.full_like(rpm_curve[rpm_curve <= elbow_rpm_cont], machine_params["M_cont_value"]),
+                    mode="lines",
+                    name="M cont Max [kNm]",
+                    line=dict(color="green", width=2),
+                )
+            )
+
+            fig.add_trace(
+                go.Scatter(
+                    x=rpm_curve[rpm_curve <= elbow_rpm_max],
+                    y=np.full_like(rpm_curve[rpm_curve <= elbow_rpm_max], machine_params["M_max_Vg1"]),
+                    mode="lines",
+                    name="M max Vg1 [kNm]",
+                    line=dict(color="red", width=2),
+                )
+            )
+
+            fig.add_trace(
+                go.Scatter(
+                    x=rpm_curve[rpm_curve <= machine_params["n1"]],
+                    y=M_max_Vg2(rpm_curve[rpm_curve <= machine_params["n1"]]),
+                    mode="lines",
+                    name="M max Vg2 [kNm]",
+                    line=dict(color="red", width=2, dash="dash"),
+                )
+            )
+
+            # Calculate the y-values for the vertical lines
+            y_max_vg2 = M_max_Vg2(
+                np.array(
+                    [
+                        elbow_rpm_max,
+                        elbow_rpm_cont,
+                        machine_params["n1"],
+                    ]
+                )
+            )
+
+            # Add truncated vertical lines at elbow points
+            fig.add_trace(
+                go.Scatter(
+                    x=[elbow_rpm_max, elbow_rpm_max],
+                    y=[0, y_max_vg2[0]],
+                    mode="lines",
+                    line=dict(color="purple", width=1, dash="dot"),
+                    showlegend=False,
+                )
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=[elbow_rpm_cont, elbow_rpm_cont],
+                    y=[0, y_max_vg2[1]],
+                    mode="lines",
+                    line=dict(color="orange", width=1, dash="dot"),
+                    showlegend=False,
+                )
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=[machine_params["n1"], machine_params["n1"]],
+                    y=[0, y_max_vg2[2]],
+                    mode="lines",
+                    line=dict(color="black", width=1, dash="dash"),
+                    showlegend=False,
+                )
+            )
+
+            # Separate normal and anomaly data
+            normal_data = df[~df["Is_Anomaly"]]
+            anomaly_data = df[df["Is_Anomaly"]]
+
+            # Separate outlier data
+            torque_outlier_data = df[df["Calculated torque [kNm]"].isin(torque_outliers)]
+            rpm_outlier_data = df[df[revolution_col].isin(rpm_outliers)]
+
+            # Plot data points
+            fig.add_trace(
+                go.Scatter(
+                    x=normal_data[revolution_col],
+                    y=normal_data["Calculated torque [kNm]"],
+                    mode="markers",
+                    name="Normal Data",
+                    marker=dict(
+                        color=normal_data["Calculated torque [kNm]"],
+                        colorscale="Viridis",
+                        size=8,
+                    ),
+                )
+            )
+
+            fig.add_trace(
+                go.Scatter(
+                    x=anomaly_data[revolution_col],
+                    y=anomaly_data["Calculated torque [kNm]"],
+                    mode="markers",
+                    name=f"Anomaly (Pressure ≥ {anomaly_threshold} bar)",
+                    marker=dict(color="red", symbol="x", size=10),
+                )
+            )
+
+            fig.add_trace(
+                go.Scatter(
+                    x=torque_outlier_data[revolution_col],
+                    y=torque_outlier_data["Calculated torque [kNm]"],
+                    mode="markers",
+                    name="Torque Outliers",
+                    marker=dict(color="orange", symbol="diamond", size=10),
+                )
+            )
+
+            fig.add_trace(
+                go.Scatter(
+                    x=rpm_outlier_data[revolution_col],
+                    y=rpm_outlier_data["Calculated torque [kNm]"],
+                    mode="markers",
+                    name="RPM Outliers",
+                    marker=dict(color="purple", symbol="square", size=10),
+                )
+            )
+
+            # Add horizontal lines for the torque whiskers
+            fig.add_hline(
+                y=torque_upper_whisker,
+                line_dash="dash",
+                line_color="gray",
+                annotation_text="Torque Upper Whisker (90th Percentile)",
+            )
+            fig.add_hline(
+                y=torque_lower_whisker,
+                line_dash="dot",
+                line_color="gray",
+                annotation_text="Torque Lower Whisker (10th Percentile)",
+            )
+
+            # Set plot layout with adjusted dimensions
+            fig.update_layout(
+                title=f"{selected_machine} - Advanced Torque Analysis",
+                xaxis_title="Revolution [1/min]",
+                yaxis_title="Torque [kNm]",
+                xaxis=dict(range=[0, max(df[revolution_col].max(), machine_params["n1"]) * 1.1]),
+                yaxis=dict(
+                    range=[
+                        0,
+                        max(60, df["Calculated torque [kNm]"].max() * 1.1),
+                    ]
+                ),
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=-0.3,
+                    xanchor="center",
+                    x=0.5,
+                ),
+                width=1000,
+                height=800,
+                margin=dict(l=50, r=50, t=100, b=100),
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
 
         # --------------------- Features over Time Visualization ---------------------
         st.subheader("Features over Time")
@@ -1049,6 +1251,7 @@ def advanced_page():
         )
 
 # --------------------- End of advanced_page ---------------------
+
 
 
 if __name__ == "__main__":
