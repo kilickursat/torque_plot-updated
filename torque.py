@@ -678,25 +678,15 @@ def advanced_page():
             # Display the maximum allowed value for debugging
             st.write(f"**Maximum allowed value for '{time_unit}':** {max_allowed_value} {time_unit}")
 
-            # Convert time column to timedelta
-            try:
-                df["Parsed_Time"] = pd.to_timedelta(df[time_col], unit=time_unit)
-            except Exception as e:
-                st.error(f"Error converting time column to timedelta: {e}")
-                return
-
-            # Round Parsed_Time to milliseconds to prevent nanoseconds issues
-            df["Parsed_Time"] = df["Parsed_Time"].dt.round("ms")
-
-            # Create a numeric Time_unit column based on selected time unit
+            # Convert time column to seconds based on the selected unit
             if time_unit == "milliseconds":
-                df["Time_unit"] = df["Parsed_Time"].dt.total_seconds() * 1000
+                df["Time_unit"] = df[time_col] / 1000  # Convert to seconds
             elif time_unit == "seconds":
-                df["Time_unit"] = df["Parsed_Time"].dt.total_seconds()
+                df["Time_unit"] = df[time_col]
             elif time_unit == "minutes":
-                df["Time_unit"] = df["Parsed_Time"].dt.total_seconds() / 60
+                df["Time_unit"] = df[time_col] * 60  # Convert to seconds
             elif time_unit == "hours":
-                df["Time_unit"] = df["Parsed_Time"].dt.total_seconds() / 3600
+                df["Time_unit"] = df[time_col] * 3600  # Convert to seconds
 
             # Check for out-of-bounds values after conversion
             if df["Time_unit"].max() > max_allowed_value:
@@ -713,10 +703,14 @@ def advanced_page():
             max_time_unit = df["Time_unit"].max()
 
             # Display the time range in numeric format
-            st.write(f"**Data time range:** {min_time_unit:.2f} {time_unit} to {max_time_unit:.2f} {time_unit}")
+            st.write(f"**Data time range:** {min_time_unit:.2f} seconds to {max_time_unit:.2f} seconds")
 
             # Convert numeric Time_unit back to timedelta for human-readable format
-            df["Human_Readable_Time"] = pd.to_timedelta(df["Time_unit"], unit=time_unit)
+            try:
+                df["Human_Readable_Time"] = pd.to_timedelta(df["Time_unit"], unit='s')
+            except Exception as e:
+                st.error(f"Error converting Time_unit to timedelta: {e}")
+                return
 
             # Display the time range in human-readable format
             min_hr_time = df["Human_Readable_Time"].min()
