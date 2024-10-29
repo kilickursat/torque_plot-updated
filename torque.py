@@ -476,6 +476,106 @@ def original_page():
 
 
 
+import pandas as pd
+import streamlit as st
+from plotly.subplots import make_subplots
+import plotly.graph_objects as go
+import numpy as np
+
+# --------------------- Helper Functions ---------------------
+# Define or import your helper functions here. For demonstration,
+# I'll provide a sample implementation for 'format_timedelta'.
+# You should replace these with your actual implementations.
+
+def load_data(file, file_type):
+    try:
+        if file_type == 'csv':
+            return pd.read_csv(file)
+        elif file_type in ['xlsx', 'xls']:
+            return pd.read_excel(file)
+        else:
+            st.error(f"Unsupported file type: {file_type}")
+            return None
+    except Exception as e:
+        st.error(f"Error loading data: {e}")
+        return None
+
+def format_timedelta(td):
+    """
+    Converts a Pandas Timedelta object to a formatted string 'HHh MMm SSs'.
+    """
+    total_seconds = int(td.total_seconds())
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours}h {minutes}m {seconds}s"
+
+# Update the sensor column map with more potential column names
+sensor_column_map = {
+    "pressure": ["Working pressure [bar]", "AzV.V13_SR_ArbDr_Z | DB 60.DBD 26", "Pression [bar]", "Presión [bar]", "Pressure", "Pressure [bar]", "Working Pressure"],
+    "revolution": ["Revolution [rpm]", "AzV.V13_SR_Drehz_nach_Abgl_Z | DB 60.DBD 30", "Vitesse [rpm]", "Revoluciones [rpm]", "RPM", "Speed", "Rotation Speed"],
+    "time": ["Time", "Timestamp", "DateTime", "Date", "Zeit", "Relativzeit", "Uhrzeit", "Datum"],
+    "advance_rate": ["Advance Rate", "Vorschubgeschwindigkeit", "Avance", "Rate of Penetration", "ROP", "Advance [m/min]", "Advance [mm/min]"],
+    "thrust_force": ["Thrust Force", "Thrust", "Vorschubkraft", "Force", "Force at Cutting Head", "Thrust Force [kN]"]
+}
+
+def find_sensor_columns(df):
+    found_columns = {}
+    for sensor, possible_names in sensor_column_map.items():
+        for name in possible_names:
+            if name in df.columns:
+                found_columns[sensor] = name
+                break
+        if sensor not in found_columns:
+            # If exact match not found, try case-insensitive partial match
+            for col in df.columns:
+                if any(name.lower() in col.lower() for name in possible_names):
+                    found_columns[sensor] = col
+                    break
+    return found_columns
+
+def get_machine_params(specs_df, selected_machine):
+    """
+    Retrieves machine parameters for the selected machine type.
+    This is a placeholder. Replace with actual implementation.
+    """
+    machine_row = specs_df[specs_df["Projekt"] == selected_machine]
+    if machine_row.empty:
+        return None
+    # Convert the row to a dictionary and return
+    return machine_row.iloc[0].to_dict()
+
+def calculate_whisker_and_outliers_advanced(series):
+    """
+    Calculates the lower and upper whiskers and identifies outliers based on 10th and 90th percentiles.
+    """
+    lower_whisker = series.quantile(0.10)
+    upper_whisker = series.quantile(0.90)
+    outliers = series[(series < lower_whisker) | (series > upper_whisker)]
+    return lower_whisker, upper_whisker, outliers
+
+def display_statistics(df, *columns):
+    """
+    Displays statistical summaries for the specified columns.
+    """
+    for col in columns:
+        if col in df.columns:
+            st.write(f"**{col} Statistics:**")
+            st.write(df[col].describe())
+        else:
+            st.warning(f"Column '{col}' not found in the dataset.")
+
+def get_table_download_link(df, filename, link_text):
+    """
+    Generates a download link for a DataFrame as a CSV file.
+    """
+    csv = df.to_csv(index=True)
+    b64 = base64.b64encode(csv.encode()).decode()  # Some strings
+    href = f'<a href="data:file/csv;base64,{b64}" download="{filename}">{link_text}</a>'
+    return href
+
+import base64  # Required for get_table_download_link
+
+# --------------------- Main Function ---------------------
 def advanced_page():
     st.title("Advanced Analysis")
 
@@ -1002,17 +1102,27 @@ def advanced_page():
             ]
 
             # Calculate Penetration Rate
-            df["Calculated Penetration Rate"] = df[advance_rate_col] / df[revolution_col]
-            df["Calculated Penetration Rate"].replace([np.inf, -np.inf], np.nan, inplace=True)
+            if revolution_col in df.columns and advance_rate_col in df.columns:
+                df["Calculated Penetration Rate"] = df[advance_rate_col] / df[revolution_col]
+                df["Calculated Penetration Rate"].replace([np.inf, -np.inf], np.nan, inplace=True)
+            else:
+                st.warning(f"Columns '{advance_rate_col}' or '{revolution_col}' not found for Penetration Rate calculation.")
+                df["Calculated Penetration Rate"] = np.nan
 
             # Calculate Thrust Force per Cutting Ring
-            if num_cutting_rings > 0:
+            if thrust_force_col in df.columns and num_cutting_rings > 0:
                 df["Thrust Force per Cutting Ring"] = df[thrust_force_col] / num_cutting_rings
-            else:
+            elif num_cutting_rings <= 0:
                 st.error("Number of Cutting Rings must be greater than zero.")
                 st.stop()
+            else:
+                st.warning(f"Thrust Force column '{thrust_force_col}' not found.")
+                df["Thrust Force per Cutting Ring"] = np.nan
 
-            # Add 'Calculated torque [kNm]' already calculated above
+            # Ensure 'Calculated torque [kNm]' is present
+            if "Calculated torque [kNm]" not in df.columns:
+                st.warning("Column 'Calculated torque [kNm]' not found in the dataset.")
+                df["Calculated torque [kNm]"] = np.nan
 
             # Define the number of features
             num_features_time = len(features_time)
@@ -1138,7 +1248,7 @@ def advanced_page():
                 {"column": "Calculated torque [kNm]", "display_name": "Calculated Torque [kNm]", "color": "magenta"},
             ]
 
-            # Calculate rolling means for distance-based features
+            # Define the number of features
             num_features_distance = len(features_distance)
 
             # Rolling Window Slider for Distance
@@ -1251,84 +1361,98 @@ def advanced_page():
             st.stop()
 
     # --------------------- Statistical Summaries and Download Links ---------------------
-        try:
-            st.subheader("Statistical Summaries")
+    try:
+        st.subheader("Statistical Summaries")
 
-            # Statistical Summary for Time-based Features
-            st.write("**Time-based Features Statistics:**")
-            display_statistics(df, revolution_col, pressure_col, thrust_force_col)
+        # Statistical Summary for Time-based Features
+        st.write("**Time-based Features Statistics:**")
+        display_statistics(df, revolution_col, pressure_col, thrust_force_col)
 
-            # Statistical Summary for Distance-based Features
-            st.write("**Distance/Chainage-based Features Statistics:**")
-            display_statistics(df, revolution_col, pressure_col, thrust_force_col)
-        except KeyError as ke:
-            st.error(f"Missing expected column during statistical summaries: {ke}")
-            st.stop()
-        except Exception as e:
-            st.error(f"An error occurred during statistical summaries: {str(e)}")
-            st.stop()
+        # Statistical Summary for Distance-based Features
+        st.write("**Distance/Chainage-based Features Statistics:**")
+        display_statistics(df, revolution_col, pressure_col, thrust_force_col)
+    except KeyError as ke:
+        st.error(f"Missing expected column during statistical summaries: {ke}")
+        st.stop()
+    except Exception as e:
+        st.error(f"An error occurred during statistical summaries: {str(e)}")
+        st.stop()
 
     # --------------------- Additional Statistical Features ---------------------
-        try:
-            st.subheader("Additional Statistical Features")
+    try:
+        st.subheader("Additional Statistical Features")
 
-            # Advance Rate
-            st.write("**Advance Rate Statistics:**")
+        # Advance Rate
+        st.write("**Advance Rate Statistics:**")
+        if advance_rate_col in df.columns:
             st.write(df[advance_rate_col].describe())
+        else:
+            st.warning(f"Advance Rate column '{advance_rate_col}' not found in the dataset.")
 
-            # Calculated Penetration Rate
-            st.write("**Penetration Rate Statistics (Calculated):**")
+        # Calculated Penetration Rate
+        st.write("**Penetration Rate Statistics (Calculated):**")
+        if "Calculated Penetration Rate" in df.columns:
             st.write(df["Calculated Penetration Rate"].describe())
+        else:
+            st.warning("The column 'Calculated Penetration Rate' does not exist in the dataset.")
 
-            # Thrust Force at the Cutting Head
-            st.write("**Thrust Force at the Cutting Head Statistics:**")
+        # Thrust Force at the Cutting Head
+        st.write("**Thrust Force at the Cutting Head Statistics:**")
+        if thrust_force_col in df.columns:
             st.write(df[thrust_force_col].describe())
+        else:
+            st.warning(f"Thrust Force column '{thrust_force_col}' not found in the dataset.")
 
-            # Thrust Force per Cutting Ring
-            st.write("**Thrust Force per Cutting Ring Statistics:**")
+        # Thrust Force per Cutting Ring
+        st.write("**Thrust Force per Cutting Ring Statistics:**")
+        if "Thrust Force per Cutting Ring" in df.columns:
             st.write(df["Thrust Force per Cutting Ring"].describe())
+        else:
+            st.warning("The column 'Thrust Force per Cutting Ring' does not exist in the dataset.")
 
-            # Calculated Torque [kNm]
-            st.write("**Calculated Torque [kNm] Statistics:**")
-            if "Calculated torque [kNm]" in df.columns:
-                st.write(df["Calculated torque [kNm]"].describe())
-            else:
-                st.warning("The column 'Calculated torque [kNm]' does not exist in the dataset.")
-        except KeyError as ke:
-            st.error(f"Missing expected column during additional statistical features: {ke}")
-            st.stop()
-        except Exception as e:
-            st.error(f"An error occurred during additional statistical features: {str(e)}")
-            st.stop()
+        # Calculated Torque [kNm]
+        st.write("**Calculated Torque [kNm] Statistics:**")
+        if "Calculated torque [kNm]" in df.columns:
+            st.write(df["Calculated torque [kNm]"].describe())
+        else:
+            st.warning("The column 'Calculated torque [kNm]' does not exist in the dataset.")
+    except KeyError as ke:
+        st.error(f"Missing expected column during additional statistical features: {ke}")
+        st.stop()
+    except Exception as e:
+        st.error(f"An error occurred during additional statistical features: {str(e)}")
+        st.stop()
 
     # --------------------- Download Buttons ---------------------
-        try:
-            st.sidebar.markdown("## Download Results")
-            stats_df = pd.DataFrame(
-                {
-                    "RPM": df[revolution_col].describe(),
-                    "Calculated Torque [kNm]": df["Calculated torque [kNm]"].describe(),
-                    "Working Pressure": df[pressure_col].describe(),
-                    "Advance Rate": df[advance_rate_col].describe(),
-                    "Penetration Rate (Calculated)": df["Calculated Penetration Rate"].describe(),
-                    "Thrust Force": df[thrust_force_col].describe(),
-                    "Thrust Force per Cutting Ring": df["Thrust Force per Cutting Ring"].describe(),
-                }
-            )
-            st.sidebar.markdown(
-                get_table_download_link(
-                    stats_df, "advanced_statistical_analysis.csv", "Download Statistical Analysis"
-                ),
-                unsafe_allow_html=True,
-            )
-        except KeyError as ke:
-            st.error(f"Missing expected column during download link creation: {ke}")
-            st.stop()
-        except Exception as e:
-            st.error(f"An error occurred during download link creation: {str(e)}")
-            st.stop()
+    try:
+        st.sidebar.markdown("## Download Results")
+        stats_df = pd.DataFrame(
+            {
+                "RPM": df[revolution_col].describe(),
+                "Calculated Torque [kNm]": df["Calculated torque [kNm]"].describe(),
+                "Working Pressure": df[pressure_col].describe(),
+                "Advance Rate": df[advance_rate_col].describe(),
+                "Penetration Rate (Calculated)": df["Calculated Penetration Rate"].describe(),
+                "Thrust Force": df[thrust_force_col].describe(),
+                "Thrust Force per Cutting Ring": df["Thrust Force per Cutting Ring"].describe(),
+            }
+        )
+        st.sidebar.markdown(
+            get_table_download_link(
+                stats_df, "advanced_statistical_analysis.csv", "Download Statistical Analysis"
+            ),
+            unsafe_allow_html=True,
+        )
+    except KeyError as ke:
+        st.error(f"Missing expected column during download link creation: {ke}")
+        st.stop()
+    except Exception as e:
+        st.error(f"An error occurred during download link creation: {str(e)}")
+        st.stop()
 
 # --------------------- End of advanced_page ---------------------
+
+
 
 
 
