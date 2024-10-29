@@ -503,6 +503,16 @@ def format_timedelta(td):
     return formatted_time
 
 # Main Function
+import pandas as pd
+import streamlit as st
+from plotly.subplots import make_subplots
+import plotly.graph_objects as go
+
+# Assume helper functions are defined externally:
+# load_data(), format_timedelta(), load_machine_specs(), find_sensor_columns(),
+# get_machine_params(), calculate_whisker_and_outliers_advanced(),
+# display_statistics(), get_table_download_link()
+
 def advanced_page():
     st.title("Advanced Analysis")
 
@@ -641,10 +651,14 @@ def advanced_page():
             )
 
             # Distance/Chainage Column
+            if "distance" in sensor_columns and sensor_columns["distance"] in df.columns:
+                default_distance_col = sensor_columns["distance"]
+            else:
+                default_distance_col = df.columns[1] if len(df.columns) > 1 else df.columns[0]
             distance_col = st.selectbox(
                 "Select Distance/Chainage Column",
                 options=df.columns,
-                index=1 if len(df.columns) > 1 else 0,
+                index=df.columns.get_loc(default_distance_col) if default_distance_col in df.columns else 0,
                 help="Choose the column that represents distance or chainage in your dataset."
             )
 
@@ -880,14 +894,14 @@ def advanced_page():
             st.write(
                 """
                 **Interpretation Guide:**
-        
+
                 - **Advance Rate**: Indicates the speed at which the machine is advancing. Fluctuations may indicate changes in ground conditions or operational parameters.
                 - **Penetration Rate**: Calculated as Advance Rate divided by Revolution. Reflects how efficiently the machine penetrates the material per revolution.
                 - **Thrust Force**: Represents the force applied at the cutting head. High values may indicate hard ground or potential mechanical issues.
                 - **Thrust Force per Cutting Ring**: This metric normalizes the thrust force by the number of cutting rings, providing insight into the load per ring.
                 - **Revolution**: The rotational speed of the cutting head. Variations can affect penetration rate and torque.
                 - **Working Pressure**: The pressure at which the machine is operating. Sudden changes might indicate anomalies or operational adjustments.
-        
+
                 Use the visualizations to monitor trends and identify any unusual patterns that may require further investigation.
                 """
             )
@@ -987,14 +1001,14 @@ def advanced_page():
             st.write(
                 """
                 **Interpretation Guide:**
-        
+
                 - **Advance Rate**: Indicates the speed at which the machine is advancing. Fluctuations may indicate changes in ground conditions or operational parameters.
                 - **Penetration Rate**: Calculated as Advance Rate divided by Revolution. Reflects how efficiently the machine penetrates the material per revolution.
                 - **Thrust Force**: Represents the force applied at the cutting head. High values may indicate hard ground or potential mechanical issues.
                 - **Thrust Force per Cutting Ring**: This metric normalizes the thrust force by the number of cutting rings, providing insight into the load per ring.
                 - **Revolution**: The rotational speed of the cutting head. Variations can affect penetration rate and torque.
                 - **Working Pressure**: The pressure at which the machine is operating. Sudden changes might indicate anomalies or operational adjustments.
-        
+
                 Use the visualizations to monitor trends and identify any unusual patterns that may require further investigation.
                 """
             )
@@ -1048,6 +1062,8 @@ def advanced_page():
                 ),
                 unsafe_allow_html=True,
             )
+
+    # --------------------- End of advanced_page ---------------------
 
 
 if __name__ == "__main__":
