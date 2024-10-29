@@ -467,6 +467,63 @@ def original_page():
     else:
         st.info("Please upload a Raw Data file to begin the analysis.")
 
+import streamlit as st
+import pandas as pd
+import numpy as np
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+# Placeholder functions (to be replaced with actual implementations)
+def load_machine_specs(file, file_type):
+    if file_type == "csv":
+        return pd.read_csv(file)
+    elif file_type == "xlsx":
+        return pd.read_excel(file)
+    else:
+        raise ValueError("Unsupported file type for machine specifications.")
+
+def get_machine_params(specs, selected_machine):
+    machine = specs[specs["Projekt"] == selected_machine].iloc[0]
+    return machine.to_dict()
+
+def load_data(file, file_type):
+    if file_type == "csv":
+        return pd.read_csv(file)
+    elif file_type == "xlsx":
+        return pd.read_excel(file)
+    else:
+        st.error("Unsupported file type for raw data.")
+        return None
+
+def find_sensor_columns(df):
+    # Implement logic to find sensor columns
+    # For demonstration, return a dictionary with assumed column names
+    return {
+        "time": "Time",
+        "pressure": "Pressure",
+        "revolution": "Revolution",
+        "advance_rate": "Advance_Rate",
+        "thrust_force": "Thrust_Force"
+    }
+
+def calculate_whisker_and_outliers_advanced(series):
+    lower = series.quantile(0.10)
+    upper = series.quantile(0.90)
+    outliers = series[(series < lower) | (series > upper)]
+    return lower, upper, outliers
+
+def display_statistics(df, revolution_col, pressure_col, thrust_force_col):
+    st.subheader("Statistical Summary")
+    st.write(df[[revolution_col, pressure_col, thrust_force_col]].describe())
+
+def get_table_download_link(df, filename, link_text):
+    csv = df.to_csv(index=False)
+    b64 = base64.b64encode(csv.encode()).decode()  # Encode to base64
+    href = f'<a href="data:file/csv;base64,{b64}" download="{filename}">{link_text}</a>'
+    return href
+
+import base64  # Added for the download link function
+
 def advanced_page():
     st.title("Advanced Analysis")
 
@@ -641,22 +698,22 @@ def advanced_page():
             # Ask the user to select the unit of the time column
             time_unit = st.selectbox(
                 "Select Time Unit for Time Column",
-                options=["seconds", "milliseconds", "minutes", "hours"],
-                index=0,
+                options=["milliseconds", "seconds", "minutes", "hours"],
+                index=1,  # Default to seconds
             )
-            # Check for out-of-bounds values
-            max_allowed_value = {
-                "milliseconds": 2**63 // 1_000_000,
-                "seconds": 2**63 // 1_000_000_000,
-                "minutes": 2**63 // (60 * 1_000_000_000),
-                "hours": 2**63 // (3600 * 1_000_000_000),
-            }[time_unit]
+            # Check for out-of-bounds values (Removed to prevent unnecessary errors)
+            # max_allowed_value = {
+            #     "milliseconds": 2**63 // 1_000_000,
+            #     "seconds": 2**63 // 1_000_000_000,
+            #     "minutes": 2**63 // (60 * 1_000_000_000),
+            #     "hours": 2**63 // (3600 * 1_000_000_000)
+            # }[time_unit]
 
-            if df[time_col].max() > max_allowed_value:
-                st.error(
-                    f"The values in the time column exceed the maximum allowed for the selected unit '{time_unit}'. Please check the data or select a different unit."
-                )
-                return
+            # if df["Time_unit"].max() > max_allowed_value:
+            #     st.error(
+            #         f"The values in the time column exceed the maximum allowed for the selected unit '{time_unit}'. Please check the data or select a different unit."
+            #     )
+            #     return
 
             # Convert time column to timedelta
             df["Parsed_Time"] = pd.to_timedelta(df[time_col], unit=time_unit)
@@ -1002,31 +1059,18 @@ def advanced_page():
                 vertical_spacing=0.02,
             )
 
-            # Calculate rolling means for each feature
-            for col_name, display_name, color in features:
-                df[f"{col_name}_mean"] = df[col_name].rolling(window=100).mean()
+            # Calculate mean values for each feature based on unique Time_unit
+            df_mean = df.groupby("Time_unit").mean().reset_index()
 
             for i, (col_name, display_name, color) in enumerate(features, start=1):
                 # Original Feature
                 fig_time.add_trace(
                     go.Scatter(
-                        x=df["Time_unit"],
-                        y=df[col_name],
+                        x=df_mean["Time_unit"],
+                        y=df_mean[col_name],
                         mode="lines",
                         name=display_name,
                         line=dict(color=color),
-                    ),
-                    row=i,
-                    col=1,
-                )
-                # Rolling Mean
-                fig_time.add_trace(
-                    go.Scatter(
-                        x=df["Time_unit"],
-                        y=df[f"{col_name}_mean"],
-                        mode="lines",
-                        name=f"{display_name} Mean",
-                        line=dict(color=color, dash="dash"),
                     ),
                     row=i,
                     col=1,
@@ -1078,6 +1122,8 @@ def advanced_page():
 
     else:
         st.info("Please upload a Raw Data file to begin the advanced analysis.")
+
+
 
 
 if __name__ == "__main__":
