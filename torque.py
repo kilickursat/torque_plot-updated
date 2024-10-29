@@ -468,6 +468,7 @@ def original_page():
         st.info("Please upload a Raw Data file to begin the analysis.")
 
 def advanced_page():
+def advanced_page():
     st.title("Advanced Analysis")
 
     # File uploaders for batch data
@@ -484,19 +485,16 @@ def advanced_page():
 
             machine_params = get_machine_params(machine_specs, selected_machine)
 
-            # Display machine parameters as before
+            # Display machine parameters
             params_df = pd.DataFrame([machine_params])
-            # Create a styled HTML table with thicker borders
             styled_table = params_df.style.set_table_styles([
                 {'selector': 'th', 'props': [('border', '2px solid black'), ('padding', '5px')]},
                 {'selector': 'td', 'props': [('border', '2px solid black'), ('padding', '5px')]},
                 {'selector': '', 'props': [('border-collapse', 'collapse')]}
             ]).to_html()
 
-            # Remove the unwanted CSS that appears above the table
             styled_table = styled_table.split('</style>')[-1]
 
-            # Display the styled table
             st.markdown(
                 f"""
                 <style>
@@ -600,6 +598,17 @@ def advanced_page():
 
             # Ask the user to select the unit of the time column
             time_unit = st.selectbox("Select Time Unit for Time Column", options=["seconds", "milliseconds", "minutes", "hours"], index=0)
+                        # Check for out-of-bounds values
+            max_allowed_value = {
+                "milliseconds": 2**63 // 1_000_000,
+                "seconds": 2**63 // 1_000_000_000,
+                "minutes": 2**63 // (60 * 1_000_000_000),
+                "hours": 2**63 // (3600 * 1_000_000_000)
+            }[time_unit]
+
+            if df[time_col].max() > max_allowed_value:
+                st.error(f"The values in the time column exceed the maximum allowed for the selected unit '{time_unit}'. Please check the data or select a different unit.")
+                return
 
             # Convert time column to timedelta
             df['Parsed_Time'] = pd.to_timedelta(df[time_col], unit=time_unit)
@@ -620,7 +629,6 @@ def advanced_page():
 
             # Filter data
             df = df[(df['Time'] >= time_range[0]) & (df['Time'] <= time_range[1])]
-            # Proceed with data processing
 
             # Ensure numeric columns are numeric
             for col in [pressure_col, revolution_col, advance_rate_col, thrust_force_col]:
@@ -648,7 +656,6 @@ def advanced_page():
 
             # Filter data points between n2 and n1 rpm
             df = df[(df[revolution_col] >= machine_params['n2']) & (df[revolution_col] <= machine_params['n1'])]
-
             # Calculate torque
             def calculate_torque_wrapper(row):
                 working_pressure = row[pressure_col]
