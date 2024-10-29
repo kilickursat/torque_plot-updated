@@ -468,60 +468,6 @@ def original_page():
     else:
         st.info("Please upload a Raw Data file to begin the analysis.")
 
-import streamlit as st
-import pandas as pd
-import numpy as np
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-
-# Placeholder functions (to be replaced with actual implementations)
-def load_machine_specs(file, file_type):
-    if file_type == "csv":
-        return pd.read_csv(file)
-    elif file_type == "xlsx":
-        return pd.read_excel(file)
-    else:
-        raise ValueError("Unsupported file type for machine specifications.")
-
-def get_machine_params(specs, selected_machine):
-    machine = specs[specs["Projekt"] == selected_machine].iloc[0]
-    return machine.to_dict()
-
-def load_data(file, file_type):
-    if file_type == "csv":
-        return pd.read_csv(file)
-    elif file_type == "xlsx":
-        return pd.read_excel(file)
-    else:
-        st.error("Unsupported file type for raw data.")
-        return None
-
-def find_sensor_columns(df):
-    # Implement logic to find sensor columns
-    # For demonstration, return a dictionary with assumed column names
-    return {
-        "time": "Time",
-        "pressure": "Pressure",
-        "revolution": "Revolution",
-        "advance_rate": "Advance_Rate",
-        "thrust_force": "Thrust_Force"
-    }
-
-def calculate_whisker_and_outliers_advanced(series):
-    lower = series.quantile(0.10)
-    upper = series.quantile(0.90)
-    outliers = series[(series < lower) | (series > upper)]
-    return lower, upper, outliers
-
-def display_statistics(df, revolution_col, pressure_col, thrust_force_col):
-    st.subheader("Statistical Summary")
-    st.write(df[[revolution_col, pressure_col, thrust_force_col]].describe())
-
-def get_table_download_link(df, filename, link_text):
-    csv = df.to_csv(index=False)
-    b64 = base64.b64encode(csv.encode()).decode()  # Encode to base64
-    href = f'<a href="data:file/csv;base64,{b64}" download="{filename}">{link_text}</a>'
-    return href
 
 def advanced_page():
     st.title("Advanced Analysis")
