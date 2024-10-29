@@ -669,29 +669,30 @@ def advanced_page():
 
             # Define the maximum allowed value based on the selected time unit
             max_allowed_value = {
-                "milliseconds": 2**63 // 1_000_000,
-                "seconds": 2**63 // 1_000_000_000,
-                "minutes": 2**63 // (60 * 1_000_000_000),
-                "hours": 2**63 // (3600 * 1_000_000_000),
+                "milliseconds": 9_223_372_036_854, # (2^63 - 1) / 1_000_000
+                "seconds": 9_223_372_036,          # (2^63 - 1) / 1_000_000_000
+                "minutes": 153_722_867,            # (2^63 - 1) / (60 * 1_000_000_000)
+                "hours": 2_562_047                 # (2^63 - 1) / (3600 * 1_000_000_000)
             }[time_unit]
-
-            # Display the maximum allowed value for debugging
-            st.write(f"**Maximum allowed value for '{time_unit}':** {max_allowed_value} {time_unit}")
-
+            
             # Convert time column to seconds based on the selected unit
-            if time_unit == "milliseconds":
-                df["Time_unit"] = df[time_col] / 1000  # Convert to seconds
-            elif time_unit == "seconds":
-                df["Time_unit"] = df[time_col]
-            elif time_unit == "minutes":
-                df["Time_unit"] = df[time_col] * 60  # Convert to seconds
-            elif time_unit == "hours":
-                df["Time_unit"] = df[time_col] * 3600  # Convert to seconds
-
-            # Check for out-of-bounds values after conversion
-            if df["Time_unit"].max() > max_allowed_value:
+            conversion_factors = {
+                "milliseconds": 0.001,  # Convert to seconds
+                "seconds": 1,          # Already in seconds
+                "minutes": 60,         # Convert to seconds
+                "hours": 3600         # Convert to seconds
+            }
+            
+            # Convert time using the appropriate factor
+            df["Time_unit"] = df[time_col] * conversion_factors[time_unit]
+            
+            # Check for out-of-bounds values before conversion
+            if df[time_col].max() > max_allowed_value:
                 st.error(
-                    f"The values in the time column exceed the maximum allowed for the selected unit '{time_unit}'. Please check the data or select a different unit."
+                    f"The values in the time column exceed the maximum allowed for the selected unit '{time_unit}'. "
+                    f"Maximum allowed: {max_allowed_value:,} {time_unit}. "
+                    f"Current maximum: {df[time_col].max():,} {time_unit}. "
+                    "Please check the data or select a different unit."
                 )
                 return
 
