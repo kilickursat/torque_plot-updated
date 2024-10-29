@@ -500,11 +500,6 @@ def original_page():
     else:
         st.info("Please upload a Raw Data file to begin the analysis.")
 
-
-
-
-
-
 def advanced_page():
     st.title("Advanced Analysis")
 
@@ -682,6 +677,36 @@ def advanced_page():
                 options=df.columns,
                 index=df.columns.get_loc(default_thrust_force_col) if default_thrust_force_col in df.columns else 0,
             )
+
+            # Distance/Chainage Column
+            if "distance" in sensor_columns and sensor_columns["distance"] in df.columns:
+                default_distance_col = sensor_columns["distance"]
+            else:
+                # Attempt to guess a distance-related column or default to the last column
+                possible_distance_cols = [col for col in df.columns if "distance" in col.lower() or "chainage" in col.lower()]
+                default_distance_col = possible_distance_cols[0] if possible_distance_cols else df.columns[-1]
+            distance_col = st.selectbox(
+                "Select Distance/Chainage Column",
+                options=df.columns,
+                index=df.columns.get_loc(default_distance_col) if default_distance_col in df.columns else 0,
+            )
+                # Ensure distance column is appropriately parsed
+                df[distance_col] = pd.to_numeric(df[distance_col], errors="coerce")
+                if df[distance_col].isnull().all():
+                    st.error(
+                        f"The selected distance/chainage column '{distance_col}' cannot be converted to numeric values."
+                    )
+                    return
+                
+                # Handle missing values
+                missing_distance = df[distance_col].isnull().sum()
+                if missing_distance > 0:
+                    st.warning(f"There are {missing_distance} missing values in the distance/chainage column. These rows will be dropped.")
+                    df = df.dropna(subset=[distance_col])
+                
+                # Display the maximum value in the distance/chainage column for debugging
+                max_distance_value = df[distance_col].max()
+                st.write(f"**Maximum value in the distance/chainage column (`{distance_col}`):** {max_distance_value}")
 
             # Ensure time column is appropriately parsed
             df[time_col] = pd.to_numeric(df[time_col], errors="coerce")
