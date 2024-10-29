@@ -655,10 +655,6 @@ def advanced_page():
                 )
                 return
 
-            # Display the maximum value in the time column for debugging
-            max_time_value = df[time_col].max()
-            st.write(f"**Maximum value in the time column (`{time_col}`):** {max_time_value} {time_unit}")
-
             # Ask the user to select the unit of the time column
             time_unit = st.selectbox(
                 "Select Time Unit for Time Column",
@@ -666,7 +662,12 @@ def advanced_page():
                 index=0,
                 help="Choose the unit that matches the time data in your dataset."
             )
-            # Check for out-of-bounds values
+
+            # Display the maximum value in the time column for debugging
+            max_time_value = df[time_col].max()
+            st.write(f"**Maximum value in the time column (`{time_col}`):** {max_time_value} {time_unit}")
+
+            # Define the maximum allowed value based on the selected time unit
             max_allowed_value = {
                 "milliseconds": 2**63 // 1_000_000,
                 "seconds": 2**63 // 1_000_000_000,
@@ -675,14 +676,7 @@ def advanced_page():
             }[time_unit]
 
             # Display the maximum allowed value for debugging
-            st.write(f"**Maximum allowed value for '{time_unit}':** {max_allowed_value}")
-
-            # Compare the converted Time_unit, not the original time_col
-            if df["Time_unit"].max() > max_allowed_value:
-                st.error(
-                    f"The values in the time column exceed the maximum allowed for the selected unit '{time_unit}'. Please check the data or select a different unit."
-                )
-                return
+            st.write(f"**Maximum allowed value for '{time_unit}':** {max_allowed_value} {time_unit}")
 
             # Convert time column to timedelta
             try:
@@ -703,6 +697,13 @@ def advanced_page():
                 df["Time_unit"] = df["Parsed_Time"].dt.total_seconds() / 60
             elif time_unit == "hours":
                 df["Time_unit"] = df["Parsed_Time"].dt.total_seconds() / 3600
+
+            # Check for out-of-bounds values after conversion
+            if df["Time_unit"].max() > max_allowed_value:
+                st.error(
+                    f"The values in the time column exceed the maximum allowed for the selected unit '{time_unit}'. Please check the data or select a different unit."
+                )
+                return
 
             # Sort the dataframe by Time_unit
             df = df.sort_values("Time_unit")
@@ -725,6 +726,7 @@ def advanced_page():
             # Define the format for the slider based on the time unit
             slider_format = "%.2f"
 
+            # Create the time range slider
             time_range = st.slider(
                 "Select Time Range",
                 min_value=float(min_time_unit),
@@ -1036,6 +1038,19 @@ def advanced_page():
 
             num_features = len(features)
 
+            # Optional: Allow users to set rolling window size
+            window_size = st.sidebar.slider(
+                "Select Rolling Window Size for Mean Calculation",
+                min_value=10,
+                max_value=1000,
+                value=100,
+                step=10,
+                help="Adjust the window size to smooth the data. A larger window provides a smoother mean."
+            )
+
+            # Optional: Allow users to toggle mean lines
+            show_means = st.checkbox("Show Mean Values", value=True, help="Toggle the visibility of mean lines.")
+
             # Create subplots with 2 rows per feature: one for original data, one for mean
             fig_time = make_subplots(
                 rows=2*num_features,  # Two rows per feature
@@ -1050,7 +1065,6 @@ def advanced_page():
             )
 
             # Calculate rolling means for each feature
-            window_size = 100  # Adjust the window size as needed
             for col_name, display_name, color in features:
                 df[f"{col_name}_mean"] = df[col_name].rolling(window=window_size, min_periods=1).mean()
 
@@ -1068,20 +1082,21 @@ def advanced_page():
                     col=1,
                 )
                 fig_time.update_yaxes(title_text=display_name, row=2*i-1, col=1)
-                
+
                 # Mean Feature Plot on even rows
-                fig_time.add_trace(
-                    go.Scatter(
-                        x=df["Time_unit"],
-                        y=df[f"{col_name}_mean"],
-                        mode="lines",
-                        name=f"{display_name} Mean",
-                        line=dict(color=color, dash="dash"),
-                    ),
-                    row=2*i,
-                    col=1,
-                )
-                fig_time.update_yaxes(title_text=f"{display_name} Mean", row=2*i, col=1)
+                if show_means:
+                    fig_time.add_trace(
+                        go.Scatter(
+                            x=df["Time_unit"],
+                            y=df[f"{col_name}_mean"],
+                            mode="lines",
+                            name=f"{display_name} Mean",
+                            line=dict(color=color, dash="dash"),
+                        ),
+                        row=2*i,
+                        col=1,
+                    )
+                    fig_time.update_yaxes(title_text=f"{display_name} Mean", row=2*i, col=1)
 
             fig_time.update_layout(
                 xaxis_title=f"Time ({time_unit})",
@@ -1091,6 +1106,7 @@ def advanced_page():
             )
 
             st.plotly_chart(fig_time, use_container_width=True)
+
             # Provide explanations and annotations
             st.write(
                 """
@@ -1127,11 +1143,6 @@ def advanced_page():
                 unsafe_allow_html=True,
             )
 
-    # ---------------------------
-    # Run the App
-    # ---------------------------
-
- 
 
 
 if __name__ == "__main__":
