@@ -523,14 +523,14 @@ def get_table_download_link(df, filename, link_text):
     href = f'<a href="data:file/csv;base64,{b64}" download="{filename}">{link_text}</a>'
     return href
 
-import base64  # Added for the download link function
-
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import base64
+import csv
+from io import StringIO
 
 # ---------------------------
 # Helper Functions
@@ -580,33 +580,6 @@ def get_machine_params(specs, selected_machine):
     except Exception as e:
         st.error(f"Error retrieving machine parameters: {e}")
         return {}
-
-def load_data(file, file_type):
-    """
-    Load raw data from a CSV or XLSX file with error handling.
-
-    Args:
-        file: Uploaded file object.
-        file_type (str): Type of the file ('csv' or 'xlsx').
-
-    Returns:
-        pd.DataFrame or None: DataFrame containing raw data or None if error occurs.
-    """
-    try:
-        if file_type == "csv":
-            df = pd.read_csv(file)
-        elif file_type == "xlsx":
-            df = pd.read_excel(file)
-        else:
-            st.error("Unsupported file type for raw data.")
-            return None
-        return df
-    except pd.errors.ParserError as e:
-        st.error(f"Error parsing the CSV file: {e}")
-        return None
-    except Exception as e:
-        st.error(f"An error occurred while loading the data file: {e}")
-        return None
 
 def find_sensor_columns(df):
     """
@@ -699,6 +672,77 @@ def get_table_download_link(df, filename, link_text):
     href = f'<a href="data:file/csv;base64,{b64}" download="{filename}">{link_text}</a>'
     return href
 
+def find_bad_lines(file, expected_num_fields, delimiter=','):
+    """
+    Identify lines in the CSV file that do not match the expected number of fields.
+
+    Args:
+        file: Uploaded file object.
+        expected_num_fields (int): The number of fields expected per row.
+        delimiter (str): The delimiter used in the CSV file.
+
+    Returns:
+        list: A list of tuples containing (line_number, content) for bad lines.
+    """
+    bad_lines = []
+    file.seek(0)  # Reset file pointer
+    reader = csv.reader(StringIO(file.read().decode("utf-8")), delimiter=delimiter)
+    for i, row in enumerate(reader, start=1):
+        if len(row) != expected_num_fields:
+            bad_lines.append((i, row))
+    return bad_lines
+
+def load_data_with_bad_lines(file, file_type):
+    """
+    Load data and identify bad lines in the CSV.
+
+    Args:
+        file: Uploaded file object.
+        file_type (str): Type of the file ('csv' or 'xlsx').
+
+    Returns:
+        tuple: (pd.DataFrame or None, list of bad lines)
+    """
+    bad_lines = []
+    try:
+        if file_type == "csv":
+            # Read all lines first
+            file.seek(0)
+            all_lines = file.read().decode("utf-8")
+            reader = csv.reader(StringIO(all_lines))
+            rows = list(reader)
+
+            if not rows:
+                st.error("The CSV file is empty.")
+                return None, bad_lines
+
+            # Determine expected number of fields from the header
+            expected_num_fields = len(rows[0])
+
+            # Identify bad lines
+            for i, row in enumerate(rows[1:], start=2):  # Start from line 2
+                if len(row) != expected_num_fields:
+                    bad_lines.append((i, row))
+
+            # Reconstruct the CSV without bad lines
+            cleaned_csv = "\n".join([",".join(rows[0])] + [
+                ",".join(row) for i, row in enumerate(rows[1:], start=2) if len(row) == expected_num_fields
+            ])
+
+            df = pd.read_csv(StringIO(cleaned_csv), engine='python')
+        elif file_type == "xlsx":
+            df = pd.read_excel(file)
+        else:
+            st.error("Unsupported file type for raw data.")
+            return None, bad_lines
+        return df, bad_lines
+    except pd.errors.ParserError as e:
+        st.error(f"Error parsing the CSV file: {e}")
+        return None, bad_lines
+    except Exception as e:
+        st.error(f"An error occurred while loading the data file: {e}")
+        return None, bad_lines
+
 # ---------------------------
 # Main Advanced Page Function
 # ---------------------------
@@ -720,6 +764,10 @@ def advanced_page():
             machine_specs = load_machine_specs(machine_specs_file, file_type)
             if machine_specs is None or machine_specs.empty:
                 st.error("Machine specifications file is empty or could not be loaded.")
+                st.stop()
+
+            if "Projekt" not in machine_specs.columns:
+                st.error("The machine specifications file must contain a 'Projekt' column.")
                 st.stop()
 
             machine_types = machine_specs["Projekt"].unique()
@@ -812,9 +860,14 @@ def advanced_page():
     if raw_data_file is not None:
         # Load data
         file_type = raw_data_file.name.split(".")[-1].lower()
-        df = load_data(raw_data_file, file_type)
+        df, bad_lines = load_data_with_bad_lines(raw_data_file, file_type)
 
         if df is not None:
+            if bad_lines:
+                st.warning(f"Found {len(bad_lines)} problematic rows in the CSV file:")
+                for line_num, row in bad_lines:
+                    st.write(f"Line {line_num}: {row}")
+
             # Find sensor columns
             sensor_columns = find_sensor_columns(df)
 
@@ -1290,6 +1343,8 @@ def advanced_page():
 # ---------------------------
 # Run the App
 # ---------------------------
+
+
 
 
 if __name__ == "__main__":
