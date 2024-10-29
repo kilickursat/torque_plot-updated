@@ -470,38 +470,6 @@ def original_page():
     else:
         st.info("Please upload a Raw Data file to begin the analysis.")
 
-
-# Helper Function Defined Outside
-def format_timedelta(td):
-    """
-    Convert a pandas Timedelta to a human-readable string.
-    
-    Parameters:
-        td (pd.Timedelta): The timedelta object to format.
-        
-    Returns:
-        str: A formatted string representing the timedelta.
-    """
-    total_seconds = int(td.total_seconds())
-    days, remainder = divmod(total_seconds, 86400)  # 86400 seconds in a day
-    hours, remainder = divmod(remainder, 3600)      # 3600 seconds in an hour
-    minutes, seconds = divmod(remainder, 60)        # 60 seconds in a minute
-    fractional_seconds = td.microseconds / 1_000_000  # Convert microseconds to seconds
-
-    formatted_time = ""
-    if days > 0:
-        formatted_time += f"{days} day{'s' if days != 1 else ''}, "
-    if hours > 0:
-        formatted_time += f"{hours} hour{'s' if hours != 1 else ''}, "
-    if minutes > 0:
-        formatted_time += f"{minutes} minute{'s' if minutes != 1 else ''}, "
-
-    # Combine seconds and fractional seconds
-    total_sec = seconds + fractional_seconds
-    formatted_time += f"{total_sec:.2f} second{'s' if total_sec != 1 else ''}"
-
-    return formatted_time
-
 def advanced_page():
     st.title("Advanced Analysis")
 
@@ -755,7 +723,6 @@ def advanced_page():
             min_hr_time = format_timedelta(df["Human_Readable_Time"].min())
             max_hr_time = format_timedelta(df["Human_Readable_Time"].max())
             st.write(f"**Data time range (Human Readable):** {min_hr_time} to {max_hr_time}")
-
         except Exception as e:
             st.error(f"An error occurred while processing the time column: {str(e)}")
             st.stop()
@@ -786,17 +753,24 @@ def advanced_page():
                 st.error("Number of Cutting Rings must be greater than zero.")
                 st.stop()
 
-            # Handle any potential NaN values resulting from calculations
-            derived_columns = ["Calculated Penetration Rate", "Thrust Force per Cutting Ring"]
-            for col in derived_columns:
-                if df[col].isnull().all():
-                    st.error(f"The derived column '{col}' contains all NaN values. Check your input data.")
-                    st.stop()
+            # Calculate Calculated Torque [kNm]
+            # Assuming Calculated Torque [kNm] = (P_max * 60) / (2 * pi * Revolutions) / 1000
+            # Ensure revolution_col is not zero to prevent division by zero
+            df["Calculated torque [kNm]"] = (P_max * 60) / (2 * np.pi * df[revolution_col])
+            df["Calculated torque [kNm]"] = df["Calculated torque [kNm]"] / 1000  # Convert to kNm
+
+            # Handle any potential NaN or infinite values
+            df["Calculated torque [kNm]"].replace([np.inf, -np.inf], np.nan, inplace=True)
+
+            # Check if 'Calculated torque [kNm]' has all NaN values
+            if df["Calculated torque [kNm]"].isnull().all():
+                st.error("Calculated torque [kNm] contains all NaN values. Please check the Revolution Column data.")
+                st.stop()
         except Exception as e:
             st.error(f"An error occurred while calculating derived metrics: {str(e)}")
             st.stop()
 
-        # --------------------- Rolling Window for Time Visualization ---------------------
+        # --------------------- Features over Time Visualization ---------------------
         st.subheader("Features over Time")
 
         # Define the features with their display names and colors
@@ -807,6 +781,7 @@ def advanced_page():
             {"column": "Thrust Force per Cutting Ring", "display_name": "Thrust Force per Cutting Ring", "color": "orange"},
             {"column": revolution_col, "display_name": "Revolution", "color": "purple"},
             {"column": pressure_col, "display_name": "Working Pressure", "color": "cyan"},
+            {"column": "Calculated torque [kNm]", "display_name": "Calculated Torque [kNm]", "color": "magenta"},
         ]
 
         num_features_time = len(features_time)
@@ -898,6 +873,7 @@ def advanced_page():
             - **Thrust Force per Cutting Ring**: This metric normalizes the thrust force by the number of cutting rings, providing insight into the load per ring.
             - **Revolution**: The rotational speed of the cutting head. Variations can affect penetration rate and torque.
             - **Working Pressure**: The pressure at which the machine is operating. Sudden changes might indicate anomalies or operational adjustments.
+            - **Calculated Torque [kNm]**: Represents the torque calculated based on machine parameters. High or fluctuating values may indicate mechanical stress or inefficiencies.
 
             Use the visualizations to monitor trends and identify any unusual patterns that may require further investigation.
             """
@@ -914,6 +890,7 @@ def advanced_page():
             {"column": "Thrust Force per Cutting Ring", "display_name": "Thrust Force per Cutting Ring", "color": "orange"},
             {"column": revolution_col, "display_name": "Revolution", "color": "purple"},
             {"column": pressure_col, "display_name": "Working Pressure", "color": "cyan"},
+            {"column": "Calculated torque [kNm]", "display_name": "Calculated Torque [kNm]", "color": "magenta"},
         ]
 
         num_features_distance = len(features_distance)
@@ -934,6 +911,9 @@ def advanced_page():
             value=True,
             help="Toggle the visibility of rolling mean lines for distance-based features."
         )
+
+        # Sort the dataframe by Distance/Chainage to avoid zigzag lines
+        df = df.sort_values(by=distance_col)
 
         # Calculate rolling means for each feature
         for feature in features_distance:
@@ -1005,6 +985,7 @@ def advanced_page():
             - **Thrust Force per Cutting Ring**: This metric normalizes the thrust force by the number of cutting rings, providing insight into the load per ring.
             - **Revolution**: The rotational speed of the cutting head. Variations can affect penetration rate and torque.
             - **Working Pressure**: The pressure at which the machine is operating. Sudden changes might indicate anomalies or operational adjustments.
+            - **Calculated Torque [kNm]**: Represents the torque calculated based on machine parameters. High or fluctuating values may indicate mechanical stress or inefficiencies.
 
             Use the visualizations to monitor trends and identify any unusual patterns that may require further investigation.
             """
@@ -1040,12 +1021,19 @@ def advanced_page():
         st.write("**Thrust Force per Cutting Ring Statistics:**")
         st.write(df["Thrust Force per Cutting Ring"].describe())
 
+        # Calculated Torque [kNm]
+        st.write("**Calculated Torque [kNm] Statistics:**")
+        if "Calculated torque [kNm]" in df.columns:
+            st.write(df["Calculated torque [kNm]"].describe())
+        else:
+            st.warning("The column 'Calculated torque [kNm]' does not exist in the dataset.")
+
         # --------------------- Download Buttons ---------------------
         st.sidebar.markdown("## Download Results")
         stats_df = pd.DataFrame(
             {
                 "RPM": df[revolution_col].describe(),
-                "Calculated Torque": df.get("Calculated torque [kNm]", pd.Series(dtype='float')).describe(),
+                "Calculated Torque [kNm]": df["Calculated torque [kNm]"].describe(),
                 "Working Pressure": df[pressure_col].describe(),
                 "Advance Rate": df[advance_rate_col].describe(),
                 "Penetration Rate (Calculated)": df["Calculated Penetration Rate"].describe(),
@@ -1059,6 +1047,8 @@ def advanced_page():
             ),
             unsafe_allow_html=True,
         )
+
+# --------------------- End of advanced_page ---------------------
 
 
 if __name__ == "__main__":
