@@ -1175,9 +1175,6 @@ def advanced_page():
                 unsafe_allow_html=True,
             )
 
-# Correct the main function call
-if __name__ == "__main__":
-    advanced_page()
 
 
 if __name__ == "__main__":
