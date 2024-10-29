@@ -484,10 +484,25 @@ def advanced_page():
         try:
             file_type = machine_specs_file.name.split(".")[-1].lower()
             machine_specs = load_machine_specs(machine_specs_file, file_type)
+            if machine_specs is None or machine_specs.empty:
+                st.error("Machine specifications file is empty or could not be loaded.")
+                st.stop()
+
+            if "Projekt" not in machine_specs.columns:
+                st.error("The machine specifications file must contain a 'Projekt' column.")
+                st.stop()
+
             machine_types = machine_specs["Projekt"].unique()
+            if len(machine_types) == 0:
+                st.error("No machine types found in the specifications file.")
+                st.stop()
+
             selected_machine = st.sidebar.selectbox("Select Machine Type", machine_types)
 
             machine_params = get_machine_params(machine_specs, selected_machine)
+            if not machine_params:
+                st.error("Machine parameters could not be retrieved.")
+                st.stop()
 
             # Display machine parameters
             params_df = pd.DataFrame([machine_params])
@@ -578,7 +593,7 @@ def advanced_page():
             # Allow user to select columns if not found or adjust selections
             st.subheader("Select Sensor Columns")
             # Time Column
-            if "time" in sensor_columns:
+            if "time" in sensor_columns and sensor_columns["time"] in df.columns:
                 default_time_col = sensor_columns["time"]
             else:
                 default_time_col = df.columns[0]
@@ -589,47 +604,47 @@ def advanced_page():
             )
 
             # Pressure Column
-            if "pressure" in sensor_columns:
+            if "pressure" in sensor_columns and sensor_columns["pressure"] in df.columns:
                 default_pressure_col = sensor_columns["pressure"]
             else:
-                default_pressure_col = df.columns[1]
+                default_pressure_col = df.columns[1] if len(df.columns) > 1 else df.columns[0]
             pressure_col = st.selectbox(
                 "Select Pressure Column",
                 options=df.columns,
-                index=df.columns.get_loc(default_pressure_col),
+                index=df.columns.get_loc(default_pressure_col) if default_pressure_col else 0,
             )
 
             # Revolution Column
-            if "revolution" in sensor_columns:
+            if "revolution" in sensor_columns and sensor_columns["revolution"] in df.columns:
                 default_revolution_col = sensor_columns["revolution"]
             else:
-                default_revolution_col = df.columns[2]
+                default_revolution_col = df.columns[2] if len(df.columns) > 2 else df.columns[0]
             revolution_col = st.selectbox(
                 "Select Revolution Column",
                 options=df.columns,
-                index=df.columns.get_loc(default_revolution_col),
+                index=df.columns.get_loc(default_revolution_col) if default_revolution_col else 0,
             )
 
             # Advance Rate Column
-            if "advance_rate" in sensor_columns:
+            if "advance_rate" in sensor_columns and sensor_columns["advance_rate"] in df.columns:
                 default_advance_rate_col = sensor_columns["advance_rate"]
             else:
-                default_advance_rate_col = df.columns[3]
+                default_advance_rate_col = df.columns[3] if len(df.columns) > 3 else df.columns[0]
             advance_rate_col = st.selectbox(
                 "Select Advance Rate Column",
                 options=df.columns,
-                index=df.columns.get_loc(default_advance_rate_col),
+                index=df.columns.get_loc(default_advance_rate_col) if default_advance_rate_col else 0,
             )
 
             # Thrust Force Column
-            if "thrust_force" in sensor_columns:
+            if "thrust_force" in sensor_columns and sensor_columns["thrust_force"] in df.columns:
                 default_thrust_force_col = sensor_columns["thrust_force"]
             else:
-                default_thrust_force_col = df.columns[4]
+                default_thrust_force_col = df.columns[4] if len(df.columns) > 4 else df.columns[0]
             thrust_force_col = st.selectbox(
                 "Select Thrust Force Column",
                 options=df.columns,
-                index=df.columns.get_loc(default_thrust_force_col),
+                index=df.columns.get_loc(default_thrust_force_col) if default_thrust_force_col else 0,
             )
 
             # Ensure time column is appropriately parsed
@@ -640,11 +655,16 @@ def advanced_page():
                 )
                 return
 
+            # Display the maximum value in the time column for debugging
+            max_time_value = df[time_col].max()
+            st.write(f"**Maximum value in the time column (`{time_col}`):** {max_time_value}")
+
             # Ask the user to select the unit of the time column
             time_unit = st.selectbox(
                 "Select Time Unit for Time Column",
                 options=["seconds", "milliseconds", "minutes", "hours"],
                 index=0,
+                help="Choose the unit that matches the time data in your dataset."
             )
             # Check for out-of-bounds values
             max_allowed_value = {
@@ -654,6 +674,9 @@ def advanced_page():
                 "hours": 2**63 // (3600 * 1_000_000_000),
             }[time_unit]
 
+            # Display the maximum allowed value for debugging
+            st.write(f"**Maximum allowed value for '{time_unit}':** {max_allowed_value}")
+
             if df[time_col].max() > max_allowed_value:
                 st.error(
                     f"The values in the time column exceed the maximum allowed for the selected unit '{time_unit}'. Please check the data or select a different unit."
@@ -661,12 +684,16 @@ def advanced_page():
                 return
 
             # Convert time column to timedelta
-            df["Parsed_Time"] = pd.to_timedelta(df[time_col], unit=time_unit)
+            try:
+                df["Parsed_Time"] = pd.to_timedelta(df[time_col], unit=time_unit)
+            except Exception as e:
+                st.error(f"Error converting time column to timedelta: {e}")
+                return
 
             # Round Parsed_Time to milliseconds to prevent nanoseconds issues
             df["Parsed_Time"] = df["Parsed_Time"].dt.round("ms")
 
-            # Create a numeric Time_unit column based on selected time unit
+            # Create a numeric Time_unit column based on selected unit
             if time_unit == "milliseconds":
                 df["Time_unit"] = df["Parsed_Time"].dt.total_seconds() * 1000
             elif time_unit == "seconds":
@@ -685,10 +712,7 @@ def advanced_page():
             st.write(f"Data time range: {min_time_unit:.2f} {time_unit} to {max_time_unit:.2f} {time_unit}")
 
             # Define the format for the slider based on the time unit
-            if time_unit in ["milliseconds", "seconds", "minutes", "hours"]:
-                slider_format = "%.2f"
-            else:
-                slider_format = None
+            slider_format = "%.2f"
 
             time_range = st.slider(
                 "Select Time Range",
@@ -742,10 +766,13 @@ def advanced_page():
             )
 
             # Filter data points between n2 and n1 rpm
+            n2 = machine_params.get("n2", df[revolution_col].min())
+            n1 = machine_params.get("n1", df[revolution_col].max())
             df = df[
-                (df[revolution_col] >= machine_params["n2"])
-                & (df[revolution_col] <= machine_params["n1"])
+                (df[revolution_col] >= n2)
+                & (df[revolution_col] <= n1)
             ]
+
             # Calculate torque
             def calculate_torque_wrapper(row):
                 working_pressure = row[pressure_col]
@@ -1090,8 +1117,11 @@ def advanced_page():
                 unsafe_allow_html=True,
             )
 
-    else:
-        st.info("Please upload a Raw Data file to begin the advanced analysis.")
+    # ---------------------------
+    # Run the App
+    # ---------------------------
+
+ 
 
 
 if __name__ == "__main__":
