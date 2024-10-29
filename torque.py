@@ -523,230 +523,6 @@ def get_table_download_link(df, filename, link_text):
     href = f'<a href="data:file/csv;base64,{b64}" download="{filename}">{link_text}</a>'
     return href
 
-import streamlit as st
-import pandas as pd
-import numpy as np
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import base64
-import csv
-from io import StringIO
-
-# ---------------------------
-# Helper Functions
-# ---------------------------
-
-def load_machine_specs(file, file_type):
-    """
-    Load machine specifications from a CSV or XLSX file.
-
-    Args:
-        file: Uploaded file object.
-        file_type (str): Type of the file ('csv' or 'xlsx').
-
-    Returns:
-        pd.DataFrame: DataFrame containing machine specifications.
-    """
-    try:
-        if file_type == "csv":
-            specs = pd.read_csv(file)
-        elif file_type == "xlsx":
-            specs = pd.read_excel(file)
-        else:
-            st.error("Unsupported file type for machine specifications.")
-            return None
-        return specs
-    except Exception as e:
-        st.error(f"Error loading machine specifications: {e}")
-        return None
-
-def get_machine_params(specs, selected_machine):
-    """
-    Retrieve machine parameters for the selected machine.
-
-    Args:
-        specs (pd.DataFrame): DataFrame containing machine specifications.
-        selected_machine (str): The selected machine type.
-
-    Returns:
-        dict: Dictionary of machine parameters.
-    """
-    try:
-        machine = specs[specs["Projekt"] == selected_machine].iloc[0]
-        return machine.to_dict()
-    except IndexError:
-        st.error(f"No specifications found for machine type: {selected_machine}")
-        return {}
-    except Exception as e:
-        st.error(f"Error retrieving machine parameters: {e}")
-        return {}
-
-def find_sensor_columns(df):
-    """
-    Identify sensor columns in the DataFrame.
-
-    Args:
-        df (pd.DataFrame): The raw data DataFrame.
-
-    Returns:
-        dict: Dictionary mapping sensor types to column names.
-    """
-    # Define potential keywords for each sensor type
-    sensor_keywords = {
-        "time": ["time", "timestamp", "datetime"],
-        "pressure": ["pressure", "press"],
-        "revolution": ["revolution", "rpm", "rotational_speed"],
-        "advance_rate": ["advance_rate", "advance", "speed"],
-        "thrust_force": ["thrust_force", "force", "thrust"],
-    }
-
-    sensor_columns = {}
-
-    for sensor, keywords in sensor_keywords.items():
-        for keyword in keywords:
-            for col in df.columns:
-                if keyword.lower() in col.lower():
-                    sensor_columns[sensor] = col
-                    break
-            if sensor in sensor_columns:
-                break
-
-    # Assign default columns if not found
-    if "time" not in sensor_columns:
-        sensor_columns["time"] = df.columns[0]
-    if "pressure" not in sensor_columns:
-        sensor_columns["pressure"] = df.columns[1] if len(df.columns) > 1 else None
-    if "revolution" not in sensor_columns:
-        sensor_columns["revolution"] = df.columns[2] if len(df.columns) > 2 else None
-    if "advance_rate" not in sensor_columns:
-        sensor_columns["advance_rate"] = df.columns[3] if len(df.columns) > 3 else None
-    if "thrust_force" not in sensor_columns:
-        sensor_columns["thrust_force"] = df.columns[4] if len(df.columns) > 4 else None
-
-    return sensor_columns
-
-def calculate_whisker_and_outliers_advanced(series):
-    """
-    Calculate whiskers and identify outliers based on 10th and 90th percentiles.
-
-    Args:
-        series (pd.Series): The data series to analyze.
-
-    Returns:
-        tuple: (lower_whisker, upper_whisker, outliers)
-    """
-    lower = series.quantile(0.10)
-    upper = series.quantile(0.90)
-    outliers = series[(series < lower) | (series > upper)]
-    return lower, upper, outliers
-
-def display_statistics(df, revolution_col, pressure_col, thrust_force_col):
-    """
-    Display statistical summary of selected columns.
-
-    Args:
-        df (pd.DataFrame): The DataFrame containing the data.
-        revolution_col (str): Column name for revolution.
-        pressure_col (str): Column name for pressure.
-        thrust_force_col (str): Column name for thrust force.
-    """
-    st.subheader("Statistical Summary")
-    stats_df = df[[revolution_col, pressure_col, thrust_force_col]].describe()
-    st.dataframe(stats_df)
-
-def get_table_download_link(df, filename, link_text):
-    """
-    Generates a link allowing the data in a given panda dataframe to be downloaded
-    in CSV format.
-
-    Args:
-        df (pd.DataFrame): The DataFrame to download.
-        filename (str): The filename for the downloaded CSV.
-        link_text (str): The text for the download link.
-
-    Returns:
-        str: An HTML anchor tag with the download link.
-    """
-    csv = df.to_csv(index=False)
-    b64 = base64.b64encode(csv.encode()).decode()  # Encode to base64
-    href = f'<a href="data:file/csv;base64,{b64}" download="{filename}">{link_text}</a>'
-    return href
-
-def find_bad_lines(file, expected_num_fields, delimiter=','):
-    """
-    Identify lines in the CSV file that do not match the expected number of fields.
-
-    Args:
-        file: Uploaded file object.
-        expected_num_fields (int): The number of fields expected per row.
-        delimiter (str): The delimiter used in the CSV file.
-
-    Returns:
-        list: A list of tuples containing (line_number, content) for bad lines.
-    """
-    bad_lines = []
-    file.seek(0)  # Reset file pointer
-    reader = csv.reader(StringIO(file.read().decode("utf-8")), delimiter=delimiter)
-    for i, row in enumerate(reader, start=1):
-        if len(row) != expected_num_fields:
-            bad_lines.append((i, row))
-    return bad_lines
-
-def load_data_with_bad_lines(file, file_type):
-    """
-    Load data and identify bad lines in the CSV.
-
-    Args:
-        file: Uploaded file object.
-        file_type (str): Type of the file ('csv' or 'xlsx').
-
-    Returns:
-        tuple: (pd.DataFrame or None, list of bad lines)
-    """
-    bad_lines = []
-    try:
-        if file_type == "csv":
-            # Read all lines first
-            file.seek(0)
-            all_lines = file.read().decode("utf-8")
-            reader = csv.reader(StringIO(all_lines))
-            rows = list(reader)
-
-            if not rows:
-                st.error("The CSV file is empty.")
-                return None, bad_lines
-
-            # Determine expected number of fields from the header
-            expected_num_fields = len(rows[0])
-
-            # Identify bad lines
-            for i, row in enumerate(rows[1:], start=2):  # Start from line 2
-                if len(row) != expected_num_fields:
-                    bad_lines.append((i, row))
-
-            # Reconstruct the CSV without bad lines
-            cleaned_csv = "\n".join([",".join(rows[0])] + [
-                ",".join(row) for i, row in enumerate(rows[1:], start=2) if len(row) == expected_num_fields
-            ])
-
-            df = pd.read_csv(StringIO(cleaned_csv), engine='python')
-        elif file_type == "xlsx":
-            df = pd.read_excel(file)
-        else:
-            st.error("Unsupported file type for raw data.")
-            return None, bad_lines
-        return df, bad_lines
-    except pd.errors.ParserError as e:
-        st.error(f"Error parsing the CSV file: {e}")
-        return None, bad_lines
-    except Exception as e:
-        st.error(f"An error occurred while loading the data file: {e}")
-        return None, bad_lines
-
-# ---------------------------
-# Main Advanced Page Function
-# ---------------------------
-
 def advanced_page():
     st.title("Advanced Analysis")
 
@@ -762,25 +538,10 @@ def advanced_page():
         try:
             file_type = machine_specs_file.name.split(".")[-1].lower()
             machine_specs = load_machine_specs(machine_specs_file, file_type)
-            if machine_specs is None or machine_specs.empty:
-                st.error("Machine specifications file is empty or could not be loaded.")
-                st.stop()
-
-            if "Projekt" not in machine_specs.columns:
-                st.error("The machine specifications file must contain a 'Projekt' column.")
-                st.stop()
-
             machine_types = machine_specs["Projekt"].unique()
-            if len(machine_types) == 0:
-                st.error("No machine types found in the specifications file.")
-                st.stop()
-
             selected_machine = st.sidebar.selectbox("Select Machine Type", machine_types)
 
             machine_params = get_machine_params(machine_specs, selected_machine)
-            if not machine_params:
-                st.error("Machine parameters could not be retrieved.")
-                st.stop()
 
             # Display machine parameters
             params_df = pd.DataFrame([machine_params])
@@ -836,7 +597,9 @@ def advanced_page():
                 unsafe_allow_html=True,
             )
         except Exception as e:
-            st.error(f"An error occurred while processing the machine specifications: {e}")
+            st.error(
+                f"An error occurred while processing the machine specifications: {str(e)}"
+            )
             st.stop()
     else:
         st.warning("Please upload Machine Specifications file.")
@@ -860,52 +623,67 @@ def advanced_page():
     if raw_data_file is not None:
         # Load data
         file_type = raw_data_file.name.split(".")[-1].lower()
-        df, bad_lines = load_data_with_bad_lines(raw_data_file, file_type)
+        df = load_data(raw_data_file, file_type)
 
         if df is not None:
-            if bad_lines:
-                st.warning(f"Found {len(bad_lines)} problematic rows in the CSV file:")
-                for line_num, row in bad_lines:
-                    st.write(f"Line {line_num}: {row}")
-
             # Find sensor columns
             sensor_columns = find_sensor_columns(df)
 
             # Allow user to select columns if not found or adjust selections
             st.subheader("Select Sensor Columns")
             # Time Column
+            if "time" in sensor_columns:
+                default_time_col = sensor_columns["time"]
+            else:
+                default_time_col = df.columns[0]
             time_col = st.selectbox(
                 "Select Time Column",
                 options=df.columns,
-                index=df.columns.get_loc(sensor_columns["time"]) if sensor_columns["time"] in df.columns else 0,
+                index=df.columns.get_loc(default_time_col),
             )
 
             # Pressure Column
+            if "pressure" in sensor_columns:
+                default_pressure_col = sensor_columns["pressure"]
+            else:
+                default_pressure_col = df.columns[1]
             pressure_col = st.selectbox(
                 "Select Pressure Column",
                 options=df.columns,
-                index=df.columns.get_loc(sensor_columns["pressure"]) if sensor_columns["pressure"] in df.columns else 1,
+                index=df.columns.get_loc(default_pressure_col),
             )
 
             # Revolution Column
+            if "revolution" in sensor_columns:
+                default_revolution_col = sensor_columns["revolution"]
+            else:
+                default_revolution_col = df.columns[2]
             revolution_col = st.selectbox(
                 "Select Revolution Column",
                 options=df.columns,
-                index=df.columns.get_loc(sensor_columns["revolution"]) if sensor_columns["revolution"] in df.columns else 2,
+                index=df.columns.get_loc(default_revolution_col),
             )
 
             # Advance Rate Column
+            if "advance_rate" in sensor_columns:
+                default_advance_rate_col = sensor_columns["advance_rate"]
+            else:
+                default_advance_rate_col = df.columns[3]
             advance_rate_col = st.selectbox(
                 "Select Advance Rate Column",
                 options=df.columns,
-                index=df.columns.get_loc(sensor_columns["advance_rate"]) if sensor_columns["advance_rate"] in df.columns else 3,
+                index=df.columns.get_loc(default_advance_rate_col),
             )
 
             # Thrust Force Column
+            if "thrust_force" in sensor_columns:
+                default_thrust_force_col = sensor_columns["thrust_force"]
+            else:
+                default_thrust_force_col = df.columns[4]
             thrust_force_col = st.selectbox(
                 "Select Thrust Force Column",
                 options=df.columns,
-                index=df.columns.get_loc(sensor_columns["thrust_force"]) if sensor_columns["thrust_force"] in df.columns else 4,
+                index=df.columns.get_loc(default_thrust_force_col),
             )
 
             # Ensure time column is appropriately parsed
@@ -919,17 +697,25 @@ def advanced_page():
             # Ask the user to select the unit of the time column
             time_unit = st.selectbox(
                 "Select Time Unit for Time Column",
-                options=["milliseconds", "seconds", "minutes", "hours"],
-                index=1,  # Default to seconds
+                options=["seconds", "milliseconds", "minutes", "hours"],
+                index=0,
             )
-            # Removed max_allowed_value check to prevent unnecessary errors
+            # Check for out-of-bounds values
+            max_allowed_value = {
+                "milliseconds": 2**63 // 1_000_000,
+                "seconds": 2**63 // 1_000_000_000,
+                "minutes": 2**63 // (60 * 1_000_000_000),
+                "hours": 2**63 // (3600 * 1_000_000_000),
+            }[time_unit]
+
+            if df[time_col].max() > max_allowed_value:
+                st.error(
+                    f"The values in the time column exceed the maximum allowed for the selected unit '{time_unit}'. Please check the data or select a different unit."
+                )
+                return
 
             # Convert time column to timedelta
-            try:
-                df["Parsed_Time"] = pd.to_timedelta(df[time_col], unit=time_unit)
-            except Exception as e:
-                st.error(f"Error converting time column to timedelta: {e}")
-                return
+            df["Parsed_Time"] = pd.to_timedelta(df[time_col], unit=time_unit)
 
             # Round Parsed_Time to milliseconds to prevent nanoseconds issues
             df["Parsed_Time"] = df["Parsed_Time"].dt.round("ms")
@@ -943,9 +729,6 @@ def advanced_page():
                 df["Time_unit"] = df["Parsed_Time"].dt.total_seconds() / 60
             elif time_unit == "hours":
                 df["Time_unit"] = df["Parsed_Time"].dt.total_seconds() / 3600
-            else:
-                st.error("Unsupported time unit selected.")
-                return
 
             # Sort the dataframe by Time_unit
             df = df.sort_values("Time_unit")
@@ -956,7 +739,10 @@ def advanced_page():
             st.write(f"Data time range: {min_time_unit:.2f} {time_unit} to {max_time_unit:.2f} {time_unit}")
 
             # Define the format for the slider based on the time unit
-            slider_format = "%.2f"
+            if time_unit in ["milliseconds", "seconds", "minutes", "hours"]:
+                slider_format = "%.2f"
+            else:
+                slider_format = None
 
             time_range = st.slider(
                 "Select Time Range",
@@ -1010,24 +796,21 @@ def advanced_page():
             )
 
             # Filter data points between n2 and n1 rpm
-            n2 = machine_params.get("n2", df[revolution_col].min())
-            n1 = machine_params.get("n1", df[revolution_col].max())
             df = df[
-                (df[revolution_col] >= n2)
-                & (df[revolution_col] <= n1)
+                (df[revolution_col] >= machine_params["n2"])
+                & (df[revolution_col] <= machine_params["n1"])
             ]
-
             # Calculate torque
             def calculate_torque_wrapper(row):
                 working_pressure = row[pressure_col]
                 current_speed = row[revolution_col]
 
-                if current_speed < machine_params.get("n1", current_speed):
-                    torque = working_pressure * machine_params.get("torque_constant", 1)
+                if current_speed < machine_params["n1"]:
+                    torque = working_pressure * machine_params["torque_constant"]
                 else:
                     torque = (
-                        (machine_params.get("n1", current_speed) / current_speed)
-                        * machine_params.get("torque_constant", 1)
+                        (machine_params["n1"] / current_speed)
+                        * machine_params["torque_constant"]
                         * working_pressure
                     )
 
@@ -1055,19 +838,18 @@ def advanced_page():
             # Function to calculate M max Vg2
             def M_max_Vg2(rpm):
                 return np.minimum(
-                    machine_params.get("M_max_Vg1", 1000),  # Default value if not present
+                    machine_params["M_max_Vg1"],
                     (P_max * 60 * nu) / (2 * np.pi * rpm),
                 )
 
             # Calculate the elbow points for the max and continuous torque
-            M_max_Vg1 = machine_params.get("M_max_Vg1", 1000)  # Default value
-            M_cont_value = machine_params.get("M_cont_value", 500)  # Default value
-
-            elbow_rpm_max = (P_max * 60 * nu) / (2 * np.pi * M_max_Vg1)
-            elbow_rpm_cont = (P_max * 60 * nu) / (2 * np.pi * M_cont_value)
+            elbow_rpm_max = (P_max * 60 * nu) / (2 * np.pi * machine_params["M_max_Vg1"])
+            elbow_rpm_cont = (
+                P_max * 60 * nu
+            ) / (2 * np.pi * machine_params["M_cont_value"])
 
             # Generate RPM values for the torque curve
-            rpm_curve = np.linspace(0.1, machine_params.get("n1", n1), 1000)  # Avoid division by zero
+            rpm_curve = np.linspace(0.1, machine_params["n1"], 1000)  # Avoid division by zero
 
             fig = make_subplots(rows=1, cols=1)
 
@@ -1075,7 +857,7 @@ def advanced_page():
             fig.add_trace(
                 go.Scatter(
                     x=rpm_curve[rpm_curve <= elbow_rpm_cont],
-                    y=np.full_like(rpm_curve[rpm_curve <= elbow_rpm_cont], M_cont_value),
+                    y=np.full_like(rpm_curve[rpm_curve <= elbow_rpm_cont], machine_params["M_cont_value"]),
                     mode="lines",
                     name="M cont Max [kNm]",
                     line=dict(color="green", width=2),
@@ -1085,7 +867,7 @@ def advanced_page():
             fig.add_trace(
                 go.Scatter(
                     x=rpm_curve[rpm_curve <= elbow_rpm_max],
-                    y=np.full_like(rpm_curve[rpm_curve <= elbow_rpm_max], M_max_Vg1),
+                    y=np.full_like(rpm_curve[rpm_curve <= elbow_rpm_max], machine_params["M_max_Vg1"]),
                     mode="lines",
                     name="M max Vg1 [kNm]",
                     line=dict(color="red", width=2),
@@ -1094,8 +876,8 @@ def advanced_page():
 
             fig.add_trace(
                 go.Scatter(
-                    x=rpm_curve[rpm_curve <= machine_params.get("n1", n1)],
-                    y=M_max_Vg2(rpm_curve[rpm_curve <= machine_params.get("n1", n1)]),
+                    x=rpm_curve[rpm_curve <= machine_params["n1"]],
+                    y=M_max_Vg2(rpm_curve[rpm_curve <= machine_params["n1"]]),
                     mode="lines",
                     name="M max Vg2 [kNm]",
                     line=dict(color="red", width=2, dash="dash"),
@@ -1108,7 +890,7 @@ def advanced_page():
                     [
                         elbow_rpm_max,
                         elbow_rpm_cont,
-                        machine_params.get("n1", n1),
+                        machine_params["n1"],
                     ]
                 )
             )
@@ -1134,7 +916,7 @@ def advanced_page():
             )
             fig.add_trace(
                 go.Scatter(
-                    x=[machine_params.get("n1", n1), machine_params.get("n1", n1)],
+                    x=[machine_params["n1"], machine_params["n1"]],
                     y=[0, y_max_vg2[2]],
                     mode="lines",
                     line=dict(color="black", width=1, dash="dash"),
@@ -1276,18 +1058,31 @@ def advanced_page():
                 vertical_spacing=0.02,
             )
 
-            # Calculate mean values for each feature based on unique Time_unit
-            df_mean = df.groupby("Time_unit").mean().reset_index()
+            # Calculate rolling means for each feature
+            for col_name, display_name, color in features:
+                df[f"{col_name}_mean"] = df[col_name].rolling(window=100).mean()
 
             for i, (col_name, display_name, color) in enumerate(features, start=1):
                 # Original Feature
                 fig_time.add_trace(
                     go.Scatter(
-                        x=df_mean["Time_unit"],
-                        y=df_mean[col_name],
+                        x=df["Time_unit"],
+                        y=df[col_name],
                         mode="lines",
                         name=display_name,
                         line=dict(color=color),
+                    ),
+                    row=i,
+                    col=1,
+                )
+                # Rolling Mean
+                fig_time.add_trace(
+                    go.Scatter(
+                        x=df["Time_unit"],
+                        y=df[f"{col_name}_mean"],
+                        mode="lines",
+                        name=f"{display_name} Mean",
+                        line=dict(color=color, dash="dash"),
                     ),
                     row=i,
                     col=1,
@@ -1340,15 +1135,6 @@ def advanced_page():
     else:
         st.info("Please upload a Raw Data file to begin the advanced analysis.")
 
-# ---------------------------
-# Run the App
-# ---------------------------
-
-
-
 
 if __name__ == "__main__":
     main()
-
-
-
