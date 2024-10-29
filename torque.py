@@ -620,7 +620,6 @@ def advanced_page():
 
             # Filter data
             df = df[(df['Time'] >= time_range[0]) & (df['Time'] <= time_range[1])]
-
             # Proceed with data processing
 
             # Ensure numeric columns are numeric
