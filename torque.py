@@ -243,6 +243,36 @@ def main():
     elif page == "Advanced Analysis":
         advanced_page()
 
+def format_timedelta(td):
+    """
+    Convert a pandas Timedelta to a human-readable string.
+    
+    Parameters:
+        td (pd.Timedelta): The timedelta object to format.
+        
+    Returns:
+        str: A formatted string representing the timedelta.
+    """
+    total_seconds = int(td.total_seconds())
+    days, remainder = divmod(total_seconds, 86400)  # 86400 seconds in a day
+    hours, remainder = divmod(remainder, 3600)      # 3600 seconds in an hour
+    minutes, seconds = divmod(remainder, 60)        # 60 seconds in a minute
+    fractional_seconds = td.microseconds / 1_000_000  # Convert microseconds to seconds
+
+    formatted_time = ""
+    if days > 0:
+        formatted_time += f"{days} day{'s' if days != 1 else ''}, "
+    if hours > 0:
+        formatted_time += f"{hours} hour{'s' if hours != 1 else ''}, "
+    if minutes > 0:
+        formatted_time += f"{minutes} minute{'s' if minutes != 1 else ''}, "
+
+    # Combine seconds and fractional seconds
+    total_sec = seconds + fractional_seconds
+    formatted_time += f"{total_sec:.2f} second{'s' if total_sec != 1 else ''}"
+
+    return formatted_time
+
 def original_page():
     st.title("TorqueVision: Herrenknecht's Advanced Analysis App")
 
