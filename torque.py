@@ -319,8 +319,8 @@ def original_page():
     anomaly_threshold = st.sidebar.number_input("Anomaly threshold (bar)", value=250, min_value=100, max_value=500)
 
     if raw_data_file is not None:
-        # Load data with optimization for performance
-        file_type = raw_data_file.name.split('.')[-1].lower()
+        # Load data
+        file_type = raw_data_file.name.split(".")[-1].lower()
         df = load_data(raw_data_file, file_type)
 
         if df is not None:
@@ -985,7 +985,7 @@ def advanced_page():
             st.write("**Thrust Force per Cutting Ring Statistics:**")
             st.write(df["Thrust Force per Cutting Ring"].describe())
 
-            # Plot features over Time as subplots
+            # Plot features over Time as separate subplots
             st.subheader("Features over Time")
             features = [
                 (advance_rate_col, "Advance Rate", "blue"),
@@ -997,19 +997,27 @@ def advanced_page():
             ]
 
             num_features = len(features)
+
+            # Create subplots with 2 rows per feature: one for original data, one for mean
             fig_time = make_subplots(
-                rows=num_features,
+                rows=2*num_features,  # Two rows per feature
                 cols=1,
                 shared_xaxes=True,
-                vertical_spacing=0.02,
+                vertical_spacing=0.05,
+                subplot_titles=[
+                    f"{display_name}" for _, display_name, _ in features
+                ] + [
+                    f"{display_name} - Mean" for _, display_name, _ in features
+                ]
             )
 
             # Calculate rolling means for each feature
+            window_size = 100  # Adjust the window size as needed
             for col_name, display_name, color in features:
-                df[f"{col_name}_mean"] = df[col_name].rolling(window=100).mean()
+                df[f"{col_name}_mean"] = df[col_name].rolling(window=window_size, min_periods=1).mean()
 
             for i, (col_name, display_name, color) in enumerate(features, start=1):
-                # Original Feature
+                # Original Feature Plot on odd rows
                 fig_time.add_trace(
                     go.Scatter(
                         x=df["Time_unit"],
@@ -1018,10 +1026,12 @@ def advanced_page():
                         name=display_name,
                         line=dict(color=color),
                     ),
-                    row=i,
+                    row=2*i-1,
                     col=1,
                 )
-                # Rolling Mean
+                fig_time.update_yaxes(title_text=display_name, row=2*i-1, col=1)
+                
+                # Mean Feature Plot on even rows
                 fig_time.add_trace(
                     go.Scatter(
                         x=df["Time_unit"],
@@ -1030,16 +1040,18 @@ def advanced_page():
                         name=f"{display_name} Mean",
                         line=dict(color=color, dash="dash"),
                     ),
-                    row=i,
+                    row=2*i,
                     col=1,
                 )
-                fig_time.update_yaxes(title_text=display_name, row=i, col=1)
+                fig_time.update_yaxes(title_text=f"{display_name} Mean", row=2*i, col=1)
 
             fig_time.update_layout(
-                xaxis=dict(title=f"Time ({time_unit})"),
-                height=300 * num_features,
+                xaxis_title=f"Time ({time_unit})",
+                height=300 * 2 * num_features,  # 300 pixels per subplot
                 showlegend=False,
+                title_text="Features over Time (Original and Mean Values)",
             )
+
             st.plotly_chart(fig_time, use_container_width=True)
 
             # Provide explanations and annotations
