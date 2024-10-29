@@ -1137,6 +1137,112 @@ def advanced_page():
             
             # Display the plot
             st.plotly_chart(fig_time, use_container_width=True)
+
+            st.subheader("Features over Distance/Chainage")
+
+            # 1. Select Distance/Chainage Column
+            distance_col = st.selectbox(
+                "Select Distance/Chainage Column",
+                options=df.columns,
+                index=0,  # Default to the first column; adjust as needed
+                help="Choose the column that represents distance or chainage in your dataset."
+            )
+            
+            # 2. Select Distance Unit
+            distance_unit = st.selectbox(
+                "Select Distance Unit",
+                options=["meters", "kilometers", "miles", "feet", "yards"],
+                index=0,
+                help="Select the unit that matches the distance/chainage data."
+            )
+            
+            # 3. Define Features with Metadata
+            features_distance = [
+                {"column": advance_rate_col, "display_name": "Advance Rate", "color": "blue"},
+                {"column": "Calculated Penetration Rate", "display_name": "Penetration Rate", "color": "green"},
+                {"column": thrust_force_col, "display_name": "Thrust Force", "color": "red"},
+                {"column": "Thrust Force per Cutting Ring", "display_name": "Thrust Force per Cutting Ring", "color": "orange"},
+                {"column": revolution_col, "display_name": "Revolution", "color": "purple"},
+                {"column": pressure_col, "display_name": "Working Pressure", "color": "cyan"},
+            ]
+            
+            num_features_distance = len(features_distance)
+            
+            # 4. Rolling Window Slider for Distance
+            window_size_distance = st.slider(
+                "Select Rolling Window Size for Mean Calculation (Distance)",
+                min_value=10,
+                max_value=1000,
+                value=100,
+                step=10,
+                help="Adjust the window size to smooth the data. A larger window provides a smoother mean."
+            )
+            
+            # 5. Toggle for Mean Lines
+            show_means_distance = st.checkbox(
+                "Show Rolling Mean Values (Distance)",
+                value=True,
+                help="Toggle the visibility of rolling mean lines for distance-based features."
+            )
+            
+            # 6. Calculate Rolling Means for Each Feature
+            for feature in features_distance:
+                df[f"{feature['column']}_distance_mean"] = df[feature['column']].rolling(
+                    window=window_size_distance, min_periods=1
+                ).mean()
+            
+            # 7. Create Subplots without Titles
+            fig_distance = make_subplots(
+                rows=2*num_features_distance,  # Two rows per feature
+                cols=1,
+                shared_xaxes=True,
+                vertical_spacing=0.02,  # Reduced spacing for a cleaner look
+                subplot_titles=None  # No subplot titles
+            )
+            
+            # 8. Iterate Through Each Feature and Add Traces
+            for i, feature in enumerate(features_distance, start=1):
+                # Original Feature Plot on odd-numbered rows
+                fig_distance.add_trace(
+                    go.Scatter(
+                        x=df[distance_col],
+                        y=df[feature["column"]],
+                        mode="lines",
+                        name=feature["display_name"],
+                        line=dict(color=feature["color"]),
+                    ),
+                    row=2*i-1,
+                    col=1,
+                )
+                # Update y-axis for original feature
+                fig_distance.update_yaxes(title_text=feature["display_name"], row=2*i-1, col=1)
+                
+                # Rolling Mean Plot on even-numbered rows
+                if show_means_distance:
+                    fig_distance.add_trace(
+                        go.Scatter(
+                            x=df[distance_col],
+                            y=df[f"{feature['column']}_distance_mean"],
+                            mode="lines",
+                            name=f"{feature['display_name']} Rolling Mean",
+                            line=dict(color=feature["color"], dash="dash"),
+                        ),
+                        row=2*i,
+                        col=1,
+                    )
+                    # Update y-axis for rolling mean
+                    fig_distance.update_yaxes(title_text=f"{feature['display_name']} Rolling Mean", row=2*i, col=1)
+            
+            # 9. Update Overall Layout
+            fig_distance.update_layout(
+                xaxis_title=f"Distance/Chainage ({distance_unit})",
+                height=300 * 2 * num_features_distance,  # 300 pixels per subplot row
+                showlegend=False,
+                title_text="Features over Distance/Chainage (Original and Rolling Mean)",  # Main plot title
+            )
+            
+            # 10. Display the Plot
+            st.plotly_chart(fig_distance, use_container_width=True)
             
             # Provide explanations and annotations
             st.write(
