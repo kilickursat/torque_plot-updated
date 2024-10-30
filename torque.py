@@ -19,31 +19,24 @@ def set_page_config():
 
 
 # Optimization: Add cache decorator to improve performance on repeated file loads
+
 @st.cache_data
 def load_data(file, file_type):
     """Load raw data from CSV or Excel files."""
     if file_type == "csv":
-        try:
-            sample = file.read(1024).decode('utf-8')
-            file.seek(0)
-            sniffer = csv.Sniffer()
-            dialect = sniffer.sniff(sample)
-            delimiter = dialect.delimiter
-            df = pd.read_csv(file, delimiter=delimiter)
-            return df
-        except Exception as e:
-            st.error(f"Error loading CSV file: {e}")
-            return None
+        sample = file.read(1024).decode('utf-8')
+        file.seek(0)
+        sniffer = csv.Sniffer()
+        dialect = sniffer.sniff(sample)
+        delimiter = dialect.delimiter
+        df = pd.read_csv(file, delimiter=delimiter)
+        return df
     elif file_type in ["xls", "xlsx"]:
-        try:
-            df = pd.read_excel(file)
-            return df
-        except Exception as e:
-            st.error(f"Error loading Excel file: {e}")
-            return None
+        df = pd.read_excel(file)
+        return df
     else:
-        st.error("Unsupported file type.")
-        return None
+        raise ValueError("Unsupported file type.")
+
 
 # Update the sensor column map with more potential column names
 sensor_column_map = {
@@ -72,22 +65,23 @@ def find_sensor_columns(df):
 @st.cache_data
 def load_machine_specs(file, file_type):
     """Load machine specifications from CSV or Excel files."""
-    try:
-        if file_type == 'xlsx':
-            specs_df = pd.read_excel(file)
-        elif file_type == 'csv':
-            specs_df = pd.read_csv(file)
-        else:
-            raise ValueError("Unsupported file type")
-        specs_df.columns = specs_df.columns.str.strip()
-        return specs_df
-    except Exception as e:
-        st.error(f"Error loading machine specifications: {str(e)}")
-        return None
+    if file_type == "csv":
+        df = pd.read_csv(file)
+    elif file_type in ["xls", "xlsx"]:
+        df = pd.read_excel(file)
+    else:
+        raise ValueError("Unsupported file type")
+    df.columns = df.columns.str.strip()
+    return df
+
         
 def get_machine_params(specs_df, machine_type):
     """Extract relevant machine parameters based on machine type."""
-    machine_data = specs_df[specs_df['Projekt'] == machine_type].iloc[0]
+    machine_data = specs_df[specs_df['Projekt'] == machine_type]
+    if machine_data.empty:
+        raise ValueError(f"No specifications found for machine type: {machine_type}")
+
+    machine_data = machine_data.iloc[0]
 
     def find_column(possible_names):
         for name in possible_names:
@@ -109,6 +103,12 @@ def get_machine_params(specs_df, machine_type):
     m_max_col = find_column(m_max_names)
     torque_constant_col = find_column(torque_constant_names)
 
+    # Validate that all required parameters are found
+    required_cols = [n1_col, n2_col, m_cont_col, m_max_col, torque_constant_col]
+    missing_cols = [col for col in required_cols if col is None]
+    if missing_cols:
+        raise ValueError(f"Missing required machine specification columns: {', '.join(missing_cols)}")
+
     # Return machine parameters
     return {
         'n1': machine_data[n1_col],
@@ -117,6 +117,7 @@ def get_machine_params(specs_df, machine_type):
         'M_max_Vg1': machine_data[m_max_col],
         'torque_constant': machine_data[torque_constant_col]
     }
+
 
 def calculate_whisker_and_outliers(data):
     """Calculate whiskers and outliers for a given dataset."""
@@ -237,7 +238,7 @@ def display_explanation(anomaly_threshold):
     """)
 
 def main():
-    set_page_config()
+    # set_page_config() is now redundant and can be removed
     set_background_color()
     add_logo()
 
@@ -289,7 +290,7 @@ def original_page():
     # Load machine specs if available
     if machine_specs_file is not None:
         try:
-            machine_specs = load_machine_specs(machine_specs_file, 'xlsx')
+            machine_specs = load_machine_specs(machine_specs_file, machine_specs_file.name.split(".")[-1].lower())
             machine_types = machine_specs['Projekt'].unique()
             selected_machine = st.sidebar.selectbox("Select Machine Type", machine_types)
 
@@ -349,7 +350,7 @@ def original_page():
     else:
         st.warning("Please upload Machine Specifications XLSX file.")
         return
-
+        
     # Sidebar for user inputs
     st.sidebar.header("Parameter Settings")
     P_max = st.sidebar.number_input("Maximum power (kW)", value=132.0, min_value=1.0, max_value=500.0)
@@ -602,7 +603,7 @@ def advanced_page():
     else:
         st.warning("Please upload Machine Specifications file.")
         st.stop()
-
+        
     # Sidebar for user inputs
     st.sidebar.header("Parameter Settings")
     P_max = st.sidebar.number_input(
