@@ -695,8 +695,9 @@ def advanced_page():
                 index=df.columns.get_loc(default_distance_col) if default_distance_col in df.columns else 0,
             )
 
-            # Ensure distance column is appropriately parsed
-            df[distance_col] = pd.to_numeric(df[distance_col], errors="coerce")
+            # --------------------- Clean and Convert Distance/Chainage Column ---------------------
+            # Remove non-numeric characters except for decimal points and replace commas with dots
+            df[distance_col] = df[distance_col].astype(str).str.replace(',', '.', regex=False).str.extract('(\d+\.?\d*)').astype(float)
             if df[distance_col].isnull().all():
                 st.error(
                     f"The selected distance/chainage column '{distance_col}' cannot be converted to numeric values."
@@ -839,27 +840,24 @@ def advanced_page():
                 & (df[revolution_col] <= n1)
             ]
 
-            # Calculate torque
-            def calculate_torque_wrapper(row):
-                working_pressure = row[pressure_col]
-                current_speed = row[revolution_col]
+            # --------------------- Vectorized Torque Calculation ---------------------
+            # Ensure that 'torque_constant', 'n1', and 'M_max_Vg1' exist in machine_params
+            required_params = ["torque_constant", "n1", "M_max_Vg1", "M_cont_value"]
+            missing_params = [param for param in required_params if param not in machine_params]
+            if missing_params:
+                st.error(f"Missing machine parameters: {', '.join(missing_params)}")
+                st.stop()
 
-                if current_speed < machine_params["n1"]:
-                    torque = working_pressure * machine_params["torque_constant"]
-                else:
-                    torque = (
-                        (machine_params["n1"] / current_speed)
-                        * machine_params["torque_constant"]
-                        * working_pressure
-                    )
+            # Vectorized calculation using numpy.where
+            df["Calculated torque [kNm]"] = np.where(
+                df[revolution_col] < machine_params["n1"],
+                df[pressure_col] * machine_params["torque_constant"],
+                (machine_params["n1"] / df[revolution_col]) * machine_params["torque_constant"] * df[pressure_col]
+            ).round(2)
 
-                return round(torque, 2)
-
-            # Ensure that calculate_torque_wrapper returns a scalar
-            torque_series = df.apply(calculate_torque_wrapper, axis=1)
-
-            # Assign the torque_series to the new column
-            df["Calculated torque [kNm]"] = torque_series
+            # Debugging: Check the type and contents of 'Calculated torque [kNm]'
+            st.write("**Sample Calculated Torque [kNm]:**")
+            st.write(df["Calculated torque [kNm]"].head())
 
             # Calculate whiskers and outliers using 10th and 90th percentiles
             (
@@ -1376,6 +1374,7 @@ def advanced_page():
                         "Thrust Force": df[thrust_force_col].describe(),
                         "Thrust Force per Cutting Ring": df["Thrust Force per Cutting Ring"].describe(),
                         "Distance/Chainage": df[distance_col].describe(),
+                        "Time Unit Converted": df["Time_unit_converted"].describe(),
                     }
                 )
                 st.sidebar.markdown(
