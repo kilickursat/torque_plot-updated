@@ -541,10 +541,7 @@ def original_page():
 
     return formatted_time
 
-# --------------------- Page Functions ---------------------
-def original_page():
-    st.title("Original Analysis")
-    st.write("Original analysis content goes here.")
+
 
 def advanced_page():
     st.title("Advanced Analysis")
