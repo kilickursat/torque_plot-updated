@@ -685,6 +685,25 @@ def advanced_page():
                 index=df.columns.get_loc(default_distance_col) if default_distance_col in df.columns else 0,
             )
 
+            # --------------------- Clean and Convert Distance/Chainage Column ---------------------
+            # Remove non-numeric characters except for decimal points and replace commas with dots
+            df[distance_col] = df[distance_col].astype(str).str.replace(',', '.', regex=False).str.extract('(\d+\.?\d*)').astype(float)
+            if df[distance_col].isnull().all():
+                st.error(
+                    f"The selected distance/chainage column '{distance_col}' cannot be converted to numeric values."
+                )
+                return
+
+            # Handle missing values
+            missing_distance = df[distance_col].isnull().sum()
+            if missing_distance > 0:
+                st.warning(f"There are {missing_distance} missing values in the distance/chainage column. These rows will be dropped.")
+                df = df.dropna(subset=[distance_col])
+
+            # Display the maximum value in the distance/chainage column for debugging
+            max_distance_value = df[distance_col].max()
+            st.write(f"**Maximum value in the distance/chainage column (`{distance_col}`):** {max_distance_value}")
+
             # Parse the time column as datetime
             try:
                 df['Parsed_Time'] = pd.to_datetime(df[time_col], errors='coerce', infer_datetime_format=True)
