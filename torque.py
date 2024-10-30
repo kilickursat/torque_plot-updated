@@ -744,6 +744,13 @@ def advanced_page():
 
             # --------------------- Parse and Convert Time Column ---------------------
             # Parse the time column as datetime
+                        # Ensure time column is appropriately parsed
+            df[time_col] = pd.to_numeric(df[time_col], errors="coerce")
+            if df[time_col].isnull().all():
+                st.error(
+                    f"The selected time column '{time_col}' cannot be converted to numeric values."
+                )
+                return
             try:
                 df['Parsed_Time'] = pd.to_datetime(df[time_col], errors='coerce', infer_datetime_format=True)
                 if df['Parsed_Time'].isnull().all():
