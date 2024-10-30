@@ -8,6 +8,16 @@ from datetime import timedelta
 import csv
 
 
+
+def set_page_config():
+    """Set the Streamlit page configuration."""
+    st.set_page_config(
+        page_title="Herrenknecht Torque Analysis",
+        page_icon="https://raw.githubusercontent.com/kilickursat/torque_plot-updated/main/Herrenknecht_logo.svg-1024x695.png",
+        layout="wide"
+    )
+
+
 # Optimization: Add cache decorator to improve performance on repeated file loads
 @st.cache_data
 def load_data(file, file_type):
@@ -129,14 +139,6 @@ def calculate_whisker_and_outliers_advanced(data):
     upper_whisker = Q3 + whisker_length
     outliers = data[(data < lower_whisker) | (data > upper_whisker)]
     return lower_whisker, upper_whisker, outliers
-
-def set_page_config():
-    """Set the Streamlit page configuration."""
-    st.set_page_config(
-        page_title="Herrenknecht Torque Analysis",
-        page_icon="https://raw.githubusercontent.com/kilickursat/torque_plot-updated/main/Herrenknecht_logo.svg-1024x695.png",
-        layout="wide"
-    )
 
 def set_background_color():
     """Set the background color for the app."""
