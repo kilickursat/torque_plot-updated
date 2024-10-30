@@ -1258,9 +1258,6 @@ def advanced_page():
                     help="Toggle the visibility of rolling mean lines for distance-based features."
                 )
 
-                # Sort the dataframe by Distance/Chainage to avoid zigzag lines
-                df = df.sort_values(by=distance_col)
-
                 # Calculate rolling means for each feature
                 for feature in features_distance:
                     if feature['column'] in df.columns:
