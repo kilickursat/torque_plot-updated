@@ -731,8 +731,8 @@ def advanced_page():
             # Ask the user to select the unit of the time column
             time_unit = st.selectbox(
                 "Select Time Unit for Time Column",
-                options=["milliseconds", "seconds", "minutes", "hours"],
-                index=1,  # Default to seconds
+                options=["seconds", "minutes", "hours"],
+                index=0,  # Default to seconds
                 help="Choose the unit that matches the time data in your dataset."
             )
 
@@ -742,19 +742,16 @@ def advanced_page():
 
             # Define the maximum allowed value based on the selected time unit
             max_allowed_value = {
-                "milliseconds": 2**63 // 1_000_000,
-                "seconds": 2**63 // 1_000_000_000,
-                "minutes": 2**63 // (60 * 1_000_000_000),
-                "hours": 2**63 // (3600 * 1_000_000_000),
+                "seconds": 2**63 / 1_000_000_000,
+                "minutes": 2**63 / (60 * 1_000_000_000),
+                "hours": 2**63 / (3600 * 1_000_000_000),
             }[time_unit]
 
             # Display the maximum allowed value for debugging
             st.write(f"**Maximum allowed value for '{time_unit}':** {max_allowed_value} {time_unit}")
 
             # Convert time column to selected unit
-            if time_unit == "milliseconds":
-                df["Time_unit_converted"] = df["Time_unit"] / 1000  # Convert to seconds
-            elif time_unit == "seconds":
+            if time_unit == "seconds":
                 df["Time_unit_converted"] = df["Time_unit"]
             elif time_unit == "minutes":
                 df["Time_unit_converted"] = df["Time_unit"] / 60  # Convert to minutes
@@ -858,9 +855,11 @@ def advanced_page():
 
                 return round(torque, 2)
 
-            df["Calculated torque [kNm]"] = df.apply(
-                calculate_torque_wrapper, axis=1
-            )
+            # Ensure that calculate_torque_wrapper returns a scalar
+            torque_series = df.apply(calculate_torque_wrapper, axis=1)
+
+            # Assign the torque_series to the new column
+            df["Calculated torque [kNm]"] = torque_series
 
             # Calculate whiskers and outliers using 10th and 90th percentiles
             (
@@ -1222,7 +1221,6 @@ def advanced_page():
                 st.error(f"An error occurred during time-based features plotting: {str(e)}")
                 st.stop()
 
-
             # --------------------- Features over Distance/Chainage Visualization ---------------------
             try:
                 st.subheader("Features over Distance/Chainage")
@@ -1377,6 +1375,7 @@ def advanced_page():
                         "Penetration Rate (Calculated)": df["Calculated Penetration Rate"].describe(),
                         "Thrust Force": df[thrust_force_col].describe(),
                         "Thrust Force per Cutting Ring": df["Thrust Force per Cutting Ring"].describe(),
+                        "Distance/Chainage": df[distance_col].describe(),
                     }
                 )
                 st.sidebar.markdown(
