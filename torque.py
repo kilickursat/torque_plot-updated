@@ -80,11 +80,14 @@ def load_machine_specs(file, file_type):
         return None
 
 def get_machine_params(specs_df, machine_type):
-    machine_row = specs_df[specs_df["Projekt"] == machine_type]
-    if machine_row.empty:
+    """Extract relevant machine parameters based on machine type."""
+    machine_data = specs_df[specs_df['Projekt'] == machine_type].iloc[0]
+
+    def find_column(possible_names):
+        for name in possible_names:
+            if name in machine_data.index:
+                return name
         return None
-    machine_params = machine_row.iloc[0].to_dict()
-    return machine_params
 
     # Define possible column names
     n1_names = ['n1[1/min]', 'n1 (1/min)', 'n1[rpm]']
@@ -99,6 +102,23 @@ def get_machine_params(specs_df, machine_type):
     m_cont_col = find_column(m_cont_names)
     m_max_col = find_column(m_max_names)
     torque_constant_col = find_column(torque_constant_names)
+
+    # Check if all required columns are found
+    missing_columns = []
+    if n1_col is None:
+        missing_columns.append('n1')
+    if n2_col is None:
+        missing_columns.append('n2')
+    if m_cont_col is None:
+        missing_columns.append('M_cont_value')
+    if m_max_col is None:
+        missing_columns.append('M_max_Vg1')
+    if torque_constant_col is None:
+        missing_columns.append('torque_constant')
+
+    if missing_columns:
+        st.error(f"Missing machine parameters: {', '.join(missing_columns)}")
+        st.stop()
 
     # Return machine parameters
     return {
@@ -841,12 +861,8 @@ def advanced_page():
             ]
 
             # --------------------- Vectorized Torque Calculation ---------------------
-            # Ensure that 'torque_constant', 'n1', and 'M_max_Vg1' exist in machine_params
-            required_params = ["torque_constant", "n1", "M_max_Vg1", "M_cont_value"]
-            missing_params = [param for param in required_params if param not in machine_params]
-            if missing_params:
-                st.error(f"Missing machine parameters: {', '.join(missing_params)}")
-                st.stop()
+            # Ensure that 'torque_constant', 'n1', 'M_max_Vg1', and 'M_cont_value' exist in machine_params
+            # (Handled in get_machine_params with error message and st.stop())
 
             # Vectorized calculation using numpy.where
             df["Calculated torque [kNm]"] = np.where(
@@ -1392,7 +1408,6 @@ def advanced_page():
 
             # Provide an explanation of the analysis
             display_explanation(anomaly_threshold)
-
 
 
 
