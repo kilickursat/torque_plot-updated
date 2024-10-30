@@ -81,12 +81,19 @@ def load_machine_specs(file, file_type):
 
 def get_machine_params(specs_df, machine_type):
     """Extract relevant machine parameters based on machine type."""
-    machine_data = specs_df[specs_df['Projekt'] == machine_type].iloc[0]
+    machine_data = specs_df[specs_df['Projekt'] == machine_type]
+    if machine_data.empty:
+        st.error(f"No machine found with Projekt name '{machine_type}'. Please check the specifications file.")
+        st.stop()
+    
+    machine_data = machine_data.iloc[0]
 
     def find_column(possible_names):
         for name in possible_names:
-            if name in machine_data.index:
-                return name
+            # Perform case-insensitive matching and strip whitespace
+            matched_columns = [col for col in machine_data.index if col.strip().lower() == name.strip().lower()]
+            if matched_columns:
+                return matched_columns[0]
         return None
 
     # Define possible column names
@@ -102,6 +109,14 @@ def get_machine_params(specs_df, machine_type):
     m_cont_col = find_column(m_cont_names)
     m_max_col = find_column(m_max_names)
     torque_constant_col = find_column(torque_constant_names)
+
+    # Debugging: Display which columns were found
+    st.write("**Machine Parameters Column Mapping:**")
+    st.write(f"n1: {'Found as ' + n1_col if n1_col else 'Not Found'}")
+    st.write(f"n2: {'Found as ' + n2_col if n2_col else 'Not Found'}")
+    st.write(f"M_cont_value: {'Found as ' + m_cont_col if m_cont_col else 'Not Found'}")
+    st.write(f"M_max_Vg1: {'Found as ' + m_max_col if m_max_col else 'Not Found'}")
+    st.write(f"torque_constant: {'Found as ' + torque_constant_col if torque_constant_col else 'Not Found'}")
 
     # Check if all required columns are found
     missing_columns = []
@@ -524,6 +539,13 @@ def original_page():
     else:
         st.info("Please upload a Raw Data file to begin the analysis.")
 
+    return formatted_time
+
+# --------------------- Page Functions ---------------------
+def original_page():
+    st.title("Original Analysis")
+    st.write("Original analysis content goes here.")
+
 def advanced_page():
     st.title("Advanced Analysis")
 
@@ -546,6 +568,10 @@ def advanced_page():
             if "Projekt" not in machine_specs.columns:
                 st.error("The machine specifications file must contain a 'Projekt' column.")
                 st.stop()
+
+            # Display available machine types
+            st.write("**Available Machine Types (Projekt):**")
+            st.write(machine_specs["Projekt"].unique())
 
             machine_types = machine_specs["Projekt"].unique()
             if len(machine_types) == 0:
@@ -645,6 +671,10 @@ def advanced_page():
             # Find sensor columns
             sensor_columns = find_sensor_columns(df)
 
+            # Display found sensor columns
+            st.write("**Detected Sensor Columns:**")
+            st.write(sensor_columns)
+
             # Allow user to select columns if not found or adjust selections
             st.subheader("Select Sensor Columns")
             # Time Column
@@ -717,7 +747,18 @@ def advanced_page():
 
             # --------------------- Clean and Convert Distance/Chainage Column ---------------------
             # Remove non-numeric characters except for decimal points and replace commas with dots
-            df[distance_col] = df[distance_col].astype(str).str.replace(',', '.', regex=False).str.extract('(\d+\.?\d*)').astype(float)
+            df[distance_col] = (
+                df[distance_col]
+                .astype(str)
+                .str.replace(',', '.', regex=False)  # Replace commas with dots
+                .str.extract('(\d+\.?\d*)')  # Extract numeric part
+                .astype(float)
+            )
+
+            # Debugging: Display the first few cleaned distance values
+            st.write("**Cleaned Distance/Chainage Column Sample:**")
+            st.write(df[distance_col].head())
+
             if df[distance_col].isnull().all():
                 st.error(
                     f"The selected distance/chainage column '{distance_col}' cannot be converted to numeric values."
@@ -1408,7 +1449,6 @@ def advanced_page():
 
             # Provide an explanation of the analysis
             display_explanation(anomaly_threshold)
-
 
 
 
