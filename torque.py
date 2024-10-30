@@ -1240,7 +1240,7 @@ def advanced_page():
                 )
 
                 # Display the plot
-                st.plotly_chart(fig_distance, use_container_width=True)
+            st.plotly_chart(fig_distance, use_container_width=True)
             
             # Provide explanations and annotations
             st.write(
