@@ -1141,7 +1141,7 @@ def advanced_page():
 
 
                         # --------------------- Features over Distance/Chainage Visualization ---------------------
-        try:
+        
             st.subheader("Features over Distance/Chainage")
 
             # Define the features with their display names and colors
