@@ -5,30 +5,34 @@ import base64
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import timedelta
-
+import csv
 
 
 # Optimization: Add cache decorator to improve performance on repeated file loads
 @st.cache_data
 def load_data(file, file_type):
-    try:
-        if file_type == 'csv':
-            # Try different separators and encodings
-            for sep in [';', ',']:
-                for encoding in ['utf-8', 'iso-8859-1']:
-                    try:
-                        df = pd.read_csv(file, sep=sep, encoding=encoding, decimal=',')
-                        return df
-                    except:
-                        pass
-            raise ValueError("Unable to read CSV file with tried separators and encodings")
-        elif file_type == 'xlsx':
+    if file_type == "csv":
+        try:
+            # Read a sample to detect the delimiter
+            sample = file.read(1024).decode('utf-8')
+            file.seek(0)  # Reset file pointer after reading
+            sniffer = csv.Sniffer()
+            dialect = sniffer.sniff(sample)
+            delimiter = dialect.delimiter
+            df = pd.read_csv(file, delimiter=delimiter)
+            return df
+        except Exception as e:
+            st.error(f"Error loading CSV file: {e}")
+            return None
+    elif file_type in ["xls", "xlsx"]:
+        try:
             df = pd.read_excel(file)
             return df
-        else:
-            raise ValueError("Unsupported file type")
-    except Exception as e:
-        st.error(f"Error loading file: {str(e)}")
+        except Exception as e:
+            st.error(f"Error loading Excel file: {e}")
+            return None
+    else:
+        st.error("Unsupported file type.")
         return None
 
 # Update the sensor column map with more potential column names
