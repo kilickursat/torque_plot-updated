@@ -61,29 +61,30 @@ def find_sensor_columns(df):
 
 @st.cache_data
 def load_machine_specs(file, file_type):
-    """Load machine specifications from XLSX or CSV file."""
-    try:
-        if file_type == 'xlsx':
-            specs_df = pd.read_excel(file)
-        elif file_type == 'csv':
+    if file_type == "csv":
+        try:
             specs_df = pd.read_csv(file)
-        else:
-            raise ValueError("Unsupported file type")
-        specs_df.columns = specs_df.columns.str.strip()  # Strip any leading/trailing whitespace and newlines
-        return specs_df
-    except Exception as e:
-        st.error(f"Error loading machine specifications: {str(e)}")
+            return specs_df
+        except Exception as e:
+            st.error(f"Error loading machine specs CSV: {e}")
+            return None
+    elif file_type in ["xls", "xlsx"]:
+        try:
+            specs_df = pd.read_excel(file)
+            return specs_df
+        except Exception as e:
+            st.error(f"Error loading machine specs Excel file: {e}")
+            return None
+    else:
+        st.error("Unsupported file type for machine specifications.")
         return None
 
 def get_machine_params(specs_df, machine_type):
-    """Extract relevant machine parameters based on machine type."""
-    machine_data = specs_df[specs_df['Projekt'] == machine_type].iloc[0]
-
-    def find_column(possible_names):
-        for name in possible_names:
-            if name in machine_data.index:
-                return name
+    machine_row = specs_df[specs_df["Projekt"] == machine_type]
+    if machine_row.empty:
         return None
+    machine_params = machine_row.iloc[0].to_dict()
+    return machine_params
 
     # Define possible column names
     n1_names = ['n1[1/min]', 'n1 (1/min)', 'n1[rpm]']
@@ -275,7 +276,6 @@ def format_timedelta(td):
     total_sec = seconds + fractional_seconds
     formatted_time += f"{total_sec:.2f} second{'s' if total_sec != 1 else ''}"
 
-    return formatted_time
 
 def original_page():
     st.title("TorqueVision: Herrenknecht's Advanced Analysis App")
@@ -694,6 +694,7 @@ def advanced_page():
                 options=df.columns,
                 index=df.columns.get_loc(default_distance_col) if default_distance_col in df.columns else 0,
             )
+
             # Ensure distance column is appropriately parsed
             df[distance_col] = pd.to_numeric(df[distance_col], errors="coerce")
             if df[distance_col].isnull().all():
@@ -701,23 +702,30 @@ def advanced_page():
                     f"The selected distance/chainage column '{distance_col}' cannot be converted to numeric values."
                 )
                 return
-                
+
             # Handle missing values
             missing_distance = df[distance_col].isnull().sum()
             if missing_distance > 0:
                 st.warning(f"There are {missing_distance} missing values in the distance/chainage column. These rows will be dropped.")
                 df = df.dropna(subset=[distance_col])
-                
+
             # Display the maximum value in the distance/chainage column for debugging
             max_distance_value = df[distance_col].max()
             st.write(f"**Maximum value in the distance/chainage column (`{distance_col}`):** {max_distance_value}")
 
-            # Ensure time column is appropriately parsed
-            df[time_col] = pd.to_numeric(df[time_col], errors="coerce")
-            if df[time_col].isnull().all():
-                st.error(
-                    f"The selected time column '{time_col}' cannot be converted to numeric values."
-                )
+            # --------------------- Updated Time Column Parsing and Conversion ---------------------
+            # Parse the time column as datetime
+            try:
+                df['Parsed_Time'] = pd.to_datetime(df[time_col], errors='coerce', infer_datetime_format=True)
+                if df['Parsed_Time'].isnull().all():
+                    st.error(f"The selected time column '{time_col}' could not be parsed as datetime.")
+                    return
+                else:
+                    df = df.dropna(subset=['Parsed_Time'])
+                    df = df.sort_values('Parsed_Time')
+                    df['Time_unit'] = (df['Parsed_Time'] - df['Parsed_Time'].min()).dt.total_seconds()
+            except Exception as e:
+                st.error(f"Error parsing the time column '{time_col}': {e}")
                 return
 
             # Ask the user to select the unit of the time column
@@ -729,7 +737,7 @@ def advanced_page():
             )
 
             # Display the maximum value in the time column for debugging
-            max_time_value = df[time_col].max()
+            max_time_value = df['Time_unit'].max()
             st.write(f"**Maximum value in the time column (`{time_col}`):** {max_time_value} {time_unit}")
 
             # Define the maximum allowed value based on the selected time unit
@@ -743,38 +751,33 @@ def advanced_page():
             # Display the maximum allowed value for debugging
             st.write(f"**Maximum allowed value for '{time_unit}':** {max_allowed_value} {time_unit}")
 
-            # Convert time column to seconds based on the selected unit
+            # Convert time column to selected unit
             if time_unit == "milliseconds":
-                df["Time_unit"] = df[time_col] / 1000  # Convert to seconds
+                df["Time_unit_converted"] = df["Time_unit"] / 1000  # Convert to seconds
             elif time_unit == "seconds":
-                df["Time_unit"] = df[time_col]
+                df["Time_unit_converted"] = df["Time_unit"]
             elif time_unit == "minutes":
-                df["Time_unit"] = df[time_col] * 60  # Convert to seconds
+                df["Time_unit_converted"] = df["Time_unit"] / 60  # Convert to minutes
             elif time_unit == "hours":
-                df["Time_unit"] = df[time_col] * 3600  # Convert to seconds
+                df["Time_unit_converted"] = df["Time_unit"] / 3600  # Convert to hours
 
             # Check for out-of-bounds values after conversion
-            if df["Time_unit"].max() > max_allowed_value:
+            if df["Time_unit_converted"].max() > max_allowed_value:
                 st.error(
                     f"The values in the time column exceed the maximum allowed for the selected unit '{time_unit}'. Please check the data or select a different unit."
                 )
                 return
 
-            # Sort the dataframe by Time_unit
-            df = df.sort_values("Time_unit")
-
-            # Calculate min and max time
-            min_time_unit = df["Time_unit"].min()
-            max_time_unit = df["Time_unit"].max()
-
-            # Display the time range in numeric format (seconds)
-            st.write(f"**Data time range:** {min_time_unit:.2f} seconds to {max_time_unit:.2f} seconds")
+            # Display the time range in numeric format
+            min_time_unit = df["Time_unit_converted"].min()
+            max_time_unit = df["Time_unit_converted"].max()
+            st.write(f"**Data time range:** {min_time_unit:.2f} {time_unit} to {max_time_unit:.2f} {time_unit}")
 
             # Convert numeric Time_unit back to timedelta for human-readable format
             try:
-                df["Human_Readable_Time"] = pd.to_timedelta(df["Time_unit"], unit='s')
+                df["Human_Readable_Time"] = pd.to_timedelta(df["Time_unit_converted"], unit=time_unit[0])
             except Exception as e:
-                st.error(f"Error converting Time_unit to timedelta: {e}")
+                st.error(f"Error converting Time_unit_converted to timedelta: {e}")
                 return
 
             # Format the min and max times using the external helper function
@@ -795,21 +798,15 @@ def advanced_page():
             )
 
             # Filter data based on the selected time range
-            df = df[(df["Time_unit"] >= time_range[0]) & (df["Time_unit"] <= time_range[1])]
+            df = df[(df["Time_unit_converted"] >= time_range[0]) & (df["Time_unit_converted"] <= time_range[1])]
 
-            # Ensure numeric columns are numeric
-            for col in [
-                pressure_col,
-                revolution_col,
-                advance_rate_col,
-                thrust_force_col,
-            ]:
+            # --------------------- Ensure Numeric Columns are Numeric ---------------------
+            numeric_columns = [pressure_col, revolution_col, advance_rate_col, thrust_force_col]
+            for col in numeric_columns:
                 df[col] = pd.to_numeric(df[col], errors="coerce")
 
             # Drop rows with NaNs in these columns
-            df = df.dropna(
-                subset=[pressure_col, revolution_col, advance_rate_col, thrust_force_col]
-            )
+            df = df.dropna(subset=numeric_columns)
 
             # Remove rows where revolution is zero to avoid division by zero
             df = df[df[revolution_col] != 0]
@@ -1111,24 +1108,6 @@ def advanced_page():
                     {"column": "Calculated torque [kNm]", "display_name": "Calculated Torque [kNm]", "color": "magenta"},
                 ]
 
-                # Calculate Penetration Rate
-                if revolution_col in df.columns and advance_rate_col in df.columns:
-                    df["Calculated Penetration Rate"] = df[advance_rate_col] / df[revolution_col]
-                    df["Calculated Penetration Rate"].replace([np.inf, -np.inf], np.nan, inplace=True)
-                else:
-                    st.warning(f"Columns '{advance_rate_col}' or '{revolution_col}' not found for Penetration Rate calculation.")
-                    df["Calculated Penetration Rate"] = np.nan
-
-                # Calculate Thrust Force per Cutting Ring
-                if thrust_force_col in df.columns and num_cutting_rings > 0:
-                    df["Thrust Force per Cutting Ring"] = df[thrust_force_col] / num_cutting_rings
-                elif num_cutting_rings <= 0:
-                    st.error("Number of Cutting Rings must be greater than zero.")
-                    st.stop()
-                else:
-                    st.warning(f"Thrust Force column '{thrust_force_col}' not found.")
-                    df["Thrust Force per Cutting Ring"] = np.nan
-
                 # Ensure 'Calculated torque [kNm]' is present
                 if "Calculated torque [kNm]" not in df.columns:
                     st.warning("Column 'Calculated torque [kNm]' not found in the dataset.")
@@ -1179,7 +1158,7 @@ def advanced_page():
                     if feature['column'] in df.columns:
                         fig_time.add_trace(
                             go.Scatter(
-                                x=df["Time_unit"],
+                                x=df["Time_unit_converted"],
                                 y=df[feature["column"]],
                                 mode="lines",
                                 name=feature["display_name"],
@@ -1195,7 +1174,7 @@ def advanced_page():
                         if show_means_time:
                             fig_time.add_trace(
                                 go.Scatter(
-                                    x=df["Time_unit"],
+                                    x=df["Time_unit_converted"],
                                     y=df[f"{feature['column']}_time_mean"],
                                     mode="lines",
                                     name=f"{feature['display_name']} Rolling Mean",
@@ -1242,6 +1221,7 @@ def advanced_page():
             except Exception as e:
                 st.error(f"An error occurred during time-based features plotting: {str(e)}")
                 st.stop()
+
 
             # --------------------- Features over Distance/Chainage Visualization ---------------------
             try:
