@@ -494,1033 +494,836 @@ def original_page():
     else:
         st.info("Please upload a Raw Data file to begin the analysis.")
 
-def advanced_page():
-    st.title("Advanced Analysis")
+    def advanced_page():
+        st.title("Advanced Analysis")
 
-    # File uploaders for batch data
-    raw_data_file = st.file_uploader(
-        "Upload Raw Data (CSV or XLSX)", type=["csv", "xlsx"]
-    )
-    machine_specs_file = st.file_uploader(
-        "Upload Machine Specifications: XLSX (MM-Baureihenliste) or CSV format accepted",
-        type=["xlsx", "csv"],
-    )
+        # File uploaders for batch data
+        raw_data_file = st.file_uploader("Upload Raw Data (CSV or XLSX)", type=["csv", "xlsx"])
+        machine_specs_file = st.file_uploader(
+            "Upload Machine Specifications: XLSX (MM-Baureihenliste) or CSV format accepted",
+            type=["xlsx", "csv"],
+        )
 
-    # Load machine specs if available
-    if machine_specs_file is not None:
-        try:
-            file_type = machine_specs_file.name.split(".")[-1].lower()
-            machine_specs = load_machine_specs(machine_specs_file, file_type)
-            if machine_specs is None or machine_specs.empty:
-                st.error("Machine specifications file is empty or could not be loaded.")
+        # Load machine specs if available
+        if machine_specs_file is not None:
+            try:
+                file_type = machine_specs_file.name.split(".")[-1].lower()
+                machine_specs = load_machine_specs(machine_specs_file, file_type)
+                if machine_specs is None or machine_specs.empty:
+                    st.error("Machine specifications file is empty or could not be loaded.")
+                    st.stop()
+
+                if "Projekt" not in machine_specs.columns:
+                    st.error("The machine specifications file must contain a 'Projekt' column.")
+                    st.stop()
+
+                machine_types = machine_specs["Projekt"].unique()
+                if len(machine_types) == 0:
+                    st.error("No machine types found in the specifications file.")
+                    st.stop()
+
+                selected_machine = st.sidebar.selectbox("Select Machine Type", machine_types)
+
+                machine_params = get_machine_params(machine_specs, selected_machine)
+                if not machine_params:
+                    st.error("Machine parameters could not be retrieved.")
+                    st.stop()
+
+                # Display machine parameters
+                params_df = pd.DataFrame([machine_params])
+                styled_table = params_df.style.set_table_styles(
+                    [
+                        {
+                            "selector": "th",
+                            "props": [("border", "2px solid black"), ("padding", "5px")],
+                        },
+                        {
+                            "selector": "td",
+                            "props": [("border", "2px solid black"), ("padding", "5px")],
+                        },
+                        {"selector": "", "props": [("border-collapse", "collapse")]},
+                    ]
+                ).to_html()
+
+                styled_table = styled_table.split("</style>")[-1]
+
+                st.markdown(
+                    f"""
+                    <style>
+                    table {{
+                        border-collapse: collapse;
+                        margin: 25px 0;
+                        font-size: 0.9em;
+                        font-family: sans-serif;
+                        min-width: 400px;
+                        box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
+                    }}
+                    table thead tr {{
+                        background-color: rgb(0, 62, 37);
+                        color: #ffffff;
+                        text-align: left;
+                    }}
+                    table th,
+                    table td {{
+                        padding: 12px 15px;
+                        border: 2px solid black;
+                    }}
+                    table tbody tr {{
+                        border-bottom: 1px solid #dddddd;
+                    }}
+                    table tbody tr:nth-of-type(even) {{
+                        background-color: #f3f3f3;
+                    }}
+                    table tbody tr:last-of-type {{
+                        border-bottom: 2px solid rgb(0, 62, 37);
+                    }}
+                    </style>
+                    {styled_table}
+                    """,
+                    unsafe_allow_html=True,
+                )
+            except Exception as e:
+                st.error(
+                    f"An error occurred while processing the machine specifications: {str(e)}"
+                )
                 st.stop()
-
-            if "Projekt" not in machine_specs.columns:
-                st.error("The machine specifications file must contain a 'Projekt' column.")
-                st.stop()
-
-            machine_types = machine_specs["Projekt"].unique()
-            if len(machine_types) == 0:
-                st.error("No machine types found in the specifications file.")
-                st.stop()
-
-            selected_machine = st.sidebar.selectbox("Select Machine Type", machine_types)
-
-            machine_params = get_machine_params(machine_specs, selected_machine)
-            if not machine_params:
-                st.error("Machine parameters could not be retrieved.")
-                st.stop()
-
-            # Display machine parameters
-            params_df = pd.DataFrame([machine_params])
-            styled_table = params_df.style.set_table_styles(
-                [
-                    {
-                        "selector": "th",
-                        "props": [("border", "2px solid black"), ("padding", "5px")],
-                    },
-                    {
-                        "selector": "td",
-                        "props": [("border", "2px solid black"), ("padding", "5px")],
-                    },
-                    {"selector": "", "props": [("border-collapse", "collapse")]},
-                ]
-            ).to_html()
-
-            styled_table = styled_table.split("</style>")[-1]
-
-            st.markdown(
-                f"""
-                <style>
-                table {{
-                    border-collapse: collapse;
-                    margin: 25px 0;
-                    font-size: 0.9em;
-                    font-family: sans-serif;
-                    min-width: 400px;
-                    box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
-                }}
-                table thead tr {{
-                    background-color: rgb(0, 62, 37);
-                    color: #ffffff;
-                    text-align: left;
-                }}
-                table th,
-                table td {{
-                    padding: 12px 15px;
-                    border: 2px solid black;
-                }}
-                table tbody tr {{
-                    border-bottom: 1px solid #dddddd;
-                }}
-                table tbody tr:nth-of-type(even) {{
-                    background-color: #f3f3f3;
-                }}
-                table tbody tr:last-of-type {{
-                    border-bottom: 2px solid rgb(0, 62, 37);
-                }}
-                </style>
-                {styled_table}
-                """,
-                unsafe_allow_html=True,
-            )
-        except Exception as e:
-            st.error(
-                f"An error occurred while processing the machine specifications: {str(e)}"
-            )
+        else:
+            st.warning("Please upload Machine Specifications file.")
             st.stop()
-    else:
-        st.warning("Please upload Machine Specifications file.")
-        st.stop()
 
-    # Sidebar for user inputs
-    st.sidebar.header("Parameter Settings")
-    P_max = st.sidebar.number_input(
-        "Maximum power (kW)", value=132.0, min_value=1.0, max_value=500.0
-    )
-    nu = st.sidebar.number_input(
-        "Efficiency coefficient", value=0.7, min_value=0.1, max_value=1.0
-    )
-    anomaly_threshold = st.sidebar.number_input(
-        "Anomaly threshold (bar)", value=250, min_value=100, max_value=500
-    )
-    num_cutting_rings = st.sidebar.number_input(
-        "Number of Cutting Rings", value=1, min_value=1, max_value=100
-    )
+        # Sidebar for user inputs
+        st.sidebar.header("Parameter Settings")
+        P_max = st.sidebar.number_input(
+            "Maximum power (kW)", value=132.0, min_value=1.0, max_value=500.0
+        )
+        nu = st.sidebar.number_input(
+            "Efficiency coefficient", value=0.7, min_value=0.1, max_value=1.0
+        )
+        anomaly_threshold = st.sidebar.number_input(
+            "Anomaly threshold (bar)", value=250, min_value=100, max_value=500
+        )
+        num_cutting_rings = st.sidebar.number_input(
+            "Number of Cutting Rings", value=1, min_value=1, max_value=100
+        )
 
-    if raw_data_file is not None:
-        # Load data
-        file_type = raw_data_file.name.split(".")[-1].lower()
-        df = load_data(raw_data_file, file_type)
+        if raw_data_file is not None:
+            # Load data
+            file_type = raw_data_file.name.split(".")[-1].lower()
+            df = load_data(raw_data_file, file_type)
 
-        if df is not None:
-            # Find sensor columns
-            sensor_columns = find_sensor_columns(df)
+            if df is not None:
+                # Find sensor columns
+                sensor_columns = find_sensor_columns(df)
 
-            # Display detected sensor columns for debugging
-            st.write("### Detected Sensor Columns")
-            st.write(sensor_columns)
-
-            # Allow user to select columns if not found or adjust selections
-            st.subheader("Select Sensor Columns")
-
-            # Function to safely get the index for selectbox
-            def get_selectbox_index(default_col):
-                try:
-                    return df.columns.get_loc(default_col)
-                except:
-                    return 0
-
-            # Time Column
-            if "time" in sensor_columns and sensor_columns["time"] in df.columns:
-                default_time_col = sensor_columns["time"]
-            else:
-                default_time_col = df.columns[0]
-            time_col = st.selectbox(
-                "Select Time Column",
-                options=df.columns,
-                index=get_selectbox_index(default_time_col),
-            )
-
-            # Pressure Column
-            if "pressure" in sensor_columns and sensor_columns["pressure"] in df.columns:
-                default_pressure_col = sensor_columns["pressure"]
-            else:
-                default_pressure_col = df.columns[1] if len(df.columns) > 1 else df.columns[0]
-            pressure_col = st.selectbox(
-                "Select Pressure Column",
-                options=df.columns,
-                index=get_selectbox_index(default_pressure_col),
-            )
-
-            # Revolution Column
-            if "revolution" in sensor_columns and sensor_columns["revolution"] in df.columns:
-                default_revolution_col = sensor_columns["revolution"]
-            else:
-                default_revolution_col = df.columns[2] if len(df.columns) > 2 else df.columns[0]
-            revolution_col = st.selectbox(
-                "Select Revolution Column",
-                options=df.columns,
-                index=get_selectbox_index(default_revolution_col),
-            )
-
-            # Advance Rate Column
-            if "advance_rate" in sensor_columns and sensor_columns["advance_rate"] in df.columns:
-                default_advance_rate_col = sensor_columns["advance_rate"]
-            else:
-                default_advance_rate_col = df.columns[3] if len(df.columns) > 3 else df.columns[0]
-            advance_rate_col = st.selectbox(
-                "Select Advance Rate Column",
-                options=df.columns,
-                index=get_selectbox_index(default_advance_rate_col),
-            )
-
-            # Thrust Force Column
-            if "thrust_force" in sensor_columns and sensor_columns["thrust_force"] in df.columns:
-                default_thrust_force_col = sensor_columns["thrust_force"]
-            else:
-                default_thrust_force_col = df.columns[4] if len(df.columns) > 4 else df.columns[0]
-            thrust_force_col = st.selectbox(
-                "Select Thrust Force Column",
-                options=df.columns,
-                index=get_selectbox_index(default_thrust_force_col),
-            )
-
-            # Distance/Chainage Column
-            if "distance" in sensor_columns and sensor_columns["distance"] in df.columns:
-                default_distance_col = sensor_columns["distance"]
-            else:
-                # Attempt to guess a distance-related column or default to the last column
-                possible_distance_cols = [col for col in df.columns if "distance" in col.lower() or "chainage" in col.lower()]
-                default_distance_col = possible_distance_cols[0] if possible_distance_cols else df.columns[-1]
-            distance_col = st.selectbox(
-                "Select Distance/Chainage Column",
-                options=df.columns,
-                index=get_selectbox_index(default_distance_col),
-            )
-
-            # --------------------- Clean and Convert Distance/Chainage Column ---------------------
-            # Remove non-numeric characters except for decimal points and replace commas with dots
-            df[distance_col] = (
-                df[distance_col]
-                .astype(str)
-                .str.replace(',', '.', regex=False)  # Replace commas with dots
-                .str.extract('(\d+\.?\d*)')  # Extract numeric part
-                .astype(float)
-            )
-
-            # Handle missing values
-            missing_distance = df[distance_col].isnull().sum()
-            if missing_distance > 0:
-                st.warning(f"There are {missing_distance} missing values in the distance/chainage column. These rows will be dropped.")
-                df = df.dropna(subset=[distance_col])
-
-            # Display the maximum value in the distance/chainage column for debugging
-            max_distance_value = df[distance_col].max()
-            st.write(f"**Maximum value in the distance/chainage column (`{distance_col}`):** {max_distance_value}")
-
-            # --------------------- Parse and Convert Time Column ---------------------
-            # Parse the time column as datetime
-            try:
-                df['Parsed_Time'] = pd.to_datetime(df[time_col], errors='coerce', infer_datetime_format=True)
-                if df['Parsed_Time'].isnull().all():
-                    st.error(f"The selected time column '{time_col}' could not be parsed as datetime.")
-                    return
+                # Allow user to select columns if not found or adjust selections
+                st.subheader("Select Sensor Columns")
+                # Time Column
+                if "time" in sensor_columns and sensor_columns["time"] in df.columns:
+                    default_time_col = sensor_columns["time"]
                 else:
-                    df = df.dropna(subset=['Parsed_Time'])
-                    df = df.sort_values('Parsed_Time')
-                    df['Time_unit'] = (df['Parsed_Time'] - df['Parsed_Time'].min()).dt.total_seconds()
-            except Exception as e:
-                st.error(f"Error parsing the time column '{time_col}': {e}")
-                return
-
-            # Ask the user to select the unit of the time column
-            time_unit = st.selectbox(
-                "Select Time Unit for Time Column",
-                options=["seconds", "minutes", "hours"],
-                index=0,
-                help="Choose the unit that matches the time data in your dataset."
-            )
-
-            # Convert time column to selected unit
-            if time_unit == "seconds":
-                df["Time_unit_converted"] = df["Time_unit"]
-            elif time_unit == "minutes":
-                df["Time_unit_converted"] = df["Time_unit"] / 60
-            elif time_unit == "hours":
-                df["Time_unit_converted"] = df["Time_unit"] / 3600
-
-            # Calculate min and max time
-            min_time_unit = df["Time_unit_converted"].min()
-            max_time_unit = df["Time_unit_converted"].max()
-
-            # Display the time range in numeric format
-            st.write(f"**Data time range:** {min_time_unit:.2f} {time_unit} to {max_time_unit:.2f} {time_unit}")
-
-            # Convert numeric Time_unit back to timedelta for human-readable format
-            try:
-                df["Human_Readable_Time"] = pd.to_timedelta(df["Time_unit_converted"], unit=time_unit[0])
-            except Exception as e:
-                st.error(f"Error converting Time_unit_converted to timedelta: {e}")
-                return
-
-            # Format the min and max times using the external helper function
-            min_hr_time = format_timedelta(df["Human_Readable_Time"].min())
-            max_hr_time = format_timedelta(df["Human_Readable_Time"].max())
-            st.write(f"**Data time range (Human Readable):** {min_hr_time} to {max_hr_time}")
-
-            # Define the format for the slider based on the time unit
-            slider_format = "%.2f"
-
-            # Create the time range slider
-            time_range = st.slider(
-                "Select Time Range",
-                min_value=float(min_time_unit),
-                max_value=float(max_time_unit),
-                value=(float(min_time_unit), float(max_time_unit)),
-                format=slider_format,
-            )
-
-            # Filter data based on the selected time range
-            df = df[(df["Time_unit_converted"] >= time_range[0]) & (df["Time_unit_converted"] <= time_range[1])]
-
-            # --------------------- Ensure Numeric Columns are Numeric ---------------------
-            numeric_columns = [pressure_col, revolution_col, advance_rate_col, thrust_force_col]
-            for col in numeric_columns:
-                df[col] = pd.to_numeric(df[col], errors="coerce")
-
-            # Drop rows with NaNs in these columns
-            df = df.dropna(subset=numeric_columns)
-
-            # Remove rows where revolution is zero to avoid division by zero
-            df = df[df[revolution_col] != 0]
-
-            # Calculate Penetration Rate as Advance Rate divided by Revolution
-            df["Calculated Penetration Rate"] = (
-                df[advance_rate_col] / df[revolution_col]
-            )
-            df["Calculated Penetration Rate"].replace([np.inf, -np.inf], np.nan, inplace=True)
-
-            # Calculate Thrust Force per Cutting Ring
-            if thrust_force_col in df.columns and num_cutting_rings > 0:
-                df["Thrust Force per Cutting Ring"] = df[thrust_force_col] / num_cutting_rings
-            elif num_cutting_rings <= 0:
-                st.error("Number of Cutting Rings must be greater than zero.")
-                st.stop()
-            else:
-                st.warning(f"Thrust Force column '{thrust_force_col}' not found.")
-                df["Thrust Force per Cutting Ring"] = np.nan
-
-            # Display Calculated Columns Statistics
-            st.write("### Calculated Columns Statistics")
-            st.write(df[["Calculated Penetration Rate", "Thrust Force per Cutting Ring"]].describe())
-
-            # RPM Statistics
-            rpm_stats = df[revolution_col].describe()
-            rpm_max_value = rpm_stats["max"]
-            st.sidebar.write(
-                f"Recommended value for x-axis based on the Max RPM in Data: {rpm_max_value:.2f}"
-            )
-
-            # Allow user to set x_axis_max
-            x_axis_max = st.sidebar.number_input(
-                "X-axis maximum",
-                value=float(rpm_max_value),
-                min_value=1.0,
-                max_value=float(rpm_max_value * 1.2),
-            )
-
-            # Filter data points between n2 and n1 rpm
-            n2 = machine_params.get("n2", df[revolution_col].min())
-            n1 = machine_params.get("n1", df[revolution_col].max())
-            df = df[
-                (df[revolution_col] >= n2)
-                & (df[revolution_col] <= n1)
-            ]
-
-            # --------------------- Vectorized Torque Calculation ---------------------
-            # Ensure that 'torque_constant', 'n1', 'M_max_Vg1', and 'M_cont_value' exist in machine_params
-            # (Handled in get_machine_params with error message and st.stop())
-
-            # Vectorized calculation using numpy.where
-            df["Calculated torque [kNm]"] = np.where(
-                df[revolution_col] < machine_params["n1"],
-                df[pressure_col] * machine_params["torque_constant"],
-                (machine_params["n1"] / df[revolution_col]) * machine_params["torque_constant"] * df[pressure_col]
-            ).round(2)
-
-            # Debugging: Check the type and contents of 'Calculated torque [kNm]'
-            st.write("### Sample Calculated Torque [kNm]")
-            st.write(df["Calculated torque [kNm]"].head())
-
-            if df["Calculated torque [kNm]"].isnull().all():
-                st.error("All values in 'Calculated torque [kNm]' are NaN. Please check the torque calculation.")
-                st.stop()
-
-            # Calculate whiskers and outliers using 10th and 90th percentiles
-            (
-                torque_lower_whisker,
-                torque_upper_whisker,
-                torque_outliers,
-            ) = calculate_whisker_and_outliers_advanced(df["Calculated torque [kNm]"])
-            (
-                rpm_lower_whisker,
-                rpm_upper_whisker,
-                rpm_outliers,
-            ) = calculate_whisker_and_outliers_advanced(df[revolution_col])
-
-            # Anomaly detection based on working pressure
-            df["Is_Anomaly"] = df[pressure_col] >= anomaly_threshold
-
-            # Function to calculate M max Vg2
-            def M_max_Vg2(rpm):
-                return np.minimum(
-                    machine_params["M_max_Vg1"],
-                    (P_max * 60 * nu) / (2 * np.pi * rpm),
+                    default_time_col = df.columns[0]
+                time_col = st.selectbox(
+                    "Select Time Column",
+                    options=df.columns,
+                    index=df.columns.get_loc(default_time_col) if default_time_col in df.columns else 0,
                 )
 
-            # Calculate the elbow points for the max and continuous torque
-            elbow_rpm_max = (P_max * 60 * nu) / (2 * np.pi * machine_params["M_max_Vg1"])
-            elbow_rpm_cont = (
-                P_max * 60 * nu
-            ) / (2 * np.pi * machine_params["M_cont_value"])
+                # Pressure Column
+                if "pressure" in sensor_columns and sensor_columns["pressure"] in df.columns:
+                    default_pressure_col = sensor_columns["pressure"]
+                else:
+                    default_pressure_col = df.columns[1] if len(df.columns) > 1 else df.columns[0]
+                pressure_col = st.selectbox(
+                    "Select Pressure Column",
+                    options=df.columns,
+                    index=df.columns.get_loc(default_pressure_col) if default_pressure_col in df.columns else 0,
+                )
 
-            # Generate RPM values for the torque curve
-            rpm_curve = np.linspace(0.1, machine_params["n1"], 1000)  # Avoid division by zero
+                # Revolution Column
+                if "revolution" in sensor_columns and sensor_columns["revolution"] in df.columns:
+                    default_revolution_col = sensor_columns["revolution"]
+                else:
+                    default_revolution_col = df.columns[2] if len(df.columns) > 2 else df.columns[0]
+                revolution_col = st.selectbox(
+                    "Select Revolution Column",
+                    options=df.columns,
+                    index=df.columns.get_loc(default_revolution_col) if default_revolution_col in df.columns else 0,
+                )
 
-            fig = make_subplots(rows=1, cols=1)
+                # Advance Rate Column
+                if "advance_rate" in sensor_columns and sensor_columns["advance_rate"] in df.columns:
+                    default_advance_rate_col = sensor_columns["advance_rate"]
+                else:
+                    default_advance_rate_col = df.columns[3] if len(df.columns) > 3 else df.columns[0]
+                advance_rate_col = st.selectbox(
+                    "Select Advance Rate Column",
+                    options=df.columns,
+                    index=df.columns.get_loc(default_advance_rate_col) if default_advance_rate_col in df.columns else 0,
+                )
 
-            # Plot torque curves
-            fig.add_trace(
-                go.Scatter(
+                # Thrust Force Column
+                if "thrust_force" in sensor_columns and sensor_columns["thrust_force"] in df.columns:
+                    default_thrust_force_col = sensor_columns["thrust_force"]
+                else:
+                    default_thrust_force_col = df.columns[4] if len(df.columns) > 4 else df.columns[0]
+                thrust_force_col = st.selectbox(
+                    "Select Thrust Force Column",
+                    options=df.columns,
+                    index=df.columns.get_loc(default_thrust_force_col) if default_thrust_force_col in df.columns else 0,
+                )
+
+                # Distance/Chainage Column
+                # Attempt to find 'distance' sensor
+                if "distance" in sensor_column_map:
+                    distance_possible_names = sensor_column_map["distance"]
+                else:
+                    distance_possible_names = ["Distance", "Chainage", "Distance/Chainage", "Strecke", "Laenge", "Length", "Länge", "Chain Length"]
+
+                possible_distance_cols = [col for col in df.columns if "distance" in col.lower() or "chainage" in col.lower()]
+                if possible_distance_cols:
+                    default_distance_col = possible_distance_cols[0]
+                else:
+                    default_distance_col = df.columns[-1]
+                distance_col = st.selectbox(
+                    "Select Distance/Chainage Column",
+                    options=df.columns,
+                    index=df.columns.get_loc(default_distance_col) if default_distance_col in df.columns else 0,
+                )
+
+                # --------------------- Clean and Convert Distance/Chainage Column ---------------------
+                # Remove non-numeric characters except for decimal points and replace commas with dots
+                df[distance_col] = (
+                    df[distance_col]
+                    .astype(str)
+                    .str.replace(',', '.', regex=False)  # Replace commas with dots
+                    .str.extract('(\d+\.?\d*)')  # Extract numeric part
+                    .astype(float)
+                )
+
+                # Debugging: Display the first few cleaned distance values
+                st.write("**Cleaned Distance/Chainage Column Sample:**")
+                st.write(df[distance_col].head())
+
+                if df[distance_col].isnull().all():
+                    st.error(
+                        f"The selected distance/chainage column '{distance_col}' cannot be converted to numeric values."
+                    )
+                    st.stop()
+
+                # Handle missing values
+                missing_distance = df[distance_col].isnull().sum()
+                if missing_distance > 0:
+                    st.warning(f"There are {missing_distance} missing values in the distance/chainage column. These rows will be dropped.")
+                    df = df.dropna(subset=[distance_col])
+
+                # Display the maximum value in the distance/chainage column for debugging
+                max_distance_value = df[distance_col].max()
+                st.write(f"**Maximum value in the distance/chainage column (`{distance_col}`):** {max_distance_value}")
+
+                # --------------------- Parse and Convert Time Column ---------------------
+                # Parse the time column as datetime
+                try:
+                    df['Parsed_Time'] = pd.to_datetime(df[time_col], errors='coerce', infer_datetime_format=True)
+                    if df['Parsed_Time'].isnull().all():
+                        st.error(f"The selected time column '{time_col}' could not be parsed as datetime.")
+                        st.stop()
+                    else:
+                        df = df.dropna(subset=['Parsed_Time'])
+                        df = df.sort_values('Parsed_Time')
+                        df['Time_unit'] = (df['Parsed_Time'] - df['Parsed_Time'].min()).dt.total_seconds()
+                except Exception as e:
+                    st.error(f"Error parsing the time column '{time_col}': {e}")
+                    st.stop()
+
+                # Ask the user to select the unit of the time column
+                time_unit = st.selectbox(
+                    "Select Time Unit for Time Column",
+                    options=["seconds", "minutes", "hours"],
+                    index=0,
+                    help="Choose the unit that matches the time data in your dataset."
+                )
+
+                # Convert time column to selected unit
+                if time_unit == "seconds":
+                    df["Time_unit_converted"] = df["Time_unit"]
+                elif time_unit == "minutes":
+                    df["Time_unit_converted"] = df["Time_unit"] / 60
+                elif time_unit == "hours":
+                    df["Time_unit_converted"] = df["Time_unit"] / 3600
+
+                # Display the maximum value in the time column for debugging
+                max_time_value = df["Time_unit_converted"].max()
+                st.write(f"**Maximum value in the time column (`{time_unit}`):** {max_time_value} {time_unit}")
+
+                # Define the maximum allowed value based on the selected time unit
+                max_allowed_value = {
+                    "seconds": 2**63 / 1_000_000_000,
+                    "minutes": 2**63 / (60 * 1_000_000_000),
+                    "hours": 2**63 / (3600 * 1_000_000_000),
+                }[time_unit]
+
+                # Display the maximum allowed value for debugging
+                st.write(f"**Maximum allowed value for '{time_unit}':** {max_allowed_value} {time_unit}")
+
+                # Check for out-of-bounds values after conversion
+                if df["Time_unit_converted"].max() > max_allowed_value:
+                    st.error(
+                        f"The values in the time column exceed the maximum allowed for the selected unit '{time_unit}'. Please check the data or select a different unit."
+                    )
+                    st.stop()
+
+                # Display the time range in numeric format
+                min_time_unit = df["Time_unit_converted"].min()
+                max_time_unit = df["Time_unit_converted"].max()
+                st.write(f"**Data time range:** {min_time_unit:.2f} {time_unit} to {max_time_unit:.2f} {time_unit}")
+
+                # Convert numeric Time_unit back to timedelta for human-readable format
+                try:
+                    df["Human_Readable_Time"] = pd.to_timedelta(df["Time_unit_converted"], unit=time_unit[0])
+                except Exception as e:
+                    st.error(f"Error converting Time_unit_converted to timedelta: {e}")
+                    st.stop()
+
+                # Format the min and max times using the external helper function
+                min_hr_time = format_timedelta(df["Human_Readable_Time"].min())
+                max_hr_time = format_timedelta(df["Human_Readable_Time"].max())
+                st.write(f"**Data time range (Human Readable):** {min_hr_time} to {max_hr_time}")
+
+                # Define the format for the slider based on the time unit
+                slider_format = "%.2f"
+
+                # Create the time range slider
+                time_range = st.slider(
+                    "Select Time Range",
+                    min_value=float(min_time_unit),
+                    max_value=float(max_time_unit),
+                    value=(float(min_time_unit), float(max_time_unit)),
+                    format=slider_format,
+                )
+
+                # Filter data based on the selected time range
+                df = df[(df["Time_unit_converted"] >= time_range[0]) & (df["Time_unit_converted"] <= time_range[1])]
+
+                # --------------------- Ensure Numeric Columns are Numeric ---------------------
+                numeric_columns = [pressure_col, revolution_col, advance_rate_col, thrust_force_col]
+                for col in numeric_columns:
+                    df[col] = pd.to_numeric(df[col], errors="coerce")
+
+                # Drop rows with NaNs in these columns
+                df = df.dropna(subset=numeric_columns)
+
+                # Remove rows where revolution is zero to avoid division by zero
+                df = df[df[revolution_col] != 0]
+
+                # Calculate Penetration Rate as Advance Rate divided by Revolution
+                df["Calculated Penetration Rate"] = (
+                    df[advance_rate_col] / df[revolution_col]
+                ).replace([np.inf, -np.inf], np.nan)
+                df = df.dropna(subset=["Calculated Penetration Rate"])
+
+                # Calculate Thrust Force per Cutting Ring
+                if num_cutting_rings > 0:
+                    df["Thrust Force per Cutting Ring"] = df[thrust_force_col] / num_cutting_rings
+                else:
+                    st.error("Number of Cutting Rings must be greater than zero.")
+                    st.stop()
+
+                # RPM Statistics
+                rpm_stats = df[revolution_col].describe()
+                rpm_max_value = rpm_stats["max"]
+                st.sidebar.write(
+                    f"Recommended value for x-axis based on the Max RPM in Data: {rpm_max_value:.2f}"
+                )
+
+                # Allow user to set x_axis_max
+                x_axis_max = st.sidebar.number_input(
+                    "X-axis maximum",
+                    value=float(rpm_max_value),
+                    min_value=1.0,
+                    max_value=float(rpm_max_value * 1.2),
+                )
+
+                # Filter data points between n2 and n1 rpm
+                n2 = machine_params.get("n2", df[revolution_col].min())
+                n1 = machine_params.get("n1", df[revolution_col].max())
+                df = df[
+                    (df[revolution_col] >= n2)
+                    & (df[revolution_col] <= n1)
+                ]
+
+                # --------------------- Vectorized Torque Calculation ---------------------
+                # Vectorized calculation using numpy.where
+                df["Calculated torque [kNm]"] = np.where(
+                    df[revolution_col] < machine_params['n1'],
+                    df[pressure_col] * machine_params['torque_constant'],
+                    (machine_params['n1'] / df[revolution_col]) * machine_params['torque_constant'] * df[pressure_col]
+                ).round(2)
+
+                # Debugging: Check the type and contents of 'Calculated torque [kNm]'
+                st.write("**Sample Calculated Torque [kNm]:**")
+                st.write(df["Calculated torque [kNm]"].head())
+
+                # Calculate whiskers and outliers using 10th and 90th percentiles
+                (
+                    torque_lower_whisker,
+                    torque_upper_whisker,
+                    torque_outliers,
+                ) = calculate_whisker_and_outliers_advanced(df["Calculated torque [kNm]"])
+                (
+                    rpm_lower_whisker,
+                    rpm_upper_whisker,
+                    rpm_outliers,
+                ) = calculate_whisker_and_outliers_advanced(df[revolution_col])
+
+                # Anomaly detection based on working pressure
+                df["Is_Anomaly"] = df[pressure_col] >= anomaly_threshold
+
+                # Function to calculate M max Vg2
+                def M_max_Vg2(rpm):
+                    return np.minimum(
+                        machine_params["M_max_Vg1"],
+                        (P_max * 60 * nu) / (2 * np.pi * rpm),
+                    )
+
+                # Calculate the elbow points for the max and continuous torque
+                elbow_rpm_max = (P_max * 60 * nu) / (2 * np.pi * machine_params["M_max_Vg1"])
+                elbow_rpm_cont = (
+                    P_max * 60 * nu
+                ) / (2 * np.pi * machine_params["M_cont_value"])
+
+                # Generate RPM values for the torque curve
+                rpm_curve = np.linspace(0.1, machine_params["n1"], 1000)  # Avoid division by zero
+
+                fig = make_subplots(rows=1, cols=1)
+
+                # Plot torque curves
+                fig.add_trace(go.Scatter(
                     x=rpm_curve[rpm_curve <= elbow_rpm_cont],
                     y=np.full_like(rpm_curve[rpm_curve <= elbow_rpm_cont], machine_params["M_cont_value"]),
-                    mode="lines",
-                    name="M cont Max [kNm]",
-                    line=dict(color="green", width=2),
-                )
-            )
+                    mode='lines',
+                    name='M cont Max [kNm]',
+                    line=dict(color='green', width=2)
+                ))
 
-            fig.add_trace(
-                go.Scatter(
+                fig.add_trace(go.Scatter(
                     x=rpm_curve[rpm_curve <= elbow_rpm_max],
                     y=np.full_like(rpm_curve[rpm_curve <= elbow_rpm_max], machine_params["M_max_Vg1"]),
-                    mode="lines",
-                    name="M max Vg1 [kNm]",
-                    line=dict(color="red", width=2),
-                )
-            )
+                    mode='lines',
+                    name='M max Vg1 [kNm]',
+                    line=dict(color='red', width=2)
+                ))
 
-            fig.add_trace(
-                go.Scatter(
+                fig.add_trace(go.Scatter(
                     x=rpm_curve[rpm_curve <= machine_params["n1"]],
                     y=M_max_Vg2(rpm_curve[rpm_curve <= machine_params["n1"]]),
-                    mode="lines",
-                    name="M max Vg2 [kNm]",
-                    line=dict(color="red", width=2, dash="dash"),
-                )
-            )
+                    mode='lines',
+                    name='M max Vg2 [kNm]',
+                    line=dict(color='red', width=2, dash='dash')
+                ))
 
-            # Calculate the y-values for the vertical lines
-            y_max_vg2 = M_max_Vg2(
-                np.array(
-                    [
-                        elbow_rpm_max,
-                        elbow_rpm_cont,
-                        machine_params["n1"],
-                    ]
-                )
-            )
+                # Calculate the y-values for the vertical lines
+                y_max_vg2 = M_max_Vg2(np.array([elbow_rpm_max, elbow_rpm_cont, machine_params["n1"]]))
 
-            # Add truncated vertical lines at elbow points
-            fig.add_trace(
-                go.Scatter(
+                # Add truncated vertical lines at elbow points
+                fig.add_trace(go.Scatter(
                     x=[elbow_rpm_max, elbow_rpm_max],
                     y=[0, y_max_vg2[0]],
-                    mode="lines",
-                    line=dict(color="purple", width=1, dash="dot"),
-                    showlegend=False,
-                )
-            )
-            fig.add_trace(
-                go.Scatter(
+                    mode='lines',
+                    line=dict(color='purple', width=1, dash='dot'),
+                    showlegend=False
+                ))
+                fig.add_trace(go.Scatter(
                     x=[elbow_rpm_cont, elbow_rpm_cont],
                     y=[0, y_max_vg2[1]],
-                    mode="lines",
-                    line=dict(color="orange", width=1, dash="dot"),
-                    showlegend=False,
-                )
-            )
-            fig.add_trace(
-                go.Scatter(
+                    mode='lines',
+                    line=dict(color='orange', width=1, dash='dot'),
+                    showlegend=False
+                ))
+                fig.add_trace(go.Scatter(
                     x=[machine_params["n1"], machine_params["n1"]],
                     y=[0, y_max_vg2[2]],
-                    mode="lines",
-                    line=dict(color="black", width=1, dash="dash"),
-                    showlegend=False,
-                )
-            )
+                    mode='lines',
+                    line=dict(color='black', width=1, dash='dash'),
+                    showlegend=False
+                ))
 
-            # Separate normal and anomaly data
-            normal_data = df[~df["Is_Anomaly"]]
-            anomaly_data = df[df["Is_Anomaly"]]
+                # Separate normal and anomaly data
+                normal_data = df[~df["Is_Anomaly"]]
+                anomaly_data = df[df["Is_Anomaly"]]
 
-            # Separate outlier data
-            torque_outlier_data = df[df["Calculated torque [kNm]"].isin(torque_outliers)]
-            rpm_outlier_data = df[df[revolution_col].isin(rpm_outliers)]
+                # Separate outlier data
+                torque_outlier_data = df[df["Calculated torque [kNm]"].isin(torque_outliers)]
+                rpm_outlier_data = df[df[revolution_col].isin(rpm_outliers)]
 
-            # Display counts for debugging
-            st.write(f"**Total Data Points:** {len(df)}")
-            st.write(f"**Normal Data Points:** {len(normal_data)}")
-            st.write(f"**Anomaly Data Points:** {len(anomaly_data)}")
-            st.write(f"**Torque Outliers:** {len(torque_outlier_data)}")
-            st.write(f"**RPM Outliers:** {len(rpm_outlier_data)}")
-
-            # Plot data points
-            fig.add_trace(
-                go.Scatter(
+                # Plot data points
+                fig.add_trace(go.Scatter(
                     x=normal_data[revolution_col],
                     y=normal_data["Calculated torque [kNm]"],
-                    mode="markers",
-                    name="Normal Data",
+                    mode='markers',
+                    name='Normal Data',
                     marker=dict(
                         color=normal_data["Calculated torque [kNm]"],
-                        colorscale="Viridis",
-                        size=10,  # Increased size
-                        line=dict(width=1, color='DarkSlateGrey')  # Added border
-                    ),
-                )
-            )
+                        colorscale='Viridis',
+                        size=8
+                    )
+                ))
 
-            fig.add_trace(
-                go.Scatter(
+                fig.add_trace(go.Scatter(
                     x=anomaly_data[revolution_col],
                     y=anomaly_data["Calculated torque [kNm]"],
-                    mode="markers",
-                    name=f"Anomaly (Pressure ≥ {anomaly_threshold} bar)",
-                    marker=dict(color="red", symbol="x", size=12, line=dict(width=1, color='DarkSlateGrey')),
-                )
-            )
+                    mode='markers',
+                    name=f'Anomaly (Pressure ≥ {anomaly_threshold} bar)',
+                    marker=dict(color='red', symbol='x', size=10)
+                ))
 
-            fig.add_trace(
-                go.Scatter(
+                fig.add_trace(go.Scatter(
                     x=torque_outlier_data[revolution_col],
                     y=torque_outlier_data["Calculated torque [kNm]"],
-                    mode="markers",
-                    name="Torque Outliers",
-                    marker=dict(color="orange", symbol="diamond", size=12, line=dict(width=1, color='DarkSlateGrey')),
-                )
-            )
+                    mode='markers',
+                    name='Torque Outliers',
+                    marker=dict(color='orange', symbol='diamond', size=10)
+                ))
 
-            fig.add_trace(
-                go.Scatter(
+                fig.add_trace(go.Scatter(
                     x=rpm_outlier_data[revolution_col],
                     y=rpm_outlier_data["Calculated torque [kNm]"],
-                    mode="markers",
-                    name="RPM Outliers",
-                    marker=dict(color="purple", symbol="square", size=12, line=dict(width=1, color='DarkSlateGrey')),
+                    mode='markers',
+                    name='RPM Outliers',
+                    marker=dict(color='purple', symbol='square', size=10)
+                ))
+
+                # Add horizontal lines for the torque whiskers
+                fig.add_hline(
+                    y=torque_upper_whisker,
+                    line_dash="dash",
+                    line_color="gray",
+                    annotation_text="Torque Upper Whisker (90th Percentile)"
                 )
-            )
+                fig.add_hline(
+                    y=torque_lower_whisker,
+                    line_dash="dot",
+                    line_color="gray",
+                    annotation_text="Torque Lower Whisker (10th Percentile)"
+                )
 
-            # Add horizontal lines for the torque whiskers
-            fig.add_hline(
-                y=torque_upper_whisker,
-                line_dash="dash",
-                line_color="gray",
-                annotation_text="Torque Upper Whisker (90th Percentile)",
-            )
-            fig.add_hline(
-                y=torque_lower_whisker,
-                line_dash="dot",
-                line_color="gray",
-                annotation_text="Torque Lower Whisker (10th Percentile)",
-            )
+                # Set plot layout with adjusted dimensions
+                fig.update_layout(
+                    title=f"{selected_machine} - Advanced Torque Analysis",
+                    xaxis_title="Revolution [1/min]",
+                    yaxis_title="Torque [kNm]",
+                    xaxis=dict(range=[0, x_axis_max]),
+                    yaxis=dict(range=[0, max(60, df["Calculated torque [kNm]"].max() * 1.1)]),
+                    legend=dict(
+                        orientation="h",
+                        yanchor="bottom",
+                        y=-0.3,
+                        xanchor="center",
+                        x=0.5,
+                    ),
+                    width=1000,
+                    height=800,
+                    margin=dict(l=50, r=50, t=100, b=100),
+                )
 
-            # Set plot layout with adjusted dimensions
-            fig.update_layout(
-                title=f"{selected_machine} - Advanced Torque Analysis",
-                xaxis_title="Revolution [1/min]",
-                yaxis_title="Torque [kNm]",
-                xaxis=dict(range=[0, x_axis_max]),
-                yaxis=dict(
-                    range=[
-                        0,
-                        max(60, df["Calculated torque [kNm]"].max() * 1.1),
+                st.plotly_chart(fig, use_container_width=True)
+
+                # --------------------- Features over Time Visualization ---------------------
+                try:
+                    st.subheader("Features over Time")
+
+                    # Define the features with their display names and colors
+                    features_time = [
+                        {"column": advance_rate_col, "display_name": "Advance Rate", "color": "blue"},
+                        {"column": "Calculated Penetration Rate", "display_name": "Penetration Rate", "color": "green"},
+                        {"column": thrust_force_col, "display_name": "Thrust Force", "color": "red"},
+                        {"column": "Thrust Force per Cutting Ring", "display_name": "Thrust Force per Cutting Ring", "color": "orange"},
+                        {"column": revolution_col, "display_name": "Revolution", "color": "purple"},
+                        {"column": pressure_col, "display_name": "Working Pressure", "color": "cyan"},
+                        {"column": "Calculated torque [kNm]", "display_name": "Calculated Torque [kNm]", "color": "magenta"},
                     ]
-                ),
-                legend=dict(
-                    orientation="h",
-                    yanchor="bottom",
-                    y=-0.3,
-                    xanchor="center",
-                    x=0.5,
-                ),
-                width=1000,
-                height=800,
-                margin=dict(l=50, r=50, t=100, b=100),
-            )
 
-            st.plotly_chart(fig, use_container_width=True)
+                    # Define the number of features
+                    num_features_time = len(features_time)
 
-            # --------------------- Display Statistical Summary ---------------------
-            display_statistics(df, revolution_col, pressure_col, thrust_force_col)
+                    # Rolling Window Slider for Time
+                    window_size_time = st.sidebar.slider(
+                        "Select Rolling Window Size for Mean Calculation (Time)",
+                        min_value=10,
+                        max_value=1000,
+                        value=100,
+                        step=10,
+                        help="Adjust the window size to smooth the data. A larger window provides a smoother mean."
+                    )
 
-            # --------------------- Additional Statistical Features ---------------------
-            st.subheader("Additional Statistical Features")
+                    # Toggle for Mean Lines
+                    show_means_time = st.checkbox(
+                        "Show Rolling Mean Values (Time)",
+                        value=True,
+                        help="Toggle the visibility of rolling mean lines for time-based features."
+                    )
 
-            # Advance Rate
-            st.write("**Advance Rate Statistics:**")
-            if advance_rate_col in df.columns:
-                st.write(df[advance_rate_col].describe())
-            else:
-                st.warning(f"Advance Rate column '{advance_rate_col}' not found in the dataset.")
+                    # Calculate rolling means for each feature
+                    for feature in features_time:
+                        if feature['column'] in df.columns:
+                            df[f"{feature['column']}_time_mean"] = df[feature['column']].rolling(
+                                window=window_size_time, min_periods=1
+                            ).mean()
+                        else:
+                            st.warning(f"Column '{feature['column']}' not found in the dataset.")
+                            df[f"{feature['column']}_time_mean"] = np.nan
 
-            # Calculated Penetration Rate
-            st.write("**Penetration Rate Statistics (Calculated):**")
-            if "Calculated Penetration Rate" in df.columns:
-                st.write(df["Calculated Penetration Rate"].describe())
-            else:
-                st.warning("The column 'Calculated Penetration Rate' does not exist in the dataset.")
+                    # Create subplots without titles
+                    fig_time = make_subplots(
+                        rows=2*num_features_time,  # Two rows per feature
+                        cols=1,
+                        shared_xaxes=True,
+                        vertical_spacing=0.02,  # Reduced spacing for a cleaner look
+                        subplot_titles=None  # No subplot titles
+                    )
 
-            # Thrust Force at the Cutting Head
-            st.write("**Thrust Force at the Cutting Head Statistics:**")
-            if thrust_force_col in df.columns:
-                st.write(df[thrust_force_col].describe())
-            else:
-                st.warning(f"Thrust Force column '{thrust_force_col}' not found in the dataset.")
-
-            # Thrust Force per Cutting Ring
-            st.write("**Thrust Force per Cutting Ring Statistics:**")
-            if "Thrust Force per Cutting Ring" in df.columns:
-                st.write(df["Thrust Force per Cutting Ring"].describe())
-            else:
-                st.warning("The column 'Thrust Force per Cutting Ring' does not exist in the dataset.")
-
-            # --------------------- Features over Time Visualization ---------------------
-            try:
-                st.subheader("Features over Time")
-
-                # Define the features with their display names and colors
-                features_time = [
-                    {"column": advance_rate_col, "display_name": "Advance Rate", "color": "blue"},
-                    {"column": "Calculated Penetration Rate", "display_name": "Penetration Rate", "color": "green"},
-                    {"column": thrust_force_col, "display_name": "Thrust Force", "color": "red"},
-                    {"column": "Thrust Force per Cutting Ring", "display_name": "Thrust Force per Cutting Ring", "color": "orange"},
-                    {"column": revolution_col, "display_name": "Revolution", "color": "purple"},
-                    {"column": pressure_col, "display_name": "Working Pressure", "color": "cyan"},
-                    {"column": "Calculated torque [kNm]", "display_name": "Calculated Torque [kNm]", "color": "magenta"},
-                ]
-
-                # Define the number of features
-                num_features_time = len(features_time)
-
-                # Rolling Window Slider for Time
-                window_size_time = st.sidebar.slider(
-                    "Select Rolling Window Size for Mean Calculation (Time)",
-                    min_value=10,
-                    max_value=1000,
-                    value=100,
-                    step=10,
-                    help="Adjust the window size to smooth the data. A larger window provides a smoother mean."
-                )
-
-                # Toggle for Mean Lines
-                show_means_time = st.checkbox(
-                    "Show Rolling Mean Values (Time)",
-                    value=True,
-                    help="Toggle the visibility of rolling mean lines for time-based features."
-                )
-
-                # Calculate rolling means for each feature
-                for feature in features_time:
-                    if feature['column'] in df.columns:
-                        df[f"{feature['column']}_time_mean"] = df[feature['column']].rolling(
-                            window=window_size_time, min_periods=1
-                        ).mean()
-                    else:
-                        st.warning(f"Column '{feature['column']}' not found in the dataset.")
-                        df[f"{feature['column']}_time_mean"] = np.nan
-
-                # Create subplots without titles
-                fig_time = make_subplots(
-                    rows=2*num_features_time,  # Two rows per feature
-                    cols=1,
-                    shared_xaxes=True,
-                    vertical_spacing=0.02,  # Reduced spacing for a cleaner look
-                    subplot_titles=None  # No subplot titles
-                )
-
-                # Iterate through each feature and add traces
-                for i, feature in enumerate(features_time, start=1):
-                    # Original Feature Plot on odd rows
-                    if feature['column'] in df.columns:
-                        fig_time.add_trace(
-                            go.Scatter(
-                                x=df["Time_unit_converted"],
-                                y=df[feature["column"]],
-                                mode="lines",
-                                name=feature["display_name"],
-                                line=dict(color=feature["color"]),
-                            ),
-                            row=2*i-1,
-                            col=1,
-                        )
-                        # Update y-axis for original feature
-                        fig_time.update_yaxes(title_text=feature["display_name"], row=2*i-1, col=1)
-
-                        # Rolling Mean Plot on even rows
-                        if show_means_time:
+                    # Iterate through each feature and add traces
+                    for i, feature in enumerate(features_time, start=1):
+                        # Original Feature Plot on odd rows
+                        if feature['column'] in df.columns:
                             fig_time.add_trace(
                                 go.Scatter(
                                     x=df["Time_unit_converted"],
-                                    y=df[f"{feature['column']}_time_mean"],
+                                    y=df[feature["column"]],
                                     mode="lines",
-                                    name=f"{feature['display_name']} Rolling Mean",
-                                    line=dict(color=feature["color"], dash="dash"),
+                                    name=feature["display_name"],
+                                    line=dict(color=feature["color"]),
                                 ),
-                                row=2*i,
+                                row=2*i-1,
                                 col=1,
                             )
-                            # Update y-axis for rolling mean
-                            fig_time.update_yaxes(title_text=f"{feature['display_name']} Rolling Mean", row=2*i, col=1)
-                    else:
-                        st.warning(f"Column '{feature['column']}' not found in the dataset.")
+                            # Update y-axis for original feature
+                            fig_time.update_yaxes(title_text=feature["display_name"], row=2*i-1, col=1)
 
-                # Update overall layout
-                fig_time.update_layout(
-                    xaxis_title=f"Time ({time_unit})",
-                    height=300 * 2 * num_features_time,  # 300 pixels per subplot row
-                    showlegend=False,
-                    title_text="Features over Time (Original and Rolling Mean)",  # Main plot title
-                )
+                            # Rolling Mean Plot on even rows
+                            if show_means_time:
+                                fig_time.add_trace(
+                                    go.Scatter(
+                                        x=df["Time_unit_converted"],
+                                        y=df[f"{feature['column']}_time_mean"],
+                                        mode="lines",
+                                        name=f"{feature['display_name']} Rolling Mean",
+                                        line=dict(color=feature["color"], dash="dash"),
+                                    ),
+                                    row=2*i,
+                                    col=1,
+                                )
+                                # Update y-axis for rolling mean
+                                fig_time.update_yaxes(title_text=f"{feature['display_name']} Rolling Mean", row=2*i, col=1)
+                        else:
+                            st.warning(f"Column '{feature['column']}' not found in the dataset.")
 
-                # Display the plot
-                st.plotly_chart(fig_time, use_container_width=True)
+                    # Update overall layout
+                    fig_time.update_layout(
+                        xaxis_title=f"Time ({time_unit})",
+                        height=300 * 2 * num_features_time,  # 300 pixels per subplot row
+                        showlegend=False,
+                        title_text="Features over Time (Original and Rolling Mean)",  # Main plot title
+                    )
 
-                # Provide explanations and annotations
-                st.write(
-                    """
-                    **Interpretation Guide:**
+                    # Display the plot
+                    st.plotly_chart(fig_time, use_container_width=True)
 
-                    - **Advance Rate**: Indicates the speed at which the machine is advancing. Fluctuations may indicate changes in ground conditions or operational parameters.
-                    - **Penetration Rate**: Calculated as Advance Rate divided by Revolution. Reflects how efficiently the machine penetrates the material per revolution.
-                    - **Thrust Force**: Represents the force applied at the cutting head. High values may indicate hard ground or potential mechanical issues.
-                    - **Thrust Force per Cutting Ring**: This metric normalizes the thrust force by the number of cutting rings, providing insight into the load per ring.
-                    - **Revolution**: The rotational speed of the cutting head. Variations can affect penetration rate and torque.
-                    - **Working Pressure**: The pressure at which the machine is operating. Sudden changes might indicate anomalies or operational adjustments.
-                    - **Calculated Torque [kNm]**: Represents the torque calculated based on machine parameters. High or fluctuating values may indicate mechanical stress or inefficiencies.
+                    # Provide explanations and annotations
+                    st.write(
+                        """
+                        **Interpretation Guide:**
 
-                    Use the visualizations to monitor trends and identify any unusual patterns that may require further investigation.
-                    """
-                )
-            except KeyError as ke:
-                st.error(f"Missing expected column during time-based features plotting: {ke}")
-                st.stop()
-            except Exception as e:
-                st.error(f"An error occurred during time-based features plotting: {str(e)}")
-                st.stop()
+                        - **Advance Rate**: Indicates the speed at which the machine is advancing. Fluctuations may indicate changes in ground conditions or operational parameters.
+                        - **Penetration Rate**: Calculated as Advance Rate divided by Revolution. Reflects how efficiently the machine penetrates the material per revolution.
+                        - **Thrust Force**: Represents the force applied at the cutting head. High values may indicate hard ground or potential mechanical issues.
+                        - **Thrust Force per Cutting Ring**: This metric normalizes the thrust force by the number of cutting rings, providing insight into the load per ring.
+                        - **Revolution**: The rotational speed of the cutting head. Variations can affect penetration rate and torque.
+                        - **Working Pressure**: The pressure at which the machine is operating. Sudden changes might indicate anomalies or operational adjustments.
+                        - **Calculated Torque [kNm]**: Represents the torque calculated based on machine parameters. High or fluctuating values may indicate mechanical stress or inefficiencies.
 
-            # --------------------- Features over Distance/Chainage Visualization ---------------------
-            try:
-                st.subheader("Features over Distance/Chainage")
+                        Use the visualizations to monitor trends and identify any unusual patterns that may require further investigation.
+                        """
+                    )
+                except KeyError as ke:
+                    st.error(f"Missing expected column during time-based features plotting: {ke}")
+                    st.stop()
+                except Exception as e:
+                    st.error(f"An error occurred during time-based features plotting: {str(e)}")
+                    st.stop()
 
-                # Define the features with their display names and colors
-                features_distance = [
-                    {"column": advance_rate_col, "display_name": "Advance Rate", "color": "blue"},
-                    {"column": "Calculated Penetration Rate", "display_name": "Penetration Rate", "color": "green"},
-                    {"column": thrust_force_col, "display_name": "Thrust Force", "color": "red"},
-                    {"column": "Thrust Force per Cutting Ring", "display_name": "Thrust Force per Cutting Ring", "color": "orange"},
-                    {"column": revolution_col, "display_name": "Revolution", "color": "purple"},
-                    {"column": pressure_col, "display_name": "Working Pressure", "color": "cyan"},
-                    {"column": "Calculated torque [kNm]", "display_name": "Calculated Torque [kNm]", "color": "magenta"},
-                ]
+                # --------------------- Features over Distance/Chainage Visualization ---------------------
+                try:
+                    st.subheader("Features over Distance/Chainage")
 
-                # Define the number of features
-                num_features_distance = len(features_distance)
+                    # Define the features with their display names and colors
+                    features_distance = [
+                        {"column": advance_rate_col, "display_name": "Advance Rate", "color": "blue"},
+                        {"column": "Calculated Penetration Rate", "display_name": "Penetration Rate", "color": "green"},
+                        {"column": thrust_force_col, "display_name": "Thrust Force", "color": "red"},
+                        {"column": "Thrust Force per Cutting Ring", "display_name": "Thrust Force per Cutting Ring", "color": "orange"},
+                        {"column": revolution_col, "display_name": "Revolution", "color": "purple"},
+                        {"column": pressure_col, "display_name": "Working Pressure", "color": "cyan"},
+                        {"column": "Calculated torque [kNm]", "display_name": "Calculated Torque [kNm]", "color": "magenta"},
+                    ]
 
-                # Rolling Window Slider for Distance
-                window_size_distance = st.sidebar.slider(
-                    "Select Rolling Window Size for Mean Calculation (Distance)",
-                    min_value=10,
-                    max_value=1000,
-                    value=100,
-                    step=10,
-                    help="Adjust the window size to smooth the data. A larger window provides a smoother mean."
-                )
+                    # Define the number of features
+                    num_features_distance = len(features_distance)
 
-                # Toggle for Mean Lines
-                show_means_distance = st.checkbox(
-                    "Show Rolling Mean Values (Distance)",
-                    value=True,
-                    help="Toggle the visibility of rolling mean lines for distance-based features."
-                )
+                    # Rolling Window Slider for Distance
+                    window_size_distance = st.sidebar.slider(
+                        "Select Rolling Window Size for Mean Calculation (Distance)",
+                        min_value=10,
+                        max_value=1000,
+                        value=100,
+                        step=10,
+                        help="Adjust the window size to smooth the data. A larger window provides a smoother mean."
+                    )
 
-                # Sort the dataframe by Distance/Chainage to avoid zigzag lines
-                df = df.sort_values(by=distance_col)
+                    # Toggle for Mean Lines
+                    show_means_distance = st.checkbox(
+                        "Show Rolling Mean Values (Distance)",
+                        value=True,
+                        help="Toggle the visibility of rolling mean lines for distance-based features."
+                    )
 
-                # Calculate rolling means for each feature
-                for feature in features_distance:
-                    if feature['column'] in df.columns:
-                        df[f"{feature['column']}_distance_mean"] = df[feature['column']].rolling(
-                            window=window_size_distance, min_periods=1
-                        ).mean()
-                    else:
-                        st.warning(f"Column '{feature['column']}' not found in the dataset.")
-                        df[f"{feature['column']}_distance_mean"] = np.nan
+                    # Calculate rolling means for each feature
+                    for feature in features_distance:
+                        if feature['column'] in df.columns:
+                            df[f"{feature['column']}_distance_mean"] = df[feature['column']].rolling(
+                                window=window_size_distance, min_periods=1
+                            ).mean()
+                        else:
+                            st.warning(f"Column '{feature['column']}' not found in the dataset.")
+                            df[f"{feature['column']}_distance_mean"] = np.nan
 
-                # Create subplots without titles
-                fig_distance = make_subplots(
-                    rows=2*num_features_distance,  # Two rows per feature
-                    cols=1,
-                    shared_xaxes=True,
-                    vertical_spacing=0.02,  # Reduced spacing for a cleaner look
-                    subplot_titles=None  # No subplot titles
-                )
+                    # Create subplots without titles
+                    fig_distance = make_subplots(
+                        rows=2*num_features_distance,  # Two rows per feature
+                        cols=1,
+                        shared_xaxes=True,
+                        vertical_spacing=0.02,  # Reduced spacing for a cleaner look
+                        subplot_titles=None  # No subplot titles
+                    )
 
-                # Iterate through each feature and add traces
-                for i, feature in enumerate(features_distance, start=1):
-                    # Original Feature Plot on odd rows
-                    if feature['column'] in df.columns:
-                        fig_distance.add_trace(
-                            go.Scatter(
-                                x=df[distance_col],
-                                y=df[feature["column"]],
-                                mode="lines",
-                                name=feature["display_name"],
-                                line=dict(color=feature["color"]),
-                            ),
-                            row=2*i-1,
-                            col=1,
-                        )
-                        # Update y-axis for original feature
-                        fig_distance.update_yaxes(title_text=feature["display_name"], row=2*i-1, col=1)
-
-                        # Rolling Mean Plot on even rows
-                        if show_means_distance:
+                    # Iterate through each feature and add traces
+                    for i, feature in enumerate(features_distance, start=1):
+                        # Original Feature Plot on odd rows
+                        if feature['column'] in df.columns:
                             fig_distance.add_trace(
                                 go.Scatter(
                                     x=df[distance_col],
-                                    y=df[f"{feature['column']}_distance_mean"],
+                                    y=df[feature["column"]],
                                     mode="lines",
-                                    name=f"{feature['display_name']} Rolling Mean",
-                                    line=dict(color=feature["color"], dash="dash"),
+                                    name=feature["display_name"],
+                                    line=dict(color=feature["color"]),
                                 ),
-                                row=2*i,
+                                row=2*i-1,
                                 col=1,
                             )
-                            # Update y-axis for rolling mean
-                            fig_distance.update_yaxes(title_text=f"{feature['display_name']} Rolling Mean", row=2*i, col=1)
-                    else:
-                        st.warning(f"Column '{feature['column']}' not found in the dataset.")
+                            # Update y-axis for original feature
+                            fig_distance.update_yaxes(title_text=feature["display_name"], row=2*i-1, col=1)
 
-                # Update overall layout
-                fig_distance.update_layout(
-                    xaxis_title=f"Distance/Chainage",
-                    height=300 * 2 * num_features_distance,  # 300 pixels per subplot row
-                    showlegend=False,
-                    title_text="Features over Distance/Chainage (Original and Rolling Mean)",  # Main plot title
-                )
+                            # Rolling Mean Plot on even rows
+                            if show_means_distance:
+                                fig_distance.add_trace(
+                                    go.Scatter(
+                                        x=df[distance_col],
+                                        y=df[f"{feature['column']}_distance_mean"],
+                                        mode="lines",
+                                        name=f"{feature['display_name']} Rolling Mean",
+                                        line=dict(color=feature["color"], dash="dash"),
+                                    ),
+                                    row=2*i,
+                                    col=1,
+                                )
+                                # Update y-axis for rolling mean
+                                fig_distance.update_yaxes(title_text=f"{feature['display_name']} Rolling Mean", row=2*i, col=1)
+                        else:
+                            st.warning(f"Column '{feature['column']}' not found in the dataset.")
 
-                # Display the plot
-                st.plotly_chart(fig_distance, use_container_width=True)
+                    # Update overall layout
+                    fig_distance.update_layout(
+                        xaxis_title=f"Distance/Chainage",
+                        height=300 * 2 * num_features_distance,  # 300 pixels per subplot row
+                        showlegend=False,
+                        title_text="Features over Distance/Chainage (Original and Rolling Mean)",  # Main plot title
+                    )
 
-                # Provide explanations and annotations
-                st.write(
-                    """
-                    **Interpretation Guide:**
+                    # Display the plot
+                    st.plotly_chart(fig_distance, use_container_width=True)
 
-                    - **Advance Rate**: Indicates the speed at which the machine is advancing. Fluctuations may indicate changes in ground conditions or operational parameters.
-                    - **Penetration Rate**: Calculated as Advance Rate divided by Revolution. Reflects how efficiently the machine penetrates the material per revolution.
-                    - **Thrust Force**: Represents the force applied at the cutting head. High values may indicate hard ground or potential mechanical issues.
-                    - **Thrust Force per Cutting Ring**: This metric normalizes the thrust force by the number of cutting rings, providing insight into the load per ring.
-                    - **Revolution**: The rotational speed of the cutting head. Variations can affect penetration rate and torque.
-                    - **Working Pressure**: The pressure at which the machine is operating. Sudden changes might indicate anomalies or operational adjustments.
-                    - **Calculated Torque [kNm]**: Represents the torque calculated based on machine parameters. High or fluctuating values may indicate mechanical stress or inefficiencies.
+                    # Provide explanations and annotations
+                    st.write(
+                        """
+                        **Interpretation Guide:**
 
-                    Use the visualizations to monitor trends and identify any unusual patterns that may require further investigation.
-                    """
-                )
-            except KeyError as ke:
-                st.error(f"Missing expected column during time-based features plotting: {ke}")
-                st.stop()
-            except Exception as e:
-                st.error(f"An error occurred during time-based features plotting: {str(e)}")
-                st.stop()
+                        - **Advance Rate**: Indicates the speed at which the machine is advancing. Fluctuations may indicate changes in ground conditions or operational parameters.
+                        - **Penetration Rate**: Calculated as Advance Rate divided by Revolution. Reflects how efficiently the machine penetrates the material per revolution.
+                        - **Thrust Force**: Represents the force applied at the cutting head. High values may indicate hard ground or potential mechanical issues.
+                        - **Thrust Force per Cutting Ring**: This metric normalizes the thrust force by the number of cutting rings, providing insight into the load per ring.
+                        - **Revolution**: The rotational speed of the cutting head. Variations can affect penetration rate and torque.
+                        - **Working Pressure**: The pressure at which the machine is operating. Sudden changes might indicate anomalies or operational adjustments.
+                        - **Calculated Torque [kNm]**: Represents the torque calculated based on machine parameters. High or fluctuating values may indicate mechanical stress or inefficiencies.
 
-            # --------------------- Features over Distance/Chainage Visualization ---------------------
-            try:
-                st.subheader("Features over Distance/Chainage")
+                        Use the visualizations to monitor trends and identify any unusual patterns that may require further investigation.
+                        """
+                    )
+                except KeyError as ke:
+                    st.error(f"Missing expected column during distance-based features plotting: {ke}")
+                    st.stop()
+                except Exception as e:
+                    st.error(f"An error occurred during distance-based features plotting: {str(e)}")
+                    st.stop()
 
-                # Define the features with their display names and colors
-                features_distance = [
-                    {"column": advance_rate_col, "display_name": "Advance Rate", "color": "blue"},
-                    {"column": "Calculated Penetration Rate", "display_name": "Penetration Rate", "color": "green"},
-                    {"column": thrust_force_col, "display_name": "Thrust Force", "color": "red"},
-                    {"column": "Thrust Force per Cutting Ring", "display_name": "Thrust Force per Cutting Ring", "color": "orange"},
-                    {"column": revolution_col, "display_name": "Revolution", "color": "purple"},
-                    {"column": pressure_col, "display_name": "Working Pressure", "color": "cyan"},
-                    {"column": "Calculated torque [kNm]", "display_name": "Calculated Torque [kNm]", "color": "magenta"},
-                ]
+                # --------------------- Statistical Summaries and Download Links ---------------------
+                try:
+                    st.subheader("Statistical Summaries")
 
-                # Define the number of features
-                num_features_distance = len(features_distance)
+                    # Statistical Summary for Time-based Features
+                    st.write("**Time-based Features Statistics:**")
+                    display_statistics(df, revolution_col, pressure_col, thrust_force_col)
 
-                # Rolling Window Slider for Distance
-                window_size_distance = st.sidebar.slider(
-                    "Select Rolling Window Size for Mean Calculation (Distance)",
-                    min_value=10,
-                    max_value=1000,
-                    value=100,
-                    step=10,
-                    help="Adjust the window size to smooth the data. A larger window provides a smoother mean."
-                )
+                    # Statistical Summary for Distance-based Features
+                    st.write("**Distance/Chainage-based Features Statistics:**")
+                    display_statistics(df, revolution_col, pressure_col, thrust_force_col)
+                except KeyError as ke:
+                    st.error(f"Missing expected column during statistical summaries: {ke}")
+                    st.stop()
+                except Exception as e:
+                    st.error(f"An error occurred during statistical summaries: {str(e)}")
+                    st.stop()
 
-                # Toggle for Mean Lines
-                show_means_distance = st.checkbox(
-                    "Show Rolling Mean Values (Distance)",
-                    value=True,
-                    help="Toggle the visibility of rolling mean lines for distance-based features."
-                )
+                # --------------------- Download Buttons ---------------------
+                try:
+                    st.sidebar.markdown("## Download Results")
+                    stats_df = pd.DataFrame(
+                        {
+                            "RPM": df[revolution_col].describe(),
+                            "Calculated Torque [kNm]": df["Calculated torque [kNm]"].describe(),
+                            "Working Pressure": df[pressure_col].describe(),
+                            "Advance Rate": df[advance_rate_col].describe(),
+                            "Penetration Rate (Calculated)": df["Calculated Penetration Rate"].describe(),
+                            "Thrust Force": df[thrust_force_col].describe(),
+                            "Thrust Force per Cutting Ring": df["Thrust Force per Cutting Ring"].describe(),
+                            "Distance/Chainage": df[distance_col].describe(),
+                            "Time Unit Converted": df["Time_unit_converted"].describe(),
+                        }
+                    )
+                    st.sidebar.markdown(
+                        get_table_download_link(
+                            stats_df, "advanced_statistical_analysis.csv", "Download Statistical Analysis"
+                        ),
+                        unsafe_allow_html=True,
+                    )
+                except KeyError as ke:
+                    st.error(f"Missing expected column during download link creation: {ke}")
+                    st.stop()
+                except Exception as e:
+                    st.error(f"An error occurred during download link creation: {str(e)}")
+                    st.stop()
 
-                # Sort the dataframe by Distance/Chainage to avoid zigzag lines
-                df = df.sort_values(by=distance_col)
-
-                # Calculate rolling means for each feature
-                for feature in features_distance:
-                    if feature['column'] in df.columns:
-                        df[f"{feature['column']}_distance_mean"] = df[feature['column']].rolling(
-                            window=window_size_distance, min_periods=1
-                        ).mean()
-                    else:
-                        st.warning(f"Column '{feature['column']}' not found in the dataset.")
-                        df[f"{feature['column']}_distance_mean"] = np.nan
-
-                # Create subplots without titles
-                fig_distance = make_subplots(
-                    rows=2*num_features_distance,  # Two rows per feature
-                    cols=1,
-                    shared_xaxes=True,
-                    vertical_spacing=0.02,  # Reduced spacing for a cleaner look
-                    subplot_titles=None  # No subplot titles
-                )
-
-                # Iterate through each feature and add traces
-                for i, feature in enumerate(features_distance, start=1):
-                    # Original Feature Plot on odd rows
-                    if feature['column'] in df.columns:
-                        fig_distance.add_trace(
-                            go.Scatter(
-                                x=df[distance_col],
-                                y=df[feature["column"]],
-                                mode="lines",
-                                name=feature["display_name"],
-                                line=dict(color=feature["color"]),
-                            ),
-                            row=2*i-1,
-                            col=1,
-                        )
-                        # Update y-axis for original feature
-                        fig_distance.update_yaxes(title_text=feature["display_name"], row=2*i-1, col=1)
-
-                        # Rolling Mean Plot on even rows
-                        if show_means_distance:
-                            fig_distance.add_trace(
-                                go.Scatter(
-                                    x=df[distance_col],
-                                    y=df[f"{feature['column']}_distance_mean"],
-                                    mode="lines",
-                                    name=f"{feature['display_name']} Rolling Mean",
-                                    line=dict(color=feature["color"], dash="dash"),
-                                ),
-                                row=2*i,
-                                col=1,
-                            )
-                            # Update y-axis for rolling mean
-                            fig_distance.update_yaxes(title_text=f"{feature['display_name']} Rolling Mean", row=2*i, col=1)
-                    else:
-                        st.warning(f"Column '{feature['column']}' not found in the dataset.")
-
-                # Update overall layout
-                fig_distance.update_layout(
-                    xaxis_title=f"Distance/Chainage",
-                    height=300 * 2 * num_features_distance,  # 300 pixels per subplot row
-                    showlegend=False,
-                    title_text="Features over Distance/Chainage (Original and Rolling Mean)",  # Main plot title
-                )
-
-                # Display the plot
-                st.plotly_chart(fig_distance, use_container_width=True)
-
-                # Provide explanations and annotations
-                st.write(
-                    """
-                    **Interpretation Guide:**
-    
-                    - **Advance Rate**: Indicates the speed at which the machine is advancing. Fluctuations may indicate changes in ground conditions or operational parameters.
-                    - **Penetration Rate**: Calculated as Advance Rate divided by Revolution. Reflects how efficiently the machine penetrates the material per revolution.
-                    - **Thrust Force**: Represents the force applied at the cutting head. High values may indicate hard ground or potential mechanical issues.
-                    - **Thrust Force per Cutting Ring**: This metric normalizes the thrust force by the number of cutting rings, providing insight into the load per ring.
-                    - **Revolution**: The rotational speed of the cutting head. Variations can affect penetration rate and torque.
-                    - **Working Pressure**: The pressure at which the machine is operating. Sudden changes might indicate anomalies or operational adjustments.
-                    - **Calculated Torque [kNm]**: Represents the torque calculated based on machine parameters. High or fluctuating values may indicate mechanical stress or inefficiencies.
-    
-                    Use the visualizations to monitor trends and identify any unusual patterns that may require further investigation.
-                    """
-                )
-            except KeyError as ke:
-                st.error(f"Missing expected column during distance-based features plotting: {ke}")
-                st.stop()
-            except Exception as e:
-                st.error(f"An error occurred during distance-based features plotting: {str(e)}")
-                st.stop()
-
-            # --------------------- Statistical Summaries and Download Links ---------------------
-            try:
-                st.subheader("Statistical Summaries")
-
-                # Statistical Summary for Time-based Features
-                st.write("**Time-based Features Statistics:**")
-                display_statistics(df, revolution_col, pressure_col, thrust_force_col)
-
-                # Statistical Summary for Distance-based Features
-                st.write("**Distance/Chainage-based Features Statistics:**")
-                display_statistics(df, revolution_col, pressure_col, thrust_force_col)
-            except KeyError as ke:
-                st.error(f"Missing expected column during statistical summaries: {ke}")
-                st.stop()
-            except Exception as e:
-                st.error(f"An error occurred during statistical summaries: {str(e)}")
-                st.stop()
-
-            # --------------------- Download Buttons ---------------------
-            try:
-                st.sidebar.markdown("## Download Results")
-                stats_df = pd.DataFrame(
-                    {
-                        "RPM": df[revolution_col].describe(),
-                        "Calculated Torque [kNm]": df["Calculated torque [kNm]"].describe(),
-                        "Working Pressure": df[pressure_col].describe(),
-                        "Advance Rate": df[advance_rate_col].describe(),
-                        "Penetration Rate (Calculated)": df["Calculated Penetration Rate"].describe(),
-                        "Thrust Force": df[thrust_force_col].describe(),
-                        "Thrust Force per Cutting Ring": df["Thrust Force per Cutting Ring"].describe(),
-                    }
-                )
-                st.sidebar.markdown(
-                    get_table_download_link(
-                        stats_df, "advanced_statistical_analysis.csv", "Download Statistical Analysis"
-                    ),
-                    unsafe_allow_html=True,
-                )
-            except KeyError as ke:
-                st.error(f"Missing expected column during download link creation: {ke}")
-                st.stop()
-            except Exception as e:
-                st.error(f"An error occurred during download link creation: {str(e)}")
-                st.stop()
-
-            # Provide an explanation of the analysis
-            display_explanation(anomaly_threshold)
+                # Provide an explanation of the analysis
+                display_explanation(anomaly_threshold)
 
 
 
