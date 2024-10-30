@@ -743,59 +743,69 @@ def advanced_page():
             st.write(f"**Maximum value in the distance/chainage column (`{distance_col}`):** {max_distance_value}")
 
             # --------------------- Parse and Convert Time Column ---------------------
-            # Parse the time column as datetime
-                        # Ensure time column is appropriately parsed
+            # Ensure time column is appropriately parsed
             df[time_col] = pd.to_numeric(df[time_col], errors="coerce")
             if df[time_col].isnull().all():
                 st.error(
                     f"The selected time column '{time_col}' cannot be converted to numeric values."
                 )
                 return
-            try:
-                df['Parsed_Time'] = pd.to_datetime(df[time_col], errors='coerce', infer_datetime_format=True)
-                if df['Parsed_Time'].isnull().all():
-                    st.error(f"The selected time column '{time_col}' could not be parsed as datetime.")
-                    return
-                else:
-                    df = df.dropna(subset=['Parsed_Time'])
-                    df = df.sort_values('Parsed_Time')
-                    df['Time_unit'] = (df['Parsed_Time'] - df['Parsed_Time'].min()).dt.total_seconds()
-            except Exception as e:
-                st.error(f"Error parsing the time column '{time_col}': {e}")
-                return
 
             # Ask the user to select the unit of the time column
             time_unit = st.selectbox(
                 "Select Time Unit for Time Column",
-                options=["seconds", "minutes", "hours"],
-                index=0,
+                options=["milliseconds", "seconds", "minutes", "hours"],
+                index=1,  # Default to seconds
                 help="Choose the unit that matches the time data in your dataset."
             )
 
             # Display the maximum value in the time column for debugging
-            max_time_value = df["Time_unit"].max()
-            st.write(f"**Maximum value in the time column (`{time_col}`):** {max_time_value} seconds")
+            max_time_value = df[time_col].max()
+            st.write(f"**Maximum value in the time column (`{time_col}`):** {max_time_value} {time_unit}")
 
-            # Convert time column to selected unit
-            if time_unit == "seconds":
-                df["Time_unit_converted"] = df["Time_unit"]
+            # Define the maximum allowed value based on the selected time unit
+            max_allowed_value = {
+                "milliseconds": 2**63 // 1_000_000,
+                "seconds": 2**63 // 1_000_000_000,
+                "minutes": 2**63 // (60 * 1_000_000_000),
+                "hours": 2**63 // (3600 * 1_000_000_000),
+            }[time_unit]
+
+            # Display the maximum allowed value for debugging
+            st.write(f"**Maximum allowed value for '{time_unit}':** {max_allowed_value} {time_unit}")
+
+            # Convert time column to seconds based on the selected unit
+            if time_unit == "milliseconds":
+                df["Time_unit"] = df[time_col] / 1000  # Convert to seconds
+            elif time_unit == "seconds":
+                df["Time_unit"] = df[time_col]
             elif time_unit == "minutes":
-                df["Time_unit_converted"] = df["Time_unit"] / 60  # Convert to minutes
+                df["Time_unit"] = df[time_col] * 60  # Convert to seconds
             elif time_unit == "hours":
-                df["Time_unit_converted"] = df["Time_unit"] / 3600  # Convert to hours
+                df["Time_unit"] = df[time_col] * 3600  # Convert to seconds
+
+            # Check for out-of-bounds values after conversion
+            if df["Time_unit"].max() > max_allowed_value:
+                st.error(
+                    f"The values in the time column exceed the maximum allowed for the selected unit '{time_unit}'. Please check the data or select a different unit."
+                )
+                return
+
+            # Sort the dataframe by Time_unit
+            df = df.sort_values("Time_unit")
 
             # Calculate min and max time
-            min_time_unit = df["Time_unit_converted"].min()
-            max_time_unit = df["Time_unit_converted"].max()
+            min_time_unit = df["Time_unit"].min()
+            max_time_unit = df["Time_unit"].max()
 
-            # Display the time range in numeric format
-            st.write(f"**Data time range:** {min_time_unit:.2f} {time_unit} to {max_time_unit:.2f} {time_unit}")
+            # Display the time range in numeric format (seconds)
+            st.write(f"**Data time range:** {min_time_unit:.2f} seconds to {max_time_unit:.2f} seconds")
 
             # Convert numeric Time_unit back to timedelta for human-readable format
             try:
-                df["Human_Readable_Time"] = pd.to_timedelta(df["Time_unit_converted"], unit=time_unit[0])
+                df["Human_Readable_Time"] = pd.to_timedelta(df["Time_unit"], unit='s')
             except Exception as e:
-                st.error(f"Error converting Time_unit_converted to timedelta: {e}")
+                st.error(f"Error converting Time_unit to timedelta: {e}")
                 return
 
             # Format the min and max times using the external helper function
@@ -816,7 +826,8 @@ def advanced_page():
             )
 
             # Filter data based on the selected time range
-            df = df[(df["Time_unit_converted"] >= time_range[0]) & (df["Time_unit_converted"] <= time_range[1])]
+            df = df[(df["Time_unit"] >= time_range[0]) & (df["Time_unit"] <= time_range[1])]
+
 
             # Ensure numeric columns are numeric
             for col in [
