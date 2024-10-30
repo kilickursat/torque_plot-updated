@@ -1149,35 +1149,7 @@ def advanced_page():
                 st.error(f"An error occurred during statistical summaries: {str(e)}")
                 st.stop()
 
-            # --------------------- Download Buttons ---------------------
-            try:
-                st.sidebar.markdown("## Download Results")
-                stats_df = pd.DataFrame(
-                    {
-                        "RPM": df[revolution_col].describe(),
-                        "Calculated Torque [kNm]": df["Calculated torque [kNm]"].describe(),
-                        "Working Pressure": df[pressure_col].describe(),
-                        "Advance Rate": df[advance_rate_col].describe(),
-                        "Penetration Rate (Calculated)": df["Calculated Penetration Rate"].describe(),
-                        "Thrust Force": df[thrust_force_col].describe(),
-                        "Thrust Force per Cutting Ring": df["Thrust Force per Cutting Ring"].describe(),
-                    }
-                )
-                st.sidebar.markdown(
-                    get_table_download_link(
-                        stats_df, "advanced_statistical_analysis.csv", "Download Statistical Analysis"
-                    ),
-                    unsafe_allow_html=True,
-                )
-            except KeyError as ke:
-                st.error(f"Missing expected column during download link creation: {ke}")
-                st.stop()
-            except Exception as e:
-                st.error(f"An error occurred during download link creation: {str(e)}")
-                st.stop()
 
-            # Provide an explanation of the analysis
-            display_explanation(anomaly_threshold)
 # --------------------- Main Function ---------------------
 def main():
     set_page_config()
