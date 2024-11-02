@@ -11,25 +11,119 @@ import csv
 # Optimization: Add cache decorator to improve performance on repeated file loads
 @st.cache_data
 def load_data(file, file_type):
+    """
+    Load and preprocess data from CSV or Excel files with robust error handling
+    and automatic data type detection.
+    
+    Parameters:
+    -----------
+    file : uploaded file object
+        The file uploaded through Streamlit
+    file_type : str
+        File type ('csv' or 'xlsx')
+        
+    Returns:
+    --------
+    pd.DataFrame or None
+        Processed DataFrame if successful, None if failed
+    """
     try:
         if file_type == 'csv':
-            # Try different separators and encodings
-            for sep in [';', ',']:
-                for encoding in ['utf-8', 'iso-8859-1']:
-                    try:
-                        df = pd.read_csv(file, sep=sep, encoding=encoding, decimal=',')
-                        return df
-                    except:
-                        pass
-            raise ValueError("Unable to read CSV file with tried separators and encodings")
+            # Try different separators, encodings and decimal markers
+            separators = [',', ';', '\t', '|']
+            encodings = ['utf-8', 'iso-8859-1', 'cp1252', 'latin1']
+            decimal_markers = ['.', ',']
+            
+            for sep in separators:
+                for encoding in encodings:
+                    for decimal in decimal_markers:
+                        try:
+                            df = pd.read_csv(
+                                file,
+                                sep=sep,
+                                encoding=encoding,
+                                decimal=decimal,
+                                on_bad_lines='warn',
+                                low_memory=False
+                            )
+                            
+                            # Check if data was properly separated (more than 1 column)
+                            if len(df.columns) > 1:
+                                df = preprocess_dataframe(df)
+                                return df
+                        except Exception as e:
+                            continue
+                            
+            raise ValueError("Unable to properly read CSV file with attempted combinations")
+            
         elif file_type == 'xlsx':
-            df = pd.read_excel(file)
-            return df
+            try:
+                # Try reading all sheets
+                xlsx = pd.ExcelFile(file)
+                if len(xlsx.sheet_names) == 1:
+                    df = pd.read_excel(file)
+                else:
+                    # If multiple sheets, read first non-empty sheet
+                    for sheet in xlsx.sheet_names:
+                        df = pd.read_excel(file, sheet_name=sheet)
+                        if not df.empty:
+                            break
+                
+                df = preprocess_dataframe(df)
+                return df
+                
+            except Exception as e:
+                raise ValueError(f"Error reading Excel file: {str(e)}")
         else:
-            raise ValueError("Unsupported file type")
+            raise ValueError("Unsupported file type. Please use CSV or Excel files.")
+            
     except Exception as e:
         st.error(f"Error loading file: {str(e)}")
         return None
+
+def preprocess_dataframe(df):
+    """
+    Preprocess the DataFrame to handle common issues and properly set data types.
+    """
+    # Remove any completely empty rows and columns
+    df = df.dropna(how='all', axis=0).dropna(how='all', axis=1)
+    
+    # Strip whitespace from column names and replace problematic characters
+    df.columns = df.columns.str.strip().str.replace(' ', '_')
+    
+    # Strip whitespace from string columns
+    string_columns = df.select_dtypes(include=['object']).columns
+    for col in string_columns:
+        df[col] = df[col].astype(str).str.strip()
+    
+    # Try to convert numeric columns
+    for col in df.columns:
+        try:
+            # Replace common thousand separators and invalid characters
+            if df[col].dtype == 'object':
+                # Remove currency symbols and other common non-numeric characters
+                df[col] = df[col].astype(str).replace({
+                    r'[€$,]': '',
+                    r'[\s]': ''
+                }, regex=True)
+                
+                # Try converting to numeric
+                df[col] = pd.to_numeric(df[col], errors='ignore')
+                
+        except Exception:
+            continue
+    
+    # Handle date columns
+    for col in df.columns:
+        try:
+            # Check if column might contain dates
+            if df[col].dtype == 'object':
+                # Try parsing as datetime
+                df[col] = pd.to_datetime(df[col], infer_datetime_format=True, errors='ignore')
+        except Exception:
+            continue
+    
+    return df
 
 # Update the sensor column map with more potential column names
 sensor_column_map = {
