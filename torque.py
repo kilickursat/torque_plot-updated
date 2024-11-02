@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import timedelta
 import csv
-import chardet
+
 
 # Optimization: Add cache decorator to improve performance on repeated file loads
 
