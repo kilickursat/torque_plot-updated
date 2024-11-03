@@ -8,25 +8,61 @@ from datetime import timedelta
 import csv
 
 # Optimization: Add cache decorator to improve performance on repeated file loads
-@st.cache_data
-def load_data(file, file_type):
+# Before loading data
+if raw_data_file is not None:
+    file_type = raw_data_file.name.split(".")[-1].lower()
+    if file_type == 'csv':
+        st.sidebar.write("CSV File Options")
+        separator = st.sidebar.selectbox(
+            "Select the separator used in your CSV file",
+            options=[',', ';', '\t', '|', 'Other'],
+            index=0,
+        )
+        if separator == 'Other':
+            separator = st.sidebar.text_input("Enter the custom separator")
+    else:
+        separator = None
+
+    df = load_data(raw_data_file, file_type, separator)
+
+def load_data(file, file_type, separator=None):
     try:
         if file_type == 'csv':
-            # Use pandas to automatically detect separator and encoding
-            try:
-                df = pd.read_csv(file, sep=None, engine='python')
+            if separator:
+                df = pd.read_csv(file, sep=separator, encoding='utf-8')
                 return df
-            except Exception as e:
-                st.error(f"Error loading CSV file: {str(e)}")
+            else:
+                # Try common separators
+                for sep in [',', ';', '\t', '|']:
+                    try:
+                        file.seek(0)  # Reset file pointer to the beginning
+                        df = pd.read_csv(file, sep=sep, encoding='utf-8')
+                        if len(df.columns) > 1:
+                            st.write(f"Successfully read CSV file using '{sep}' as the separator.")
+                            return df
+                    except Exception:
+                        continue
+                st.error("Could not read CSV file with common separators. Please check the file format or specify the correct separator.")
                 return None
         elif file_type == 'xlsx':
-            df = pd.read_excel(file)
-            return df
+            try:
+                df = pd.read_excel(file)
+                return df
+            except Exception as e:
+                st.error(f"Error loading Excel file: {str(e)}")
+                return None
         else:
             raise ValueError("Unsupported file type")
     except Exception as e:
         st.error(f"Error loading file: {str(e)}")
         return None
+if df is not None:
+    st.write("DataFrame loaded successfully. Here are the first few rows:")
+    st.write(df.head())
+    
+    st.write("Columns in the DataFrame:")
+    st.write(df.columns.tolist())
+
 
 # Update the sensor column map with more potential column names
 sensor_column_map = {
