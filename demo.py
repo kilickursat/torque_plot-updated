@@ -27,6 +27,7 @@ def load_data(file, file_type):
     except Exception as e:
         st.error(f"Error loading file: {str(e)}")
         return None
+
 # Update the sensor column map with more potential column names
 sensor_column_map = {
     "pressure": ["Working pressure [bar]", "AzV.V13_SR_ArbDr_Z | DB 60.DBD 26", "Pression [bar]", "Presión [bar]", "Pressure", "Pressure [bar]", "Working Pressure"],
@@ -34,7 +35,7 @@ sensor_column_map = {
     "time": ["Time", "Timestamp", "DateTime", "Date", "Zeit", "Relativzeit", "Uhrzeit", "Datum", "ts(utc)"],
     "advance_rate": ["Advance Rate", "Vorschubgeschwindigkeit", "Avance", "Rate of Penetration", "ROP", "Advance [m/min]", "Advance [mm/min]"],
     "thrust_force": ["Thrust Force", "Thrust", "Vorschubkraft", "Force", "Force at Cutting Head", "Thrust Force [kN]"],
-    "distance": ["Distance", "Chainage", "Station", "Position", "Distance/Chainage"]
+    "distance": ["Distance", "Chainage", "Station", "Position", "Distance/Chainage", "AzV.V15_VTP_Weg"]
 }
 
 def find_sensor_columns(df):
@@ -51,6 +52,7 @@ def find_sensor_columns(df):
                     found_columns[sensor] = col
                     break
     return found_columns
+
 @st.cache_data
 def load_machine_specs(file, file_type):
     """Load machine specifications from XLSX or CSV file."""
@@ -99,6 +101,7 @@ def get_machine_params(specs_df, machine_type):
         'M_max_Vg1': machine_data[m_max_col],
         'torque_constant': machine_data[torque_constant_col]
     }
+
 def calculate_whisker_and_outliers(data):
     """Calculate whiskers and outliers for a given dataset."""
     Q1 = data.quantile(0.25)
@@ -234,6 +237,8 @@ def main():
         original_page()
     elif page == "Advanced Analysis":
         advanced_page()
+
+        
 def original_page():
     st.title("TorqueVision: Herrenknecht's Advanced Analysis App")
 
@@ -460,6 +465,7 @@ def original_page():
 
     else:
         st.info("Please upload a Raw Data file to begin the analysis.")
+        
 def advanced_page():
     st.title("Advanced Analysis")
 
@@ -650,18 +656,35 @@ def advanced_page():
                 options=df.columns,
                 index=df.columns.get_loc(default_distance_col) if default_distance_col in df.columns else 0,
             )
-            # Ensure distance column is appropriately parsed
-            df[distance_col] = pd.to_numeric(df[distance_col], errors="coerce")
+
+            # Display sample data from the distance/chainage column
+            st.write("Sample data from the selected distance/chainage column:")
+            st.write(df[distance_col].head(10))
+
+            # Preprocess the distance column
+            distance_data = df[distance_col].astype(str)  # Ensure data is string type for processing
+
+            # Replace commas with dots if commas are used as decimal separators
+            distance_data = distance_data.str.replace(',', '.')
+
+            # Remove any non-numeric characters (except for '.' and '-')
+            distance_data = distance_data.str.replace(r'[^0-9\.\-]', '', regex=True)
+
+            # Convert to numeric
+            df[distance_col] = pd.to_numeric(distance_data, errors='coerce')
+
+            # Check if all values are NaN after conversion
             if df[distance_col].isnull().all():
                 st.error(
-                    f"The selected distance/chainage column '{distance_col}' cannot be converted to numeric values."
+                    f"The selected distance/chainage column '{distance_col}' cannot be converted to numeric values after preprocessing."
                 )
+                st.write("Please verify that this column contains valid numeric distance or chainage data.")
                 return
 
             # Handle missing values
             missing_distance = df[distance_col].isnull().sum()
             if missing_distance > 0:
-                st.warning(f"There are {missing_distance} missing values in the distance/chainage column. These rows will be dropped.")
+                st.warning(f"There are {missing_distance} missing values in the distance/chainage column after preprocessing. These rows will be dropped.")
                 df = df.dropna(subset=[distance_col])
 
             # Ensure time column is appropriately parsed
@@ -677,8 +700,8 @@ def advanced_page():
             st.write(f"Time column '{time_col}' successfully parsed as datetime.")
 
             # For time range selection, we can use the min and max of the datetime column
-            min_time = df[time_col].min()
-            max_time = df[time_col].max()
+            min_time = df[time_col].min().to_pydatetime()
+            max_time = df[time_col].max().to_pydatetime()
 
             st.write(f"**Data time range:** {min_time} to {max_time}")
 
