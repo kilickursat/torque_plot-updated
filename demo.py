@@ -42,16 +42,16 @@ def load_data(file, file_type, separator=None):
         st.error(f"Error loading file: {str(e)}")
         return None
         
-# After loading the data
-if df is not None:
-    st.write("DataFrame loaded successfully. Here are the first few rows:")
-    st.write(df.head())
-    
-    st.write("Columns in the DataFrame:")
-    st.write(df.columns.tolist())
-else:
-    st.error("Data could not be loaded. Please check the file format and content.")
-    return
+    # After loading the data
+    if df is not None:
+        st.write("DataFrame loaded successfully. Here are the first few rows:")
+        st.write(df.head())
+        
+        st.write("Columns in the DataFrame:")
+        st.write(df.columns.tolist())
+    else:
+        st.error("Data could not be loaded. Please check the file format and content.")
+        return
     
 st.write("Available columns in the DataFrame:")
 st.write(df.columns.tolist())
