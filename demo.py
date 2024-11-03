@@ -8,22 +8,7 @@ from datetime import timedelta
 import csv
 
 # Optimization: Add cache decorator to improve performance on repeated file loads
-# Before loading data
-if raw_data_file is not None:
-    file_type = raw_data_file.name.split(".")[-1].lower()
-    if file_type == 'csv':
-        st.sidebar.write("CSV File Options")
-        separator = st.sidebar.selectbox(
-            "Select the separator used in your CSV file",
-            options=[',', ';', '\t', '|', 'Other'],
-            index=0,
-        )
-        if separator == 'Other':
-            separator = st.sidebar.text_input("Enter the custom separator")
-    else:
-        separator = None
 
-    df = load_data(raw_data_file, file_type, separator)
 
 def load_data(file, file_type, separator=None):
     try:
