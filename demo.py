@@ -465,7 +465,8 @@ def original_page():
 
     else:
         st.info("Please upload a Raw Data file to begin the analysis.")
-        def advanced_page():
+        
+def advanced_page():
     st.title("Advanced Analysis")
 
     # File uploaders for batch data
