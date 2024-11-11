@@ -183,7 +183,13 @@ def load_machine_specs(file, file_type):
 
 def get_machine_params(specs_df, machine_type):
     """Extract relevant machine parameters based on machine type."""
-    machine_data = specs_df[specs_df['Projekt'] == machine_type].iloc[0]
+    # Check if machine type exists in the 'Projekt' column
+    machine_rows = specs_df[specs_df['Projekt'] == machine_type]
+    if machine_rows.empty:
+        st.error(f"Machine type '{machine_type}' not found in the specifications file.")
+        return None  # Return None to indicate failure
+
+    machine_data = machine_rows.iloc[0]
 
     def find_column(possible_names):
         for name in possible_names:
@@ -191,12 +197,12 @@ def get_machine_params(specs_df, machine_type):
                 return name
         return None
 
-    # Define possible column names
-    n1_names = ['n1[1/min]', 'n1 (1/min)', 'n1[rpm]']
-    n2_names = ['n2[1/min]', 'n2 (1/min)', 'n2[rpm]']
-    m_cont_names = ['M(dauer) [kNm]', 'M(dauer)[kNm]', 'M (dauer)']
-    m_max_names = ['M(max)', 'M max', 'M (max)', 'M_max[kNm]', 'M(max)[kNm]']
-    torque_constant_names = ['Drehmomentumrechnung[kNm/bar]', 'Drehmomentumrechnung [kNm/bar]']
+    # Define possible column names (update with any additional names)
+    n1_names = ['n1[1/min]', 'n1 (1/min)', 'n1[rpm]', 'Max RPM']
+    n2_names = ['n2[1/min]', 'n2 (1/min)', 'n2[rpm]', 'Min RPM']
+    m_cont_names = ['M(dauer) [kNm]', 'M(dauer)[kNm]', 'M (dauer)', 'Continuous Torque']
+    m_max_names = ['M(max)', 'M max', 'M (max)', 'M_max[kNm]', 'M(max)[kNm]', 'Max Torque']
+    torque_constant_names = ['Drehmomentumrechnung[kNm/bar]', 'Drehmomentumrechnung [kNm/bar]', 'Torque Constant']
 
     # Find the correct column names
     n1_col = find_column(n1_names)
@@ -204,6 +210,23 @@ def get_machine_params(specs_df, machine_type):
     m_cont_col = find_column(m_cont_names)
     m_max_col = find_column(m_max_names)
     torque_constant_col = find_column(torque_constant_names)
+
+    # Check for missing parameters
+    missing_params = []
+    if n1_col is None:
+        missing_params.append('n1 (Maximum RPM)')
+    if n2_col is None:
+        missing_params.append('n2 (Minimum RPM)')
+    if m_cont_col is None:
+        missing_params.append('M_cont_value (Continuous Torque)')
+    if m_max_col is None:
+        missing_params.append('M_max_Vg1 (Maximum Torque)')
+    if torque_constant_col is None:
+        missing_params.append('torque_constant')
+
+    if missing_params:
+        st.error(f"Missing parameters for machine '{machine_type}': {', '.join(missing_params)}. Please check the specifications file.")
+        return None  # Return None to indicate failure
 
     # Return machine parameters
     return {
@@ -213,6 +236,7 @@ def get_machine_params(specs_df, machine_type):
         'M_max_Vg1': machine_data[m_max_col],
         'torque_constant': machine_data[torque_constant_col]
     }
+
 
 def calculate_whisker_and_outliers(data):
     """Calculate whiskers and outliers for a given dataset."""
@@ -367,7 +391,12 @@ def original_page():
             machine_types = machine_specs['Projekt'].unique()
             selected_machine = st.sidebar.selectbox("Select Machine Type", machine_types)
 
+            # After selecting the machine type
             machine_params = get_machine_params(machine_specs, selected_machine)
+            if not machine_params:
+                st.error("Machine parameters could not be retrieved. Please ensure the specifications file contains all required parameters for the selected machine.")
+                st.stop()
+
 
             # Convert the machine parameters to a DataFrame
             params_df = pd.DataFrame([machine_params])
