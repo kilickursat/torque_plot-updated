@@ -10,6 +10,7 @@ from io import StringIO
 import chardet
 
 
+
 @st.cache_data
 def load_data(file, file_type):
     """
@@ -226,6 +227,9 @@ def format_timedelta(td):
     return formatted_time
 
 
+def has_zero_variance(series):
+    """Check if a pandas Series has zero variance."""
+    return series.nunique() <= 1
 
 @st.cache_data
 def load_machine_specs(file, file_type):
@@ -301,9 +305,6 @@ def get_machine_params(specs_df, machine_type):
     }
 
 
-
-
-
 def display_statistics(df, revolution_col, pressure_col, thrust_force_col=None):
     """Display statistics of RPM, Torque, Pressure, and Thrust Force per Cutting Ring."""
     st.subheader("Statistical Summary")
@@ -311,19 +312,32 @@ def display_statistics(df, revolution_col, pressure_col, thrust_force_col=None):
 
     with col1:
         st.write("RPM Statistics:")
-        st.write(df[revolution_col].describe())
+        if has_zero_variance(df[revolution_col]):
+            st.write(f"All RPM values are the same: {df[revolution_col].iloc[0]}")
+        else:
+            st.write(df[revolution_col].describe())
 
     with col2:
         st.write("Calculated Torque Statistics:")
-        st.write(df['Calculated torque [kNm]'].describe())
+        if has_zero_variance(df['Calculated torque [kNm]']):
+            st.write(f"All Torque values are the same: {df['Calculated torque [kNm]'].iloc[0]}")
+        else:
+            st.write(df['Calculated torque [kNm]'].describe())
 
     with col3:
         st.write("Working Pressure Statistics:")
-        st.write(df[pressure_col].describe())
+        if has_zero_variance(df[pressure_col]):
+            st.write(f"All Pressure values are the same: {df[pressure_col].iloc[0]}")
+        else:
+            st.write(df[pressure_col].describe())
 
     if thrust_force_col is not None and 'Thrust Force per Cutting Ring' in df.columns:
         st.write("**Thrust Force per Cutting Ring Statistics:**")
-        st.write(df['Thrust Force per Cutting Ring'].describe())
+        if has_zero_variance(df['Thrust Force per Cutting Ring']):
+            st.write(f"All Thrust Force per Cutting Ring values are the same: {df['Thrust Force per Cutting Ring'].iloc[0]}")
+        else:
+            st.write(df['Thrust Force per Cutting Ring'].describe())
+
 
 def display_explanation(anomaly_threshold):
     """Display an explanation of the results."""
@@ -493,6 +507,18 @@ def original_page():
                 df[pressure_col] = pd.to_numeric(df[pressure_col], errors='coerce')
                 df = df.dropna(subset=[revolution_col, pressure_col])
 
+                # **Drop rows where revolution or pressure is zero**
+                zero_values = (df[revolution_col] == 0) | (df[pressure_col] == 0)
+                num_zero_values = zero_values.sum()
+                if num_zero_values > 0:
+                    st.warning(f"Dropping {num_zero_values} rows where Revolution or Pressure is zero.")
+                    df = df[~zero_values]
+
+                # Handle case where data might be empty after dropping zeros
+                if df.empty:
+                    st.error("No data left after dropping zero values. Cannot proceed with analysis.")
+                    return
+
                 # RPM Statistics
                 rpm_stats = df[revolution_col].describe()
                 rpm_max_value = rpm_stats['max']
@@ -509,6 +535,9 @@ def original_page():
                     working_pressure = row[pressure_col]
                     current_speed = row[revolution_col]
 
+                    if current_speed == 0:
+                        return np.nan  # Avoid division by zero
+
                     if current_speed < machine_params['n1']:
                         torque = working_pressure * machine_params['torque_constant']
                     else:
@@ -517,6 +546,14 @@ def original_page():
                     return round(torque, 2)
 
                 df['Calculated torque [kNm]'] = df.apply(calculate_torque_wrapper, axis=1)
+                df = df.dropna(subset=['Calculated torque [kNm]'])
+
+                # Handle zero variance in calculated torque
+                if has_zero_variance(df['Calculated torque [kNm]']):
+                    st.warning("Calculated torque has zero variance. All values are the same.")
+                    # Use mean value for plotting
+                    mean_torque = df['Calculated torque [kNm]'].iloc[0]
+                    df['Calculated torque [kNm]'] = mean_torque
 
                 # Calculate whiskers and outliers for torque
                 torque_lower_whisker, torque_upper_whisker, torque_outliers = calculate_whisker_and_outliers(df['Calculated torque [kNm]'])
@@ -928,6 +965,23 @@ def advanced_page():
                 subset=[pressure_col, revolution_col, advance_rate_col, thrust_force_col]
             )
 
+            # **Drop rows where critical measurements are zero**
+            zero_values = (
+                (df[pressure_col] == 0) |
+                (df[revolution_col] == 0) |
+                (df[advance_rate_col] == 0) |
+                (df[thrust_force_col] == 0)
+            )
+            num_zero_values = zero_values.sum()
+            if num_zero_values > 0:
+                st.warning(f"Dropping {num_zero_values} rows where critical measurements are zero.")
+                df = df[~zero_values]
+
+            # Handle case where data might be empty after dropping zeros
+            if df.empty:
+                st.error("No data left after dropping zero values. Cannot proceed with analysis.")
+                return
+
             # Remove rows where revolution is zero to avoid division by zero
             df = df[df[revolution_col] != 0]
 
@@ -938,6 +992,24 @@ def advanced_page():
 
             # Calculate Thrust Force per Cutting Ring
             df["Thrust Force per Cutting Ring"] = df[thrust_force_col] / num_cutting_rings
+
+            # Handle zero variance in critical features
+            critical_features = [
+                revolution_col,
+                pressure_col,
+                "Calculated torque [kNm]",
+                advance_rate_col,
+                "Calculated Penetration Rate",
+                thrust_force_col,
+                "Thrust Force per Cutting Ring"
+            ]
+
+            for feature in critical_features:
+                if has_zero_variance(df[feature]):
+                    st.warning(f"{feature} has zero variance. All values are the same.")
+                    # Set all values to the mean for plotting purposes
+                    mean_value = df[feature].iloc[0]
+                    df[feature] = mean_value
 
             # RPM Statistics
             rpm_stats = df[revolution_col].describe()
