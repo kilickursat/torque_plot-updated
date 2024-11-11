@@ -509,7 +509,6 @@ def format_timedelta(td):
     return formatted_time
 
 
-# Main Function
 def advanced_page():
     st.title("Advanced Analysis")
 
@@ -789,11 +788,14 @@ def advanced_page():
                 df = df.sort_values("Time_unit")
 
                 # Calculate min and max time
-                min_time_unit = df["Time_unit"].min()
-                max_time_unit = df["Time_unit"].max()
+                min_time_unit = df["Time_unit"].min().to_pydatetime()
+                max_time_unit = df["Time_unit"].max().to_pydatetime()
 
                 # Display the time range
                 st.write(f"**Data time range:** {min_time_unit} to {max_time_unit}")
+
+                # Define a reasonable step for the slider (e.g., one second)
+                time_step = timedelta(seconds=1)
 
                 # Create the time range slider
                 time_range = st.slider(
@@ -801,7 +803,8 @@ def advanced_page():
                     min_value=min_time_unit,
                     max_value=max_time_unit,
                     value=(min_time_unit, max_time_unit),
-                    format="",
+                    format="YYYY-MM-DD HH:mm:ss",
+                    step=time_step,
                 )
 
                 # Filter data based on the selected time range
@@ -1096,7 +1099,7 @@ def advanced_page():
 
             # Plot features over Time as separate subplots
             st.subheader("Features over Time")
-            
+
             # Define the features with their display names and colors
             features = [
                 {"column": advance_rate_col, "display_name": "Advance Rate", "color": "blue"},
@@ -1106,9 +1109,9 @@ def advanced_page():
                 {"column": revolution_col, "display_name": "Revolution", "color": "purple"},
                 {"column": pressure_col, "display_name": "Working Pressure", "color": "cyan"},
             ]
-            
+
             num_features = len(features)
-            
+
             # Optional: Allow users to set rolling window size
             window_size = st.sidebar.slider(
                 "Select Rolling Window Size for Mean Calculation",
@@ -1118,14 +1121,14 @@ def advanced_page():
                 step=10,
                 help="Adjust the window size to smooth the data. A larger window provides a smoother mean."
             )
-            
+
             # Optional: Allow users to toggle mean lines
             show_means = st.checkbox("Show Mean Values", value=True, help="Toggle the visibility of mean lines.")
-            
+
             # Calculate rolling means for each feature
             for feature in features:
                 df[f"{feature['column']}_mean"] = df[feature['column']].rolling(window=window_size, min_periods=1).mean()
-            
+
             # Create subplots with 2 rows per feature: one for original data, one for mean
             fig_time = make_subplots(
                 rows=2*num_features,  # Two rows per feature
@@ -1134,7 +1137,7 @@ def advanced_page():
                 vertical_spacing=0.02,  # Reduced spacing for a cleaner look
                 subplot_titles=None  # No subplot titles
             )
-            
+
             # Iterate through each feature and add traces
             for i, feature in enumerate(features, start=1):
                 # Original Feature Plot on odd rows
@@ -1151,7 +1154,7 @@ def advanced_page():
                 )
                 # Update y-axis for original feature
                 fig_time.update_yaxes(title_text=feature["display_name"], row=2*i-1, col=1)
-            
+
                 # Rolling Mean Plot on even rows
                 if show_means:
                     fig_time.add_trace(
@@ -1167,22 +1170,20 @@ def advanced_page():
                     )
                     # Update y-axis for rolling mean
                     fig_time.update_yaxes(title_text=f"{feature['display_name']} - Rolling Mean", row=2*i, col=1)
-            
+
             # Update overall layout
             fig_time.update_layout(
-                xaxis_title=f"Time ({time_unit})",
+                xaxis_title=f"Time",
                 height=300 * 2 * num_features,  # 300 pixels per subplot row
                 showlegend=False,
                 title_text="Features over Time (Original and Rolling Mean)",  # Main plot title
             )
-            
+
             # Display the plot
             st.plotly_chart(fig_time, use_container_width=True)
 
+            # --------------------- Features over Distance/Chainage Visualization ---------------------
 
-
-                        # --------------------- Features over Distance/Chainage Visualization ---------------------
-        
             st.subheader("Features over Distance/Chainage")
 
             # Define the features with their display names and colors
@@ -1196,7 +1197,7 @@ def advanced_page():
                 {"column": "Calculated torque [kNm]", "display_name": "Calculated Torque [kNm]", "color": "magenta"},
             ]
 
-                # Define the number of features
+            # Define the number of features
             num_features_distance = len(features_distance)
 
             # Rolling Window Slider for Distance
@@ -1285,25 +1286,21 @@ def advanced_page():
             # Display the plot
             st.plotly_chart(fig_distance, use_container_width=True)
 
-            
-
-            
             # Provide explanations and annotations
             st.write(
                 """
                 **Interpretation Guide:**
-            
+
                 - **Advance Rate**: Indicates the speed at which the machine is advancing. Fluctuations may indicate changes in ground conditions or operational parameters.
                 - **Penetration Rate**: Calculated as Advance Rate divided by Revolution. Reflects how efficiently the machine penetrates the material per revolution.
                 - **Thrust Force**: Represents the force applied at the cutting head. High values may indicate hard ground or potential mechanical issues.
                 - **Thrust Force per Cutting Ring**: This metric normalizes the thrust force by the number of cutting rings, providing insight into the load per ring.
                 - **Revolution**: The rotational speed of the cutting head. Variations can affect penetration rate and torque.
                 - **Working Pressure**: The pressure at which the machine is operating. Sudden changes might indicate anomalies or operational adjustments.
-            
+
                 Use the visualizations to monitor trends and identify any unusual patterns that may require further investigation.
                 """
             )
-
 
             # Download buttons for analysis results
             st.sidebar.markdown("## Download Results")
@@ -1324,6 +1321,9 @@ def advanced_page():
                 ),
                 unsafe_allow_html=True,
             )
+
+    else:
+        st.info("Please upload a Raw Data file to begin the analysis.")
 
 
 
