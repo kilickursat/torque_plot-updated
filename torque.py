@@ -7,7 +7,7 @@ from plotly.subplots import make_subplots
 from datetime import timedelta
 import csv
 from io import StringIO
-
+import chardet
 
 @st.cache_data
 def load_data(file, file_type):
