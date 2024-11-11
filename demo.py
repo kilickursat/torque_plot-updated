@@ -664,16 +664,6 @@ def original_page():
     else:
         st.info("Please upload a Raw Data file to begin the analysis.")
 
-def advanced_page():
-    st.title("Advanced Analysis")
-
-    # File uploaders for batch data
-    raw_data_file = st.file_uploader("Upload Raw Data (CSV or XLSX)", type=["csv", "xlsx"])
-    machine_specs_file = st.file_uploader(
-        "Upload Machine Specifications: XLSX (MM-Baureihenliste) or CSV format accepted",
-        type=["xlsx", "csv"],
-    )
-
     # Load machine specs if available
     if machine_specs_file is not None:
         try:
@@ -982,8 +972,7 @@ def advanced_page():
                 st.error("No data left after dropping zero values. Cannot proceed with analysis.")
                 return
 
-            # Remove rows where revolution is zero to avoid division by zero
-            df = df[df[revolution_col] != 0]
+            # Proceed with calculations and plotting
 
             # Calculate Penetration Rate as Advance Rate divided by Revolution
             df["Calculated Penetration Rate"] = (
@@ -992,6 +981,28 @@ def advanced_page():
 
             # Calculate Thrust Force per Cutting Ring
             df["Thrust Force per Cutting Ring"] = df[thrust_force_col] / num_cutting_rings
+
+            # Calculate 'Calculated torque [kNm]'
+            def calculate_torque_wrapper(row):
+                working_pressure = row[pressure_col]
+                current_speed = row[revolution_col]
+
+                if current_speed == 0:
+                    return np.nan  # Avoid division by zero
+
+                if current_speed < machine_params["n1"]:
+                    torque = working_pressure * machine_params["torque_constant"]
+                else:
+                    torque = (
+                        (machine_params["n1"] / current_speed)
+                        * machine_params["torque_constant"]
+                        * working_pressure
+                    )
+
+                return round(torque, 2)
+
+            df["Calculated torque [kNm]"] = df.apply(calculate_torque_wrapper, axis=1)
+            df = df.dropna(subset=["Calculated torque [kNm]"])
 
             # Handle zero variance in critical features
             critical_features = [
