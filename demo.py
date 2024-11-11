@@ -228,7 +228,10 @@ def format_timedelta(td):
 
 def has_zero_variance(series):
     """Check if a pandas Series has zero variance."""
+    if series.empty:
+        return False  # Or handle this case separately as per your logic
     return series.nunique() <= 1
+
 
 @st.cache_data
 def load_machine_specs(file, file_type):
@@ -311,31 +314,40 @@ def display_statistics(df, revolution_col, pressure_col, thrust_force_col=None):
 
     with col1:
         st.write("RPM Statistics:")
-        if has_zero_variance(df[revolution_col]):
+        if df[revolution_col].empty:
+            st.write("No data available for RPM.")
+        elif has_zero_variance(df[revolution_col]):
             st.write(f"All RPM values are the same: {df[revolution_col].iloc[0]}")
         else:
             st.write(df[revolution_col].describe())
 
     with col2:
         st.write("Calculated Torque Statistics:")
-        if has_zero_variance(df['Calculated torque [kNm]']):
+        if df['Calculated torque [kNm]'].empty:
+            st.write("No data available for Calculated Torque.")
+        elif has_zero_variance(df['Calculated torque [kNm]']):
             st.write(f"All Torque values are the same: {df['Calculated torque [kNm]'].iloc[0]}")
         else:
             st.write(df['Calculated torque [kNm]'].describe())
 
     with col3:
         st.write("Working Pressure Statistics:")
-        if has_zero_variance(df[pressure_col]):
+        if df[pressure_col].empty:
+            st.write("No data available for Working Pressure.")
+        elif has_zero_variance(df[pressure_col]):
             st.write(f"All Pressure values are the same: {df[pressure_col].iloc[0]}")
         else:
             st.write(df[pressure_col].describe())
 
     if thrust_force_col is not None and 'Thrust Force per Cutting Ring' in df.columns:
         st.write("**Thrust Force per Cutting Ring Statistics:**")
-        if has_zero_variance(df['Thrust Force per Cutting Ring']):
+        if df['Thrust Force per Cutting Ring'].empty:
+            st.write("No data available for Thrust Force per Cutting Ring.")
+        elif has_zero_variance(df['Thrust Force per Cutting Ring']):
             st.write(f"All Thrust Force per Cutting Ring values are the same: {df['Thrust Force per Cutting Ring'].iloc[0]}")
         else:
             st.write(df['Thrust Force per Cutting Ring'].describe())
+
 
 
 def display_explanation(anomaly_threshold):
@@ -1024,13 +1036,16 @@ def advanced_page():
                 thrust_force_col,
                 "Thrust Force per Cutting Ring"
             ]
-
+            
             for feature in critical_features:
-                if has_zero_variance(df[feature]):
+                if df[feature].empty:
+                    st.warning(f"No data available for {feature}. Skipping zero variance check.")
+                elif has_zero_variance(df[feature]):
                     st.warning(f"{feature} has zero variance. All values are the same.")
                     # Set all values to the mean for plotting purposes
                     mean_value = df[feature].iloc[0]
                     df[feature] = mean_value
+
 
             # RPM Statistics
             rpm_stats = df[revolution_col].describe()
