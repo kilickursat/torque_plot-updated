@@ -10,7 +10,6 @@ from io import StringIO
 import chardet
 
 
-
 @st.cache_data
 def load_data(file, file_type):
     """
@@ -664,6 +663,17 @@ def original_page():
     else:
         st.info("Please upload a Raw Data file to begin the analysis.")
 
+
+def advanced_page():
+    st.title("Advanced Analysis")
+
+    # File uploaders for batch data
+    raw_data_file = st.file_uploader("Upload Raw Data (CSV or XLSX)", type=["csv", "xlsx"])
+    machine_specs_file = st.file_uploader(
+        "Upload Machine Specifications: XLSX (MM-Baureihenliste) or CSV format accepted",
+        type=["xlsx", "csv"],
+    )
+    
     # Load machine specs if available
     if machine_specs_file is not None:
         try:
