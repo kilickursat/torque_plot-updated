@@ -9,20 +9,29 @@ import csv
 
 
 # Optimization: Add cache decorator to improve performance on repeated file loads
-
 @st.cache_data
 def load_data(file, file_type):
     try:
         if file_type == 'csv':
-            # Try different separators and encodings
-            for sep in [';', ',']:
-                for encoding in ['utf-8', 'iso-8859-1']:
-                    try:
-                        df = pd.read_csv(file, sep=sep, encoding=encoding, decimal=',')
-                        return df
-                    except:
-                        pass
-            raise ValueError("Unable to read CSV file with tried separators and encodings")
+            # Try to read with automatic separator detection
+            try:
+                file.seek(0)
+                df = pd.read_csv(file, sep=None, engine='python', encoding='utf-8', decimal=',')
+                return df
+            except Exception as e:
+                st.error(f"Error reading CSV with automatic separator detection: {str(e)}")
+                # Try different separators and encodings
+                file.seek(0)
+                for sep in [';', ',', '\t', '|']:
+                    for encoding in ['utf-8', 'iso-8859-1', 'latin1']:
+                        try:
+                            file.seek(0)
+                            df = pd.read_csv(file, sep=sep, encoding=encoding, decimal=',')
+                            if df.shape[1] > 1:  # Check if multiple columns are read
+                                return df
+                        except Exception as e2:
+                            pass
+                raise ValueError("Unable to read CSV file with tried separators and encodings")
         elif file_type == 'xlsx':
             df = pd.read_excel(file)
             return df
@@ -36,9 +45,10 @@ def load_data(file, file_type):
 sensor_column_map = {
     "pressure": ["Working pressure [bar]", "AzV.V13_SR_ArbDr_Z | DB 60.DBD 26", "Pression [bar]", "Presión [bar]", "Pressure", "Pressure [bar]", "Working Pressure"],
     "revolution": ["Revolution [rpm]", "AzV.V13_SR_Drehz_nach_Abgl_Z | DB 60.DBD 30", "Vitesse [rpm]", "Revoluciones [rpm]", "RPM", "Speed", "Rotation Speed"],
-    "time": ["Time", "Timestamp", "DateTime", "Date", "Zeit", "Relativzeit", "Uhrzeit", "Datum"],
+    "time": ["Time", "Timestamp", "DateTime", "Date", "Zeit", "Relativzeit", "Uhrzeit", "Datum", "ts(utc)"],
     "advance_rate": ["Advance Rate", "Vorschubgeschwindigkeit", "Avance", "Rate of Penetration", "ROP", "Advance [m/min]", "Advance [mm/min]"],
-    "thrust_force": ["Thrust Force", "Thrust", "Vorschubkraft", "Force", "Force at Cutting Head", "Thrust Force [kN]"]
+    "thrust_force": ["Thrust Force", "Thrust", "Vorschubkraft", "Force", "Force at Cutting Head", "Thrust Force [kN]"],
+    "distance": ["Distance", "Chainage", "Position", "Kette", "Station"]
 }
 
 def find_sensor_columns(df):
@@ -71,6 +81,7 @@ def load_machine_specs(file, file_type):
     except Exception as e:
         st.error(f"Error loading machine specifications: {str(e)}")
         return None
+
 
 def get_machine_params(specs_df, machine_type):
     """Extract relevant machine parameters based on machine type."""
@@ -476,12 +487,6 @@ def original_page():
 def format_timedelta(td):
     """
     Convert a pandas Timedelta to a human-readable string.
-    
-    Parameters:
-        td (pd.Timedelta): The timedelta object to format.
-        
-    Returns:
-        str: A formatted string representing the timedelta.
     """
     total_seconds = int(td.total_seconds())
     days, remainder = divmod(total_seconds, 86400)  # 86400 seconds in a day
@@ -502,6 +507,7 @@ def format_timedelta(td):
     formatted_time += f"{total_sec:.2f} second{'s' if total_sec != 1 else ''}"
 
     return formatted_time
+
 
 # Main Function
 def advanced_page():
@@ -682,7 +688,6 @@ def advanced_page():
                 index=df.columns.get_loc(default_thrust_force_col) if default_thrust_force_col else 0,
             )
 
-
             # Distance/Chainage Column
             if "distance" in sensor_columns and sensor_columns["distance"] in df.columns:
                 default_distance_col = sensor_columns["distance"]
@@ -695,6 +700,7 @@ def advanced_page():
                 options=df.columns,
                 index=df.columns.get_loc(default_distance_col) if default_distance_col in df.columns else 0,
             )
+
             # Ensure distance column is appropriately parsed
             df[distance_col] = pd.to_numeric(df[distance_col], errors="coerce")
             if df[distance_col].isnull().all():
@@ -702,101 +708,104 @@ def advanced_page():
                     f"The selected distance/chainage column '{distance_col}' cannot be converted to numeric values."
                 )
                 return
-                
+
             # Handle missing values
             missing_distance = df[distance_col].isnull().sum()
             if missing_distance > 0:
                 st.warning(f"There are {missing_distance} missing values in the distance/chainage column. These rows will be dropped.")
                 df = df.dropna(subset=[distance_col])
-                
+
             # Display the maximum value in the distance/chainage column for debugging
             max_distance_value = df[distance_col].max()
             st.write(f"**Maximum value in the distance/chainage column (`{distance_col}`):** {max_distance_value}")
 
             # Ensure time column is appropriately parsed
-            df[time_col] = pd.to_numeric(df[time_col], errors="coerce")
-            if df[time_col].isnull().all():
-                st.error(
-                    f"The selected time column '{time_col}' cannot be converted to numeric values."
-                )
-                return
-
-            # Ask the user to select the unit of the time column
-            time_unit = st.selectbox(
-                "Select Time Unit for Time Column",
-                options=["milliseconds", "seconds", "minutes", "hours"],
-                index=0,
-                help="Choose the unit that matches the time data in your dataset."
-            )
-
-            # Display the maximum value in the time column for debugging
-            max_time_value = df[time_col].max()
-            st.write(f"**Maximum value in the time column (`{time_col}`):** {max_time_value} {time_unit}")
-
-            # Define the maximum allowed value based on the selected time unit
-            max_allowed_value = {
-                "milliseconds": 2**63 // 1_000_000,
-                "seconds": 2**63 // 1_000_000_000,
-                "minutes": 2**63 // (60 * 1_000_000_000),
-                "hours": 2**63 // (3600 * 1_000_000_000),
-            }[time_unit]
-
-            # Display the maximum allowed value for debugging
-            st.write(f"**Maximum allowed value for '{time_unit}':** {max_allowed_value} {time_unit}")
-
-            # Convert time column to seconds based on the selected unit
-            if time_unit == "milliseconds":
-                df["Time_unit"] = df[time_col] / 1000  # Convert to seconds
-            elif time_unit == "seconds":
-                df["Time_unit"] = df[time_col]
-            elif time_unit == "minutes":
-                df["Time_unit"] = df[time_col] * 60  # Convert to seconds
-            elif time_unit == "hours":
-                df["Time_unit"] = df[time_col] * 3600  # Convert to seconds
-
-            # Check for out-of-bounds values after conversion
-            if df["Time_unit"].max() > max_allowed_value:
-                st.error(
-                    f"The values in the time column exceed the maximum allowed for the selected unit '{time_unit}'. Please check the data or select a different unit."
-                )
-                return
-
-            # Sort the dataframe by Time_unit
-            df = df.sort_values("Time_unit")
-
-            # Calculate min and max time
-            min_time_unit = df["Time_unit"].min()
-            max_time_unit = df["Time_unit"].max()
-
-            # Display the time range in numeric format (seconds)
-            st.write(f"**Data time range:** {min_time_unit:.2f} seconds to {max_time_unit:.2f} seconds")
-
-            # Convert numeric Time_unit back to timedelta for human-readable format
             try:
-                df["Human_Readable_Time"] = pd.to_timedelta(df["Time_unit"], unit='s')
+                df[time_col] = pd.to_datetime(df[time_col], errors='coerce')
+                if df[time_col].isnull().all():
+                    raise ValueError("All values in the time column are NaT after parsing.")
+                time_column_type = 'datetime'
             except Exception as e:
-                st.error(f"Error converting Time_unit to timedelta: {e}")
-                return
+                # Try to convert to numeric
+                df[time_col] = pd.to_numeric(df[time_col], errors="coerce")
+                if df[time_col].isnull().all():
+                    st.error(
+                        f"The selected time column '{time_col}' cannot be converted to numeric or datetime values."
+                    )
+                    return
+                else:
+                    time_column_type = 'numeric'
 
-            # Format the min and max times using the external helper function
-            min_hr_time = format_timedelta(df["Human_Readable_Time"].min())
-            max_hr_time = format_timedelta(df["Human_Readable_Time"].max())
-            st.write(f"**Data time range (Human Readable):** {min_hr_time} to {max_hr_time}")
+            if time_column_type == 'numeric':
+                # Ask the user to select the unit of the time column
+                time_unit = st.selectbox(
+                    "Select Time Unit for Time Column",
+                    options=["milliseconds", "seconds", "minutes", "hours"],
+                    index=0,
+                    help="Choose the unit that matches the time data in your dataset."
+                )
 
-            # Define the format for the slider based on the time unit
-            slider_format = "%.2f"
+                # Display the maximum value in the time column for debugging
+                max_time_value = df[time_col].max()
+                st.write(f"**Maximum value in the time column (`{time_col}`):** {max_time_value} {time_unit}")
 
-            # Create the time range slider
-            time_range = st.slider(
-                "Select Time Range",
-                min_value=float(min_time_unit),
-                max_value=float(max_time_unit),
-                value=(float(min_time_unit), float(max_time_unit)),
-                format=slider_format,
-            )
+                # Convert time column to seconds based on the selected unit
+                if time_unit == "milliseconds":
+                    df["Time_unit"] = df[time_col] / 1000  # Convert to seconds
+                elif time_unit == "seconds":
+                    df["Time_unit"] = df[time_col]
+                elif time_unit == "minutes":
+                    df["Time_unit"] = df[time_col] * 60  # Convert to seconds
+                elif time_unit == "hours":
+                    df["Time_unit"] = df[time_col] * 3600  # Convert to seconds
 
-            # Filter data based on the selected time range
-            df = df[(df["Time_unit"] >= time_range[0]) & (df["Time_unit"] <= time_range[1])]
+                # Sort the dataframe by Time_unit
+                df = df.sort_values("Time_unit")
+
+                # Calculate min and max time
+                min_time_unit = df["Time_unit"].min()
+                max_time_unit = df["Time_unit"].max()
+
+                # Display the time range in numeric format (seconds)
+                st.write(f"**Data time range:** {min_time_unit:.2f} seconds to {max_time_unit:.2f} seconds")
+
+                # Create the time range slider
+                time_range = st.slider(
+                    "Select Time Range",
+                    min_value=float(min_time_unit),
+                    max_value=float(max_time_unit),
+                    value=(float(min_time_unit), float(max_time_unit)),
+                    format="%.2f",
+                )
+
+                # Filter data based on the selected time range
+                df = df[(df["Time_unit"] >= time_range[0]) & (df["Time_unit"] <= time_range[1])]
+
+            elif time_column_type == 'datetime':
+                # Use the datetime column directly
+                df["Time_unit"] = df[time_col]
+
+                # Sort the dataframe by Time_unit
+                df = df.sort_values("Time_unit")
+
+                # Calculate min and max time
+                min_time_unit = df["Time_unit"].min()
+                max_time_unit = df["Time_unit"].max()
+
+                # Display the time range
+                st.write(f"**Data time range:** {min_time_unit} to {max_time_unit}")
+
+                # Create the time range slider
+                time_range = st.slider(
+                    "Select Time Range",
+                    min_value=min_time_unit,
+                    max_value=max_time_unit,
+                    value=(min_time_unit, max_time_unit),
+                    format="",
+                )
+
+                # Filter data based on the selected time range
+                df = df[(df["Time_unit"] >= time_range[0]) & (df["Time_unit"] <= time_range[1])]
 
             # Ensure numeric columns are numeric
             for col in [
