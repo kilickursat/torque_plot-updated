@@ -9,6 +9,24 @@ import csv
 from io import StringIO
 import chardet
 
+
+def safe_get_loc(columns, col_name):
+    """
+    Safely get the index of a column name in a DataFrame's columns.
+
+    Args:
+        columns: The columns of the DataFrame (df.columns).
+        col_name: The column name to find.
+
+    Returns:
+        The index of the column if found; otherwise, 0.
+    """
+    try:
+        return columns.get_loc(col_name)
+    except KeyError:
+        return 0  # Default to the first column if not found
+
+
 @st.cache_data
 def load_data(file, file_type):
     """
@@ -153,16 +171,19 @@ def find_sensor_columns(df):
     found_columns = {}
     for sensor, possible_names in sensor_column_map.items():
         for name in possible_names:
-            if name in df.columns:
-                found_columns[sensor] = name
-                break
+            # Case-insensitive and whitespace-stripped matching
+            for col in df.columns:
+                if name.strip().lower() == col.strip().lower():
+                    found_columns[sensor] = col
+                    break
+        # If still not found, attempt partial matches
         if sensor not in found_columns:
-            # If exact match not found, try case-insensitive partial match
             for col in df.columns:
                 if any(name.lower() in col.lower() for name in possible_names):
                     found_columns[sensor] = col
                     break
     return found_columns
+
 
 @st.cache_data
 def load_machine_specs(file, file_type):
@@ -471,8 +492,18 @@ def original_page():
             sensor_columns = find_sensor_columns(df)
 
             # Allow user to select columns
-            pressure_col = st.selectbox("Select pressure column", options=df.columns, index=df.columns.get_loc(sensor_columns.get('pressure', df.columns[0])))
-            revolution_col = st.selectbox("Select revolution column", options=df.columns, index=df.columns.get_loc(sensor_columns.get('revolution', df.columns[0])))
+            # Allow user to select columns
+            pressure_col = st.selectbox(
+                "Select Pressure Column",
+                options=df.columns,
+                index=safe_get_loc(df.columns, sensor_columns.get('pressure', df.columns[0]))
+            )
+            revolution_col = st.selectbox(
+                "Select Revolution Column",
+                options=df.columns,
+                index=safe_get_loc(df.columns, sensor_columns.get('revolution', df.columns[0]))
+            )
+
 
             if pressure_col and revolution_col:
                 # Proceed with data processing and visualization
@@ -765,55 +796,60 @@ def advanced_page():
             if "time" in sensor_columns and sensor_columns["time"] in df.columns:
                 default_time_col = sensor_columns["time"]
             else:
+                st.warning("Time column not found automatically. Please select it manually.")
                 default_time_col = df.columns[0]
             time_col = st.selectbox(
                 "Select Time Column",
                 options=df.columns,
-                index=df.columns.get_loc(default_time_col),
+                index=safe_get_loc(df.columns, default_time_col)
             )
 
             # Pressure Column
             if "pressure" in sensor_columns and sensor_columns["pressure"] in df.columns:
                 default_pressure_col = sensor_columns["pressure"]
             else:
-                default_pressure_col = df.columns[1] if len(df.columns) > 1 else df.columns[0]
+                st.warning("Pressure column not found automatically. Please select it manually.")
+                default_pressure_col = df.columns[0]
             pressure_col = st.selectbox(
                 "Select Pressure Column",
                 options=df.columns,
-                index=df.columns.get_loc(default_pressure_col) if default_pressure_col else 0,
+                index=safe_get_loc(df.columns, default_pressure_col)
             )
 
             # Revolution Column
             if "revolution" in sensor_columns and sensor_columns["revolution"] in df.columns:
                 default_revolution_col = sensor_columns["revolution"]
             else:
-                default_revolution_col = df.columns[2] if len(df.columns) > 2 else df.columns[0]
+                st.warning("Revolution column not found automatically. Please select it manually.")
+                default_revolution_col = df.columns[0]
             revolution_col = st.selectbox(
                 "Select Revolution Column",
                 options=df.columns,
-                index=df.columns.get_loc(default_revolution_col) if default_revolution_col else 0,
+                index=safe_get_loc(df.columns, default_revolution_col)
             )
 
             # Advance Rate Column
             if "advance_rate" in sensor_columns and sensor_columns["advance_rate"] in df.columns:
                 default_advance_rate_col = sensor_columns["advance_rate"]
             else:
-                default_advance_rate_col = df.columns[3] if len(df.columns) > 3 else df.columns[0]
+                st.warning("Advance rate column not found automatically. Please select it manually.")
+                default_revolution_col = df.columns[0]
             advance_rate_col = st.selectbox(
                 "Select Advance Rate Column",
                 options=df.columns,
-                index=df.columns.get_loc(default_advance_rate_col) if default_advance_rate_col else 0,
+                index=safe_get_loc(df.columns, default_advance_rate_col)
             )
 
             # Thrust Force Column
             if "thrust_force" in sensor_columns and sensor_columns["thrust_force"] in df.columns:
                 default_thrust_force_col = sensor_columns["thrust_force"]
             else:
-                default_thrust_force_col = df.columns[4] if len(df.columns) > 4 else df.columns[0]
+                st.warning("Thrust force column not found automatically. Please select it manually.")
+                default_thrust_force_col = df.columns[0]
             thrust_force_col = st.selectbox(
                 "Select Thrust Force Column",
                 options=df.columns,
-                index=df.columns.get_loc(default_thrust_force_col) if default_thrust_force_col else 0,
+                index=safe_get_loc(df.columns, default_thrust_force_col)
             )
 
             # Distance/Chainage Column
@@ -821,12 +857,13 @@ def advanced_page():
                 default_distance_col = sensor_columns["distance"]
             else:
                 # Attempt to guess a distance-related column or default to the last column
-                possible_distance_cols = [col for col in df.columns if "distance" in col.lower() or "chainage" in col.lower()]
-                default_distance_col = possible_distance_cols[0] if possible_distance_cols else df.columns[-1]
+                st.warning("Thrust force column not found automatically. Please select it manually.")
+                #possible_distance_cols = [col for col in df.columns if "distance" in col.lower() or "chainage" in col.lower()]
+                default_distance_col = df.columns[0]
             distance_col = st.selectbox(
                 "Select Distance/Chainage Column",
                 options=df.columns,
-                index=df.columns.get_loc(default_distance_col) if default_distance_col in df.columns else 0,
+                index=safe_get_loc(df.columns, default_distance_col)
             )
 
             # Ensure distance column is appropriately parsed
