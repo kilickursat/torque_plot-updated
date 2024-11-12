@@ -833,7 +833,7 @@ def advanced_page():
                 default_advance_rate_col = sensor_columns["advance_rate"]
             else:
                 st.warning("Advance rate column not found automatically. Please select it manually.")
-                default_revolution_col = df.columns[0]
+                default_advance_rate_col = df.columns[0]
             advance_rate_col = st.selectbox(
                 "Select Advance Rate Column",
                 options=df.columns,
