@@ -9,6 +9,7 @@ from io import StringIO
 import chardet
 import logging
 import warnings
+from datetime import timedelta
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
