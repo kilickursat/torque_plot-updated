@@ -11,3 +11,4 @@ openpyxl
 fpdf
 pillow
 chardet
+tornado
