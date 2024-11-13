@@ -9,6 +9,11 @@ import csv
 from io import StringIO
 import chardet
 
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
 
 def safe_get_loc(columns, col_name):
     """
