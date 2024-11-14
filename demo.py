@@ -143,7 +143,7 @@ def find_sensor_columns(df):
             "Chainage_Position"
         ]
     }
-    
+
     found_columns = {}
     for sensor, possible_names in sensor_column_map.items():
         found = False
@@ -259,24 +259,28 @@ def get_machine_params(specs_df, machine_type):
     # Collect missing parameters
     missing_params = [param for param, value in found_columns.items() if value is None]
 
-    # If any parameters are missing, notify the user and return None
+    # If any parameters are missing or zero, prompt user to input them
     if missing_params:
-        st.error(
-            f"Missing parameters for machine '{machine_type}': {', '.join(missing_params)}. "
-            f"Please ensure the specifications file contains all required parameters with valid values."
+        st.warning(
+            f"The selected machine '{machine_type}' is missing the following parameters: {', '.join(missing_params)}. "
+            f"Please input the missing values below."
         )
-        logger.error(
-            f"Missing parameters for machine '{machine_type}': {', '.join(missing_params)}."
-        )
-        return None
+        for param in missing_params:
+            user_input = st.number_input(
+                f"Input value for '{param}':",
+                min_value=0.0,
+                format="%.2f",
+                key=f"{machine_type}_{param}"
+            )
+            found_columns[param] = user_input
 
     # Validate parameter values
     if not is_valid_machine(found_columns):
         st.error(
-            f"Selected machine '{machine_type}' has invalid or zero parameters. Please select a different machine."
+            f"Selected machine '{machine_type}' has invalid or zero parameters even after user input. Please verify the values."
         )
         logger.error(
-            f"Selected machine '{machine_type}' has invalid or zero parameters."
+            f"Machine '{machine_type}' has invalid or zero parameters after user input."
         )
         return None
 
@@ -362,7 +366,7 @@ def advanced_page():
                 "Select Time Column Type",
                 options=["Numeric", "Datetime"],
                 index=0,
-                help="Choose how to interpret the Time column."
+                help="Choose how to interpret the Time column based on your raw data. 'Numeric' treats it as elapsed time units, while 'Datetime' parses it as dates and times."
             )
 
             # Function to map sensor columns with manual override
@@ -1006,6 +1010,7 @@ def advanced_page():
                 - **Thrust Force per Cutting Ring**: This metric normalizes the thrust force by the number of cutting rings, providing insight into the load per ring.
                 - **Revolution**: The rotational speed of the cutting head. Variations can affect penetration rate and torque.
                 - **Working Pressure**: The pressure at which the machine is operating. Sudden changes might indicate anomalies or operational adjustments.
+                - **Calculated Torque [kNm]**: Represents the torque calculated based on machine parameters and operational data.
 
                 Use the visualizations to monitor trends and identify any unusual patterns that may require further investigation.
                 """
@@ -1032,6 +1037,7 @@ def advanced_page():
             )
 
     # Helper functions used within advanced_page
+
     def process_time_column(df, time_col, time_type):
         """
         Processes the time column based on the user-selected type (Numeric or Datetime).
@@ -1093,47 +1099,6 @@ def advanced_page():
                 st.error(f"Error processing datetime for time column '{time_col}': {e}")
                 logger.error(f"Error processing datetime for time column '{time_col}': {e}")
                 st.stop()
-        return df
-
-    def calculate_metrics(df, params, columns, num_cutting_rings):
-        """
-        Calculates necessary metrics such as Penetration Rate, Thrust Force per Cutting Ring,
-        and Calculated Torque.
-        """
-        # Calculate Penetration Rate with safe division
-        df["Calculated Penetration Rate"] = df.apply(
-            lambda row: row[columns['advance_rate']] / row[columns['revolution']] if row[columns['revolution']] != 0 else np.nan,
-            axis=1
-        )
-        # Drop or handle NaN values resulting from division by zero
-        df = df.dropna(subset=["Calculated Penetration Rate"])
-        if df.empty:
-            st.error("No data available after calculating Penetration Rate.")
-            logger.error("DataFrame is empty after calculating Penetration Rate.")
-            st.stop()
-
-        # Thrust Force per Cutting Ring
-        if num_cutting_rings == 0:
-            st.error("Number of Cutting Rings cannot be zero.")
-            logger.error("Number of Cutting Rings is zero.")
-            st.stop()
-        df["Thrust Force per Cutting Ring"] = df[columns['thrust_force']] / num_cutting_rings
-
-        # Calculate Torque
-        df["Calculated torque [kNm]"] = df.apply(
-            lambda row: row[columns['pressure']] * params["torque_constant"] if row[columns['revolution']] < params["n1"]
-            else (params["n1"] / row[columns['revolution']]) * params["torque_constant"] * row[columns['pressure']]
-            if row[columns['revolution']] != 0 else np.nan,
-            axis=1
-        )
-        # Drop or handle NaN values resulting from invalid torque calculations
-        df = df.dropna(subset=["Calculated torque [kNm]"])
-        if df.empty:
-            st.error("No data available after calculating torque.")
-            logger.error("DataFrame is empty after calculating torque.")
-            st.stop()
-
-        logger.info("Metrics calculated successfully.")
         return df
 if __name__ == "__main__":
     advanced_page()
