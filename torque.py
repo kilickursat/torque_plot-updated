@@ -32,7 +32,7 @@ def safe_get_loc(columns, col_name):
         return 0  # Default to the first column if not found
 
 
-@st.cache_data
+
 def load_data(file, file_type):
     """
     Enhanced function to load CSV and Excel files with robust error handling
@@ -190,7 +190,7 @@ def find_sensor_columns(df):
     return found_columns
 
 
-@st.cache_data
+
 def load_machine_specs(file, file_type):
     """Load machine specifications from XLSX or CSV file."""
     try:
