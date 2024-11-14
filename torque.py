@@ -797,6 +797,15 @@ def advanced_page():
 
             # Allow user to select columns if not found or adjust selections
             st.subheader("Select Sensor Columns")
+            
+            # Add a checkbox to let the user specify if the time column is numeric or datetime
+            time_column_type_user = st.selectbox(
+                "Select Time Column Type",
+                options=["Numeric", "Datetime"],
+                index=0,
+                help="Choose how to interpret the Time column."
+            )
+
             # Time Column
             if "time" in sensor_columns and sensor_columns["time"] in df.columns:
                 default_time_col = sensor_columns["time"]
@@ -862,8 +871,7 @@ def advanced_page():
                 default_distance_col = sensor_columns["distance"]
             else:
                 # Attempt to guess a distance-related column or default to the last column
-                st.warning("Thrust force column not found automatically. Please select it manually.")
-                #possible_distance_cols = [col for col in df.columns if "distance" in col.lower() or "chainage" in col.lower()]
+                st.warning("Distance/Chainage column not found automatically. Please select it manually.")
                 default_distance_col = df.columns[0]
             distance_col = st.selectbox(
                 "Select Distance/Chainage Column",
@@ -889,55 +897,26 @@ def advanced_page():
             max_distance_value = df[distance_col].max()
             st.write(f"**Maximum value in the distance/chainage column (`{distance_col}`):** {max_distance_value}")
 
-            # Ensure time column is appropriately parsed
-            try:
-                df[time_col] = pd.to_datetime(df[time_col], errors='coerce')
-                if df[time_col].isnull().all():
-                    raise ValueError("All values in the time column are NaT after parsing.")
-                time_column_type = 'datetime'
-            except Exception as e:
-                # Try to convert to numeric
-                df[time_col] = pd.to_numeric(df[time_col], errors="coerce")
+            # **Modified Time Column Handling: Always Treat as Numeric**
+            # Convert the time column to numeric based on user selection
+            if time_column_type_user == "Numeric":
+                df[time_col] = pd.to_numeric(df[time_col], errors='coerce')
                 if df[time_col].isnull().all():
                     st.error(
-                        f"The selected time column '{time_col}' cannot be converted to numeric or datetime values."
+                        f"The selected time column '{time_col}' cannot be converted to numeric values."
                     )
                     return
-                else:
-                    time_column_type = 'numeric'
-
-            if time_column_type == 'numeric':
-                # Ask the user to select the unit of the time column
-                time_unit = st.selectbox(
-                    "Select Time Unit for Time Column",
-                    options=["milliseconds", "seconds", "minutes", "hours"],
-                    index=0,
-                    help="Choose the unit that matches the time data in your dataset."
-                )
-
-                # Display the maximum value in the time column for debugging
-                max_time_value = df[time_col].max()
-                st.write(f"**Maximum value in the time column (`{time_col}`):** {max_time_value} {time_unit}")
-
-                # Convert time column to seconds based on the selected unit
-                if time_unit == "milliseconds":
-                    df["Time_unit"] = df[time_col] / 1000  # Convert to seconds
-                elif time_unit == "seconds":
-                    df["Time_unit"] = df[time_col]
-                elif time_unit == "minutes":
-                    df["Time_unit"] = df[time_col] * 60  # Convert to seconds
-                elif time_unit == "hours":
-                    df["Time_unit"] = df[time_col] * 3600  # Convert to seconds
+                time_column_type = 'numeric'
 
                 # Sort the dataframe by Time_unit
                 df = df.sort_values("Time_unit")
 
                 # Calculate min and max time
-                min_time_unit = df["Time_unit"].min()
-                max_time_unit = df["Time_unit"].max()
+                min_time_unit = df[time_col].min()
+                max_time_unit = df[time_col].max()
 
                 # Display the time range in numeric format (seconds)
-                st.write(f"**Data time range:** {min_time_unit:.2f} seconds to {max_time_unit:.2f} seconds")
+                st.write(f"**Data time range:** {min_time_unit:.2f} to {max_time_unit:.2f} units")
 
                 # Create the time range slider
                 time_range = st.slider(
@@ -949,37 +928,61 @@ def advanced_page():
                 )
 
                 # Filter data based on the selected time range
-                df = df[(df["Time_unit"] >= time_range[0]) & (df["Time_unit"] <= time_range[1])]
+                df = df[(df[time_col] >= time_range[0]) & (df[time_col] <= time_range[1])]
 
-            elif time_column_type == 'datetime':
-                # Use the datetime column directly
+                # Assign Time_unit for plotting
                 df["Time_unit"] = df[time_col]
 
-                # Sort the dataframe by Time_unit
-                df = df.sort_values("Time_unit")
+            else:
+                # Treat as datetime
+                try:
+                    df[time_col] = pd.to_datetime(df[time_col], errors='coerce')
+                    if df[time_col].isnull().all():
+                        raise ValueError("All values in the time column are NaT after parsing.")
+                    time_column_type = 'datetime'
+                except Exception as e:
+                    # Try to convert to numeric
+                    df[time_col] = pd.to_numeric(df[time_col], errors="coerce")
+                    if df[time_col].isnull().all():
+                        st.error(
+                            f"The selected time column '{time_col}' cannot be converted to numeric or datetime values."
+                        )
+                        return
+                    else:
+                        time_column_type = 'numeric'
 
-                # Calculate min and max time
-                min_time_unit = df["Time_unit"].min().to_pydatetime()
-                max_time_unit = df["Time_unit"].max().to_pydatetime()
+                if time_column_type == 'datetime':
+                    # Use the datetime column directly
+                    df["Time_unit"] = df[time_col]
 
-                # Display the time range
-                st.write(f"**Data time range:** {min_time_unit} to {max_time_unit}")
+                    # Sort the dataframe by Time_unit
+                    df = df.sort_values("Time_unit")
 
-                # Define a reasonable step for the slider (e.g., one second)
-                time_step = timedelta(seconds=1)
+                    # Calculate min and max time
+                    min_time_unit = df["Time_unit"].min().to_pydatetime()
+                    max_time_unit = df["Time_unit"].max().to_pydatetime()
 
-                # Create the time range slider
-                time_range = st.slider(
-                    "Select Time Range",
-                    min_value=min_time_unit,
-                    max_value=max_time_unit,
-                    value=(min_time_unit, max_time_unit),
-                    format="YYYY-MM-DD HH:mm:ss",
-                    step=time_step,
-                )
+                    # Display the time range
+                    st.write(f"**Data time range:** {min_time_unit} to {max_time_unit}")
 
-                # Filter data based on the selected time range
-                df = df[(df["Time_unit"] >= time_range[0]) & (df["Time_unit"] <= time_range[1])]
+                    # Define a reasonable step for the slider (e.g., one second)
+                    time_step = timedelta(seconds=1)
+
+                    # Create the time range slider
+                    time_range = st.slider(
+                        "Select Time Range",
+                        min_value=min_time_unit,
+                        max_value=max_time_unit,
+                        value=(min_time_unit, max_time_unit),
+                        format="YYYY-MM-DD HH:mm:ss",
+                        step=time_step,
+                    )
+
+                    # Filter data based on the selected time range
+                    df = df[(df["Time_unit"] >= time_range[0]) & (df["Time_unit"] <= time_range[1])]
+                elif time_column_type == 'numeric':
+                    # Similar handling as above for numeric
+                    pass  # Already handled above
 
             # Ensure numeric columns are numeric
             for col in [
@@ -1495,6 +1498,7 @@ def advanced_page():
 
     else:
         st.info("Please upload a Raw Data file to begin the analysis.")
+
 
 
 
