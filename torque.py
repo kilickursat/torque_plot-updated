@@ -798,7 +798,8 @@ def advanced_page():
             # Allow user to select columns if not found or adjust selections
             st.subheader("Select Sensor Columns")
             
-            # Add a checkbox to let the user specify if the time column is numeric or datetime
+            # **Critical Correction: Ensure 'Time_unit' is assigned before sorting**
+            # Add a selectbox to let the user specify if the time column is numeric or datetime
             time_column_type_user = st.selectbox(
                 "Select Time Column Type",
                 options=["Numeric", "Datetime"],
@@ -897,8 +898,7 @@ def advanced_page():
             max_distance_value = df[distance_col].max()
             st.write(f"**Maximum value in the distance/chainage column (`{distance_col}`):** {max_distance_value}")
 
-            # **Modified Time Column Handling: Always Treat as Numeric**
-            # Convert the time column to numeric based on user selection
+            # **Modified Time Column Handling: Always Treat as Numeric or Datetime Based on User Selection**
             if time_column_type_user == "Numeric":
                 df[time_col] = pd.to_numeric(df[time_col], errors='coerce')
                 if df[time_col].isnull().all():
@@ -908,14 +908,17 @@ def advanced_page():
                     return
                 time_column_type = 'numeric'
 
+                # Assign Time_unit for plotting
+                df["Time_unit"] = df[time_col]
+
                 # Sort the dataframe by Time_unit
                 df = df.sort_values("Time_unit")
 
                 # Calculate min and max time
-                min_time_unit = df[time_col].min()
-                max_time_unit = df[time_col].max()
+                min_time_unit = df["Time_unit"].min()
+                max_time_unit = df["Time_unit"].max()
 
-                # Display the time range in numeric format (seconds)
+                # Display the time range in numeric format
                 st.write(f"**Data time range:** {min_time_unit:.2f} to {max_time_unit:.2f} units")
 
                 # Create the time range slider
@@ -928,10 +931,7 @@ def advanced_page():
                 )
 
                 # Filter data based on the selected time range
-                df = df[(df[time_col] >= time_range[0]) & (df[time_col] <= time_range[1])]
-
-                # Assign Time_unit for plotting
-                df["Time_unit"] = df[time_col]
+                df = df[(df["Time_unit"] >= time_range[0]) & (df["Time_unit"] <= time_range[1])]
 
             else:
                 # Treat as datetime
@@ -952,7 +952,7 @@ def advanced_page():
                         time_column_type = 'numeric'
 
                 if time_column_type == 'datetime':
-                    # Use the datetime column directly
+                    # Assign Time_unit for plotting
                     df["Time_unit"] = df[time_col]
 
                     # Sort the dataframe by Time_unit
@@ -980,9 +980,32 @@ def advanced_page():
 
                     # Filter data based on the selected time range
                     df = df[(df["Time_unit"] >= time_range[0]) & (df["Time_unit"] <= time_range[1])]
+
                 elif time_column_type == 'numeric':
-                    # Similar handling as above for numeric
-                    pass  # Already handled above
+                    # Assign Time_unit for plotting
+                    df["Time_unit"] = df[time_col]
+
+                    # Sort the dataframe by Time_unit
+                    df = df.sort_values("Time_unit")
+
+                    # Calculate min and max time
+                    min_time_unit = df["Time_unit"].min()
+                    max_time_unit = df["Time_unit"].max()
+
+                    # Display the time range in numeric format
+                    st.write(f"**Data time range:** {min_time_unit:.2f} to {max_time_unit:.2f} units")
+
+                    # Create the time range slider
+                    time_range = st.slider(
+                        "Select Time Range",
+                        min_value=float(min_time_unit),
+                        max_value=float(max_time_unit),
+                        value=(float(min_time_unit), float(max_time_unit)),
+                        format="%.2f",
+                    )
+
+                    # Filter data based on the selected time range
+                    df = df[(df["Time_unit"] >= time_range[0]) & (df["Time_unit"] <= time_range[1])]
 
             # Ensure numeric columns are numeric
             for col in [
