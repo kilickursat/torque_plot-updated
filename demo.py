@@ -26,6 +26,9 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+# Helper Functions
+
 def load_data(file, file_type):
     """
     Loads raw data from a CSV or Excel file.
@@ -44,6 +47,7 @@ def load_data(file, file_type):
         st.error(f"Error loading raw data: {e}")
         logger.error(f"Error loading raw data: {e}")
         return None
+
 def load_machine_specs(file, file_type):
     """
     Loads machine specifications from a CSV or Excel file.
@@ -62,6 +66,7 @@ def load_machine_specs(file, file_type):
         st.error(f"Error loading machine specifications: {e}")
         logger.error(f"Error loading machine specifications: {e}")
         return None
+
 def find_sensor_columns(df):
     """
     Attempts to find sensor columns in the raw data based on common names.
@@ -156,6 +161,7 @@ def find_sensor_columns(df):
             found_columns[sensor] = None
     logger.info("Sensor columns mapping completed.")
     return found_columns
+
 def get_table_download_link(df, filename, link_text):
     """
     Generates a link allowing the data in a given panda dataframe to be downloaded
@@ -165,6 +171,7 @@ def get_table_download_link(df, filename, link_text):
     b64 = base64.b64encode(csv.encode()).decode()  # some strings
     href = f'<a href="data:file/csv;base64,{b64}" download="{filename}">{link_text}</a>'
     return href
+
 def calculate_whisker_and_outliers_advanced(series):
     """
     Calculates the lower and upper whiskers (10th and 90th percentiles)
@@ -176,6 +183,7 @@ def calculate_whisker_and_outliers_advanced(series):
     outliers = series[(series < lower_whisker) | (series > upper_whisker)].unique()
     logger.info("Whiskers and outliers calculated.")
     return lower_whisker, upper_whisker, outliers
+
 def display_statistics(df, revolution_col, pressure_col, thrust_force_col):
     """
     Displays statistical summaries for RPM, Pressure, and Thrust Force.
@@ -196,6 +204,7 @@ def display_statistics(df, revolution_col, pressure_col, thrust_force_col):
         st.write(df[thrust_force_col].describe())
     
     logger.info("Statistical summaries displayed.")
+
 def is_valid_machine(params):
     """
     Validates that machine parameters are within acceptable ranges.
@@ -205,6 +214,7 @@ def is_valid_machine(params):
         if params.get(param, 0) == 0 or params.get(param, None) is None:
             return False
     return True
+
 def get_machine_params(specs_df, machine_type):
     """
     Extracts and validates machine parameters for the selected machine type.
@@ -256,31 +266,35 @@ def get_machine_params(specs_df, machine_type):
         else:
             found_columns[param] = None  # Explicitly set to None if not found
 
-    # Collect missing parameters
-    missing_params = [param for param, value in found_columns.items() if value is None]
+    # Collect missing or zero parameters
+    missing_params = [param for param, value in found_columns.items() if value is None or value == 0.0]
 
     # If any parameters are missing or zero, prompt user to input them
     if missing_params:
         st.warning(
-            f"The selected machine '{machine_type}' is missing the following parameters: {', '.join(missing_params)}. "
+            f"The selected machine '{machine_type}' is missing or has zero for the following parameters: {', '.join(missing_params)}. "
             f"Please input the missing values below."
         )
         for param in missing_params:
+            # Set a reasonable default value or placeholder
+            default_value = 1.0  # You can adjust this as needed
             user_input = st.number_input(
                 f"Input value for '{param}':",
-                min_value=0.0,
+                min_value=0.01,  # Prevent zero or negative values
+                value=default_value,
                 format="%.2f",
                 key=f"{machine_type}_{param}"
             )
             found_columns[param] = user_input
 
     # Validate parameter values
-    if not is_valid_machine(found_columns):
+    invalid_params = [param for param, value in found_columns.items() if value is None or value == 0.0]
+    if invalid_params:
         st.error(
-            f"Selected machine '{machine_type}' has invalid or zero parameters even after user input. Please verify the values."
+            f"Selected machine '{machine_type}' has invalid or zero parameters even after user input: {', '.join(invalid_params)}. Please verify the values."
         )
         logger.error(
-            f"Machine '{machine_type}' has invalid or zero parameters after user input."
+            f"Machine '{machine_type}' has invalid or zero parameters after user input: {', '.join(invalid_params)}."
         )
         return None
 
@@ -291,6 +305,121 @@ def get_machine_params(specs_df, machine_type):
     logger.info(f"Machine parameters for '{machine_type}' retrieved successfully.")
 
     return found_columns
+
+def process_time_column(df, time_col, time_type):
+    """
+    Processes the time column based on the user-selected type (Numeric or Datetime).
+    Assigns a 'Time_unit' column for consistent plotting.
+    """
+    if time_type == "Numeric":
+        df[time_col] = pd.to_numeric(df[time_col], errors='coerce')
+        if df[time_col].isnull().all():
+            st.error(f"The selected time column '{time_col}' cannot be converted to numeric values.")
+            logger.error(f"Time column '{time_col}' conversion to numeric failed.")
+            st.stop()
+        df["Time_unit"] = df[time_col]
+        # Sort the dataframe by Time_unit
+        df = df.sort_values("Time_unit")
+        # Calculate min and max time
+        min_time_unit = df["Time_unit"].min()
+        max_time_unit = df["Time_unit"].max()
+        # Display the time range in numeric format
+        st.write(f"**Data Time Range:** {min_time_unit:.2f} to {max_time_unit:.2f} units")
+        # Create the time range slider
+        time_range = st.slider(
+            "Select Time Range",
+            min_value=float(min_time_unit),
+            max_value=float(max_time_unit),
+            value=(float(min_time_unit), float(max_time_unit)),
+            format="%.2f",
+        )
+        # Filter data based on the selected time range
+        df = df[(df["Time_unit"] >= time_range[0]) & (df["Time_unit"] <= time_range[1])]
+    else:
+        try:
+            df[time_col] = pd.to_datetime(df[time_col], errors='coerce')
+            if df[time_col].isnull().all():
+                st.error(f"The selected time column '{time_col}' cannot be converted to datetime values.")
+                logger.error(f"Time column '{time_col}' conversion to datetime failed.")
+                st.stop()
+            df["Time_unit"] = df[time_col]
+            # Sort the dataframe by Time_unit
+            df = df.sort_values("Time_unit")
+            # Calculate min and max time
+            min_time_unit = df["Time_unit"].min().to_pydatetime()
+            max_time_unit = df["Time_unit"].max().to_pydatetime()
+            # Display the time range
+            st.write(f"**Data Time Range:** {min_time_unit} to {max_time_unit}")
+            # Define a reasonable step for the slider (e.g., one second)
+            time_step = timedelta(seconds=1)
+            # Create the time range slider
+            time_range = st.slider(
+                "Select Time Range",
+                min_value=min_time_unit,
+                max_value=max_time_unit,
+                value=(min_time_unit, max_time_unit),
+                format="YYYY-MM-DD HH:mm:ss",
+                step=time_step,
+            )
+            # Filter data based on the selected time range
+            df = df[(df["Time_unit"] >= time_range[0]) & (df["Time_unit"] <= time_range[1])]
+        except Exception as e:
+            st.error(f"Error processing datetime for time column '{time_col}': {e}")
+            logger.error(f"Error processing datetime for time column '{time_col}': {e}")
+            st.stop()
+    return df
+
+def validate_and_convert_columns(df, columns):
+    """
+    Ensures that specified columns are numeric and drops rows with NaNs.
+    """
+    for col in columns:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    df = df.dropna(subset=columns)
+    logger.info("Numeric columns validated and converted.")
+    return df
+
+def calculate_metrics(df, params, columns, num_cutting_rings):
+    """
+    Calculates necessary metrics such as Penetration Rate, Thrust Force per Cutting Ring,
+    and Calculated Torque.
+    """
+    # Calculate Penetration Rate with safe division
+    df["Calculated Penetration Rate"] = df.apply(
+        lambda row: row[columns['advance_rate']] / row[columns['revolution']] if row[columns['revolution']] != 0 else np.nan,
+        axis=1
+    )
+    # Drop or handle NaN values resulting from division by zero
+    df = df.dropna(subset=["Calculated Penetration Rate"])
+    if df.empty:
+        st.error("No data available after calculating Penetration Rate.")
+        logger.error("DataFrame is empty after calculating Penetration Rate.")
+        st.stop()
+
+    # Thrust Force per Cutting Ring
+    if num_cutting_rings == 0:
+        st.error("Number of Cutting Rings cannot be zero.")
+        logger.error("Number of Cutting Rings is zero.")
+        st.stop()
+    df["Thrust Force per Cutting Ring"] = df[columns['thrust_force']] / num_cutting_rings
+
+    # Calculate Torque
+    df["Calculated torque [kNm]"] = df.apply(
+        lambda row: row[columns['pressure']] * params["torque_constant"] if row[columns['revolution']] < params["n1"]
+        else (params["n1"] / row[columns['revolution']]) * params["torque_constant"] * row[columns['pressure']]
+        if row[columns['revolution']] != 0 else np.nan,
+        axis=1
+    )
+    # Drop or handle NaN values resulting from invalid torque calculations
+    df = df.dropna(subset=["Calculated torque [kNm]"])
+    if df.empty:
+        st.error("No data available after calculating torque.")
+        logger.error("DataFrame is empty after calculating torque.")
+        st.stop()
+
+    logger.info("Metrics calculated successfully.")
+    return df
+
 def advanced_page():
     st.title("Advanced Machine Data Analysis")
 
@@ -882,7 +1011,7 @@ def advanced_page():
                         col=1,
                     )
                     # Update y-axis for rolling mean
-                    fig_time.update_yaxes(title_text=f"{feature['display_name']} - Rolling Mean", row=2*i, col=1)
+                    fig_time.update_yaxes(title_text=f"{feature['display_name']} Rolling Mean", row=2*i, col=1)
 
             # Update overall layout
             fig_time.update_layout(
@@ -1036,69 +1165,5 @@ def advanced_page():
                 unsafe_allow_html=True,
             )
 
-    # Helper functions used within advanced_page
-
-    def process_time_column(df, time_col, time_type):
-        """
-        Processes the time column based on the user-selected type (Numeric or Datetime).
-        Assigns a 'Time_unit' column for consistent plotting.
-        """
-        if time_type == "Numeric":
-            df[time_col] = pd.to_numeric(df[time_col], errors='coerce')
-            if df[time_col].isnull().all():
-                st.error(f"The selected time column '{time_col}' cannot be converted to numeric values.")
-                logger.error(f"Time column '{time_col}' conversion to numeric failed.")
-                st.stop()
-            df["Time_unit"] = df[time_col]
-            # Sort the dataframe by Time_unit
-            df = df.sort_values("Time_unit")
-            # Calculate min and max time
-            min_time_unit = df["Time_unit"].min()
-            max_time_unit = df["Time_unit"].max()
-            # Display the time range in numeric format
-            st.write(f"**Data Time Range:** {min_time_unit:.2f} to {max_time_unit:.2f} units")
-            # Create the time range slider
-            time_range = st.slider(
-                "Select Time Range",
-                min_value=float(min_time_unit),
-                max_value=float(max_time_unit),
-                value=(float(min_time_unit), float(max_time_unit)),
-                format="%.2f",
-            )
-            # Filter data based on the selected time range
-            df = df[(df["Time_unit"] >= time_range[0]) & (df["Time_unit"] <= time_range[1])]
-        else:
-            try:
-                df[time_col] = pd.to_datetime(df[time_col], errors='coerce')
-                if df[time_col].isnull().all():
-                    st.error(f"The selected time column '{time_col}' cannot be converted to datetime values.")
-                    logger.error(f"Time column '{time_col}' conversion to datetime failed.")
-                    st.stop()
-                df["Time_unit"] = df[time_col]
-                # Sort the dataframe by Time_unit
-                df = df.sort_values("Time_unit")
-                # Calculate min and max time
-                min_time_unit = df["Time_unit"].min().to_pydatetime()
-                max_time_unit = df["Time_unit"].max().to_pydatetime()
-                # Display the time range
-                st.write(f"**Data Time Range:** {min_time_unit} to {max_time_unit}")
-                # Define a reasonable step for the slider (e.g., one second)
-                time_step = timedelta(seconds=1)
-                # Create the time range slider
-                time_range = st.slider(
-                    "Select Time Range",
-                    min_value=min_time_unit,
-                    max_value=max_time_unit,
-                    value=(min_time_unit, max_time_unit),
-                    format="YYYY-MM-DD HH:mm:ss",
-                    step=time_step,
-                )
-                # Filter data based on the selected time range
-                df = df[(df["Time_unit"] >= time_range[0]) & (df["Time_unit"] <= time_range[1])]
-            except Exception as e:
-                st.error(f"Error processing datetime for time column '{time_col}': {e}")
-                logger.error(f"Error processing datetime for time column '{time_col}': {e}")
-                st.stop()
-        return df
 if __name__ == "__main__":
     advanced_page()
