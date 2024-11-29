@@ -613,18 +613,43 @@ def get_machine_params(specs_df: pd.DataFrame, machine_type: str) -> Optional[Di
         # Extract first matching row
         machine_data = machine_rows.iloc[0]
 
-        # Define parameter mappings with alternatives
+        # Define parameter mappings with alternatives and German translations
         parameter_mappings = {
-            'n1': ['n1[1/min]', 'n1 (1/min)', 'n1[rpm]', 'Max RPM'],
-            'n2': ['n2[1/min]', 'n2 (1/min)', 'n2[rpm]', 'Min RPM'],
-            'M_cont_value': ['M(dauer) [kNm]', 'M(dauer)[kNm]', 'M (dauer)', 'Continuous Torque'],
-            'M_max_Vg1': ['M(max)', 'M max', 'M (max)', 'M_max[kNm]', 'M(max)[kNm]', 'Max Torque'],
+            'n1': [
+                'n1[1/min]', 'n1 (1/min)', 'n1[rpm]', 'Max RPM', 'n1', 
+                'Maximum Speed', 'Max Speed', 'Drehzahl Max',
+                'MaxSpeed', 'Speed_Max', 'n_max'
+            ],
+            'n2': [
+                'n2[1/min]', 'n2 (1/min)', 'n2[rpm]', 'Min RPM', 'n2',
+                'Minimum Speed', 'Min Speed', 'Drehzahl Min',
+                'MinSpeed', 'Speed_Min', 'n_min'
+            ],
+            'M_cont_value': [
+                'M(dauer) [kNm]', 'M(dauer)[kNm]', 'M (dauer)', 'Continuous Torque',
+                'M_cont', 'Cont_Torque', 'Dauer_Drehmoment', 'M_dauer',
+                'Continuous_Torque', 'TorqueContinuous', 'M cont'
+            ],
+            'M_max_Vg1': [
+                'M(max)', 'M max', 'M (max)', 'M_max[kNm]', 'M(max)[kNm]', 
+                'Max Torque', 'Maximum_Torque', 'TorqueMax',
+                'Max_Torque', 'Drehmoment_Max', 'M maximum'
+            ],
             'torque_constant': [
-                'Drehmomentumrechnung[kNm/bar]',
-                'Drehmomentumrechnung [kNm/bar]',
-                'Torque Constant'
+                'Drehmomentumrechnung[kNm/bar]', 'Drehmomentumrechnung [kNm/bar]',
+                'Torque Constant', 'TorqueConstant', 'Torque_Constant',
+                'Drehmoment_Konstante', 'Torque_Factor', 'TorqueFactor',
+                'kNm/bar', 'Torque/Pressure', 'TorquePerPressure'
             ]
         }
+
+        # Add case-insensitive search
+        for param_name, possible_names in parameter_mappings.items():
+            # Add lowercase and uppercase versions
+            extra_names = []
+            for name in possible_names:
+                extra_names.extend([name.lower(), name.upper()])
+            parameter_mappings[param_name].extend(extra_names)
 
         # Find parameters
         params = {}
@@ -632,22 +657,52 @@ def get_machine_params(specs_df: pd.DataFrame, machine_type: str) -> Optional[Di
         
         for param_name, possible_names in parameter_mappings.items():
             found = False
+            # First try exact matches
             for name in possible_names:
                 if name in machine_data.index:
                     try:
-                        params[param_name] = float(machine_data[name])
+                        value = machine_data[name]
+                        # Handle string values that might contain numbers
+                        if isinstance(value, str):
+                            # Remove any units in brackets and convert to float
+                            value = float(re.sub(r'\[.*?\]', '', value).strip())
+                        params[param_name] = float(value)
                         found = True
                         break
-                    except ValueError:
-                        logger.error(f"Invalid value for {param_name}: {machine_data[name]}")
-                        raise DataProcessingError(f"Invalid value for {param_name}: {machine_data[name]}")
+                    except (ValueError, TypeError):
+                        continue
+            
+            # If no exact match, try fuzzy matching
+            if not found:
+                for column in machine_data.index:
+                    if any(possible_name.lower() in column.lower() for possible_name in possible_names):
+                        try:
+                            value = machine_data[column]
+                            if isinstance(value, str):
+                                value = float(re.sub(r'\[.*?\]', '', value).strip())
+                            params[param_name] = float(value)
+                            found = True
+                            break
+                        except (ValueError, TypeError):
+                            continue
+            
             if not found:
                 missing_params.append(f"{param_name} ({possible_names[0]})")
 
         if missing_params:
+            # If parameters are missing, try to provide more helpful error message
+            available_columns = ", ".join(machine_data.index)
             raise DataProcessingError(
-                f"Missing required parameters for machine '{machine_type}': {', '.join(missing_params)}"
+                f"Missing required parameters for machine '{machine_type}': {', '.join(missing_params)}\n"
+                f"Available columns: {available_columns}"
             )
+
+        # Add default values for missing parameters if appropriate
+        if 'n2' not in params and 'n1' in params:
+            params['n2'] = params['n1'] * 0.1  # Default minimum speed to 10% of max speed
+        
+        if 'M_cont_value' not in params and 'M_max_Vg1' in params:
+            params['M_cont_value'] = params['M_max_Vg1'] * 0.8  # Default continuous torque to 80% of max
 
         # Validate parameter values
         validate_machine_params(params)
