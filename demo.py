@@ -877,9 +877,6 @@ def display_advanced_statistics(df, columns):
             'Thrust_Force_per_Ring': df['Thrust Force per Cutting Ring'].describe()
         }))
 
-"""
-Part 4: Error Handling and Additional Helper Functions
-"""
 
 class DataProcessingError(Exception):
     """Custom exception for data processing errors."""
