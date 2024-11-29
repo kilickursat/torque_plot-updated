@@ -614,32 +614,977 @@ def get_machine_params(specs_df, machine_type):
     # Extract the first matching row
     machine_data = machine_rows.iloc[0]
     
-    # Define extended parameter patterns with regex
+    # Define parameter patterns that match the exact column names
     parameter_patterns = {
         'n1': [
-            r'^n1[\s_]*(?:\[1/min\]|\(1/min\)|\[rpm\])?$',
-            r'^max(?:imum)?[\s_]*(?:speed|rpm|revolution)[\s_]*(?:\[1/min\]|\(1/min\)|\[rpm\])?$',
-            r'^drehzahl[\s_]*max(?:imum)?$'
+            r'^n1\s*\[1/min\]
+
+    def clean_column_name(col):
+        """Clean column names for consistent matching."""
+        return str(col).strip()
+    
+    def extract_numeric_value(value):
+        """Extract numeric value from string, handling different formats."""
+        if pd.isna(value):
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        # Clean string and extract numeric value
+        value_str = str(value).lower().strip()
+        # Remove units and other non-numeric characters
+        numeric_part = re.sub(r'[^\d.,\-]', '', value_str.split('[')[0])
+        try:
+            # Handle different decimal separators
+            numeric_part = numeric_part.replace(',', '.')
+            return float(numeric_part)
+        except ValueError:
+            return None
+
+    def find_matching_column(patterns):
+        """Find column matching any of the provided patterns."""
+        clean_columns = {clean_column_name(col): col for col in machine_data.index}
+        
+        for pattern in patterns:
+            for clean_col in clean_columns.keys():
+                if re.match(pattern, clean_col):
+                    value = extract_numeric_value(machine_data[clean_columns[clean_col]])
+                    if value is not None and value > 0:
+                        return value
+        return None
+
+    # Extract parameters
+    params = {}
+    missing_params = []
+    
+    for param_name, patterns in parameter_patterns.items():
+        value = find_matching_column(patterns)
+        if value is None:
+            missing_params.append(param_name)
+            continue
+        params[param_name] = value
+
+    # If any parameters are missing, return None with error message
+    if missing_params:
+        # Log available columns for debugging
+        available_cols = "\nAvailable columns:\n" + "\n".join(machine_data.index)
+        st.error(f"Missing required parameters for machine '{machine_type}': {', '.join(missing_params)}.{available_cols}")
+        return None
+
+    # Validate parameter relationships
+    if params['n2'] >= params['n1']:
+        st.error(f"Invalid parameters: n2 ({params['n2']}) must be less than n1 ({params['n1']})")
+        return None
+
+    if params['M_cont_value'] >= params['M_max_Vg1']:
+        st.error(f"Invalid parameters: Continuous torque ({params['M_cont_value']}) must be less than maximum torque ({params['M_max_Vg1']})")
+        return None
+
+    return params
+,
+            r'^n1
+
+    def clean_column_name(col):
+        """Clean column names for consistent matching."""
+        return str(col).lower().strip().replace('-', '_').replace(' ', '_')
+    
+    def extract_numeric_value(value):
+        """Extract numeric value from string, handling different formats."""
+        if pd.isna(value):
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        # Clean string and extract numeric value
+        value_str = str(value).lower().strip()
+        # Remove units and other non-numeric characters
+        numeric_part = re.sub(r'[^\d.,\-]', '', value_str.split('[')[0])
+        try:
+            # Handle different decimal separators
+            numeric_part = numeric_part.replace(',', '.')
+            return float(numeric_part)
+        except ValueError:
+            return None
+
+    def find_matching_column(patterns):
+        """Find column matching any of the provided patterns."""
+        clean_columns = {clean_column_name(col): col for col in machine_data.index}
+        
+        for pattern in patterns:
+            for clean_col in clean_columns.keys():
+                if re.match(pattern, clean_col):
+                    value = extract_numeric_value(machine_data[clean_columns[clean_col]])
+                    if value is not None and value > 0:
+                        return value
+        return None
+
+    # Extract parameters
+    params = {}
+    missing_params = []
+    
+    for param_name, patterns in parameter_patterns.items():
+        value = find_matching_column(patterns)
+        if value is None:
+            missing_params.append(param_name)
+            continue
+        params[param_name] = value
+
+    # If any parameters are missing, return None with error message
+    if missing_params:
+        # Log available columns for debugging
+        available_cols = "\nAvailable columns:\n" + "\n".join(machine_data.index)
+        st.error(f"Missing required parameters for machine '{machine_type}': {', '.join(missing_params)}.{available_cols}")
+        return None
+
+    # Validate parameter relationships
+    if params['n2'] >= params['n1']:
+        st.error(f"Invalid parameters: n2 ({params['n2']}) must be less than n1 ({params['n1']})")
+        return None
+
+    if params['M_cont_value'] >= params['M_max_Vg1']:
+        st.error(f"Invalid parameters: Continuous torque ({params['M_cont_value']}) must be less than maximum torque ({params['M_max_Vg1']})")
+        return None
+
+    return params
+,
+            r'^n1 \[\d+/min\]
+
+    def clean_column_name(col):
+        """Clean column names for consistent matching."""
+        return str(col).lower().strip().replace('-', '_').replace(' ', '_')
+    
+    def extract_numeric_value(value):
+        """Extract numeric value from string, handling different formats."""
+        if pd.isna(value):
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        # Clean string and extract numeric value
+        value_str = str(value).lower().strip()
+        # Remove units and other non-numeric characters
+        numeric_part = re.sub(r'[^\d.,\-]', '', value_str.split('[')[0])
+        try:
+            # Handle different decimal separators
+            numeric_part = numeric_part.replace(',', '.')
+            return float(numeric_part)
+        except ValueError:
+            return None
+
+    def find_matching_column(patterns):
+        """Find column matching any of the provided patterns."""
+        clean_columns = {clean_column_name(col): col for col in machine_data.index}
+        
+        for pattern in patterns:
+            for clean_col in clean_columns.keys():
+                if re.match(pattern, clean_col):
+                    value = extract_numeric_value(machine_data[clean_columns[clean_col]])
+                    if value is not None and value > 0:
+                        return value
+        return None
+
+    # Extract parameters
+    params = {}
+    missing_params = []
+    
+    for param_name, patterns in parameter_patterns.items():
+        value = find_matching_column(patterns)
+        if value is None:
+            missing_params.append(param_name)
+            continue
+        params[param_name] = value
+
+    # If any parameters are missing, return None with error message
+    if missing_params:
+        # Log available columns for debugging
+        available_cols = "\nAvailable columns:\n" + "\n".join(machine_data.index)
+        st.error(f"Missing required parameters for machine '{machine_type}': {', '.join(missing_params)}.{available_cols}")
+        return None
+
+    # Validate parameter relationships
+    if params['n2'] >= params['n1']:
+        st.error(f"Invalid parameters: n2 ({params['n2']}) must be less than n1 ({params['n1']})")
+        return None
+
+    if params['M_cont_value'] >= params['M_max_Vg1']:
+        st.error(f"Invalid parameters: Continuous torque ({params['M_cont_value']}) must be less than maximum torque ({params['M_max_Vg1']})")
+        return None
+
+    return params
+
         ],
         'n2': [
-            r'^n2[\s_]*(?:\[1/min\]|\(1/min\)|\[rpm\])?$', 
-            r'^min(?:imum)?[\s_]*(?:speed|rpm|revolution)[\s_]*(?:\[1/min\]|\(1/min\)|\[rpm\])?$',
-            r'^drehzahl[\s_]*min(?:imum)?$'
+            r'^n2\s*\[1/min\]
+
+    def clean_column_name(col):
+        """Clean column names for consistent matching."""
+        return str(col).lower().strip().replace('-', '_').replace(' ', '_')
+    
+    def extract_numeric_value(value):
+        """Extract numeric value from string, handling different formats."""
+        if pd.isna(value):
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        # Clean string and extract numeric value
+        value_str = str(value).lower().strip()
+        # Remove units and other non-numeric characters
+        numeric_part = re.sub(r'[^\d.,\-]', '', value_str.split('[')[0])
+        try:
+            # Handle different decimal separators
+            numeric_part = numeric_part.replace(',', '.')
+            return float(numeric_part)
+        except ValueError:
+            return None
+
+    def find_matching_column(patterns):
+        """Find column matching any of the provided patterns."""
+        clean_columns = {clean_column_name(col): col for col in machine_data.index}
+        
+        for pattern in patterns:
+            for clean_col in clean_columns.keys():
+                if re.match(pattern, clean_col):
+                    value = extract_numeric_value(machine_data[clean_columns[clean_col]])
+                    if value is not None and value > 0:
+                        return value
+        return None
+
+    # Extract parameters
+    params = {}
+    missing_params = []
+    
+    for param_name, patterns in parameter_patterns.items():
+        value = find_matching_column(patterns)
+        if value is None:
+            missing_params.append(param_name)
+            continue
+        params[param_name] = value
+
+    # If any parameters are missing, return None with error message
+    if missing_params:
+        # Log available columns for debugging
+        available_cols = "\nAvailable columns:\n" + "\n".join(machine_data.index)
+        st.error(f"Missing required parameters for machine '{machine_type}': {', '.join(missing_params)}.{available_cols}")
+        return None
+
+    # Validate parameter relationships
+    if params['n2'] >= params['n1']:
+        st.error(f"Invalid parameters: n2 ({params['n2']}) must be less than n1 ({params['n1']})")
+        return None
+
+    if params['M_cont_value'] >= params['M_max_Vg1']:
+        st.error(f"Invalid parameters: Continuous torque ({params['M_cont_value']}) must be less than maximum torque ({params['M_max_Vg1']})")
+        return None
+
+    return params
+,
+            r'^n2
+
+    def clean_column_name(col):
+        """Clean column names for consistent matching."""
+        return str(col).lower().strip().replace('-', '_').replace(' ', '_')
+    
+    def extract_numeric_value(value):
+        """Extract numeric value from string, handling different formats."""
+        if pd.isna(value):
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        # Clean string and extract numeric value
+        value_str = str(value).lower().strip()
+        # Remove units and other non-numeric characters
+        numeric_part = re.sub(r'[^\d.,\-]', '', value_str.split('[')[0])
+        try:
+            # Handle different decimal separators
+            numeric_part = numeric_part.replace(',', '.')
+            return float(numeric_part)
+        except ValueError:
+            return None
+
+    def find_matching_column(patterns):
+        """Find column matching any of the provided patterns."""
+        clean_columns = {clean_column_name(col): col for col in machine_data.index}
+        
+        for pattern in patterns:
+            for clean_col in clean_columns.keys():
+                if re.match(pattern, clean_col):
+                    value = extract_numeric_value(machine_data[clean_columns[clean_col]])
+                    if value is not None and value > 0:
+                        return value
+        return None
+
+    # Extract parameters
+    params = {}
+    missing_params = []
+    
+    for param_name, patterns in parameter_patterns.items():
+        value = find_matching_column(patterns)
+        if value is None:
+            missing_params.append(param_name)
+            continue
+        params[param_name] = value
+
+    # If any parameters are missing, return None with error message
+    if missing_params:
+        # Log available columns for debugging
+        available_cols = "\nAvailable columns:\n" + "\n".join(machine_data.index)
+        st.error(f"Missing required parameters for machine '{machine_type}': {', '.join(missing_params)}.{available_cols}")
+        return None
+
+    # Validate parameter relationships
+    if params['n2'] >= params['n1']:
+        st.error(f"Invalid parameters: n2 ({params['n2']}) must be less than n1 ({params['n1']})")
+        return None
+
+    if params['M_cont_value'] >= params['M_max_Vg1']:
+        st.error(f"Invalid parameters: Continuous torque ({params['M_cont_value']}) must be less than maximum torque ({params['M_max_Vg1']})")
+        return None
+
+    return params
+,
+            r'^n2 \[\d+/min\]
+
+    def clean_column_name(col):
+        """Clean column names for consistent matching."""
+        return str(col).lower().strip().replace('-', '_').replace(' ', '_')
+    
+    def extract_numeric_value(value):
+        """Extract numeric value from string, handling different formats."""
+        if pd.isna(value):
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        # Clean string and extract numeric value
+        value_str = str(value).lower().strip()
+        # Remove units and other non-numeric characters
+        numeric_part = re.sub(r'[^\d.,\-]', '', value_str.split('[')[0])
+        try:
+            # Handle different decimal separators
+            numeric_part = numeric_part.replace(',', '.')
+            return float(numeric_part)
+        except ValueError:
+            return None
+
+    def find_matching_column(patterns):
+        """Find column matching any of the provided patterns."""
+        clean_columns = {clean_column_name(col): col for col in machine_data.index}
+        
+        for pattern in patterns:
+            for clean_col in clean_columns.keys():
+                if re.match(pattern, clean_col):
+                    value = extract_numeric_value(machine_data[clean_columns[clean_col]])
+                    if value is not None and value > 0:
+                        return value
+        return None
+
+    # Extract parameters
+    params = {}
+    missing_params = []
+    
+    for param_name, patterns in parameter_patterns.items():
+        value = find_matching_column(patterns)
+        if value is None:
+            missing_params.append(param_name)
+            continue
+        params[param_name] = value
+
+    # If any parameters are missing, return None with error message
+    if missing_params:
+        # Log available columns for debugging
+        available_cols = "\nAvailable columns:\n" + "\n".join(machine_data.index)
+        st.error(f"Missing required parameters for machine '{machine_type}': {', '.join(missing_params)}.{available_cols}")
+        return None
+
+    # Validate parameter relationships
+    if params['n2'] >= params['n1']:
+        st.error(f"Invalid parameters: n2 ({params['n2']}) must be less than n1 ({params['n1']})")
+        return None
+
+    if params['M_cont_value'] >= params['M_max_Vg1']:
+        st.error(f"Invalid parameters: Continuous torque ({params['M_cont_value']}) must be less than maximum torque ({params['M_max_Vg1']})")
+        return None
+
+    return params
+
         ],
         'M_cont_value': [
-            r'^m[\s_]*(?:cont|continuous|dauer)[\s_]*(?:\[knm\]|\(knm\))?$',
-            r'^continuous[\s_]*torque[\s_]*(?:\[knm\]|\(knm\))?$',
-            r'^dauer[\s_]*drehmoment$'
+            r'^M\(dauer\)\s*\[kNm\]
+
+    def clean_column_name(col):
+        """Clean column names for consistent matching."""
+        return str(col).lower().strip().replace('-', '_').replace(' ', '_')
+    
+    def extract_numeric_value(value):
+        """Extract numeric value from string, handling different formats."""
+        if pd.isna(value):
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        # Clean string and extract numeric value
+        value_str = str(value).lower().strip()
+        # Remove units and other non-numeric characters
+        numeric_part = re.sub(r'[^\d.,\-]', '', value_str.split('[')[0])
+        try:
+            # Handle different decimal separators
+            numeric_part = numeric_part.replace(',', '.')
+            return float(numeric_part)
+        except ValueError:
+            return None
+
+    def find_matching_column(patterns):
+        """Find column matching any of the provided patterns."""
+        clean_columns = {clean_column_name(col): col for col in machine_data.index}
+        
+        for pattern in patterns:
+            for clean_col in clean_columns.keys():
+                if re.match(pattern, clean_col):
+                    value = extract_numeric_value(machine_data[clean_columns[clean_col]])
+                    if value is not None and value > 0:
+                        return value
+        return None
+
+    # Extract parameters
+    params = {}
+    missing_params = []
+    
+    for param_name, patterns in parameter_patterns.items():
+        value = find_matching_column(patterns)
+        if value is None:
+            missing_params.append(param_name)
+            continue
+        params[param_name] = value
+
+    # If any parameters are missing, return None with error message
+    if missing_params:
+        # Log available columns for debugging
+        available_cols = "\nAvailable columns:\n" + "\n".join(machine_data.index)
+        st.error(f"Missing required parameters for machine '{machine_type}': {', '.join(missing_params)}.{available_cols}")
+        return None
+
+    # Validate parameter relationships
+    if params['n2'] >= params['n1']:
+        st.error(f"Invalid parameters: n2 ({params['n2']}) must be less than n1 ({params['n1']})")
+        return None
+
+    if params['M_cont_value'] >= params['M_max_Vg1']:
+        st.error(f"Invalid parameters: Continuous torque ({params['M_cont_value']}) must be less than maximum torque ({params['M_max_Vg1']})")
+        return None
+
+    return params
+,
+            r'^M\(dauer\)
+
+    def clean_column_name(col):
+        """Clean column names for consistent matching."""
+        return str(col).lower().strip().replace('-', '_').replace(' ', '_')
+    
+    def extract_numeric_value(value):
+        """Extract numeric value from string, handling different formats."""
+        if pd.isna(value):
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        # Clean string and extract numeric value
+        value_str = str(value).lower().strip()
+        # Remove units and other non-numeric characters
+        numeric_part = re.sub(r'[^\d.,\-]', '', value_str.split('[')[0])
+        try:
+            # Handle different decimal separators
+            numeric_part = numeric_part.replace(',', '.')
+            return float(numeric_part)
+        except ValueError:
+            return None
+
+    def find_matching_column(patterns):
+        """Find column matching any of the provided patterns."""
+        clean_columns = {clean_column_name(col): col for col in machine_data.index}
+        
+        for pattern in patterns:
+            for clean_col in clean_columns.keys():
+                if re.match(pattern, clean_col):
+                    value = extract_numeric_value(machine_data[clean_columns[clean_col]])
+                    if value is not None and value > 0:
+                        return value
+        return None
+
+    # Extract parameters
+    params = {}
+    missing_params = []
+    
+    for param_name, patterns in parameter_patterns.items():
+        value = find_matching_column(patterns)
+        if value is None:
+            missing_params.append(param_name)
+            continue
+        params[param_name] = value
+
+    # If any parameters are missing, return None with error message
+    if missing_params:
+        # Log available columns for debugging
+        available_cols = "\nAvailable columns:\n" + "\n".join(machine_data.index)
+        st.error(f"Missing required parameters for machine '{machine_type}': {', '.join(missing_params)}.{available_cols}")
+        return None
+
+    # Validate parameter relationships
+    if params['n2'] >= params['n1']:
+        st.error(f"Invalid parameters: n2 ({params['n2']}) must be less than n1 ({params['n1']})")
+        return None
+
+    if params['M_cont_value'] >= params['M_max_Vg1']:
+        st.error(f"Invalid parameters: Continuous torque ({params['M_cont_value']}) must be less than maximum torque ({params['M_max_Vg1']})")
+        return None
+
+    return params
+,
+            r'^M dauer \[kNm\]
+
+    def clean_column_name(col):
+        """Clean column names for consistent matching."""
+        return str(col).lower().strip().replace('-', '_').replace(' ', '_')
+    
+    def extract_numeric_value(value):
+        """Extract numeric value from string, handling different formats."""
+        if pd.isna(value):
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        # Clean string and extract numeric value
+        value_str = str(value).lower().strip()
+        # Remove units and other non-numeric characters
+        numeric_part = re.sub(r'[^\d.,\-]', '', value_str.split('[')[0])
+        try:
+            # Handle different decimal separators
+            numeric_part = numeric_part.replace(',', '.')
+            return float(numeric_part)
+        except ValueError:
+            return None
+
+    def find_matching_column(patterns):
+        """Find column matching any of the provided patterns."""
+        clean_columns = {clean_column_name(col): col for col in machine_data.index}
+        
+        for pattern in patterns:
+            for clean_col in clean_columns.keys():
+                if re.match(pattern, clean_col):
+                    value = extract_numeric_value(machine_data[clean_columns[clean_col]])
+                    if value is not None and value > 0:
+                        return value
+        return None
+
+    # Extract parameters
+    params = {}
+    missing_params = []
+    
+    for param_name, patterns in parameter_patterns.items():
+        value = find_matching_column(patterns)
+        if value is None:
+            missing_params.append(param_name)
+            continue
+        params[param_name] = value
+
+    # If any parameters are missing, return None with error message
+    if missing_params:
+        # Log available columns for debugging
+        available_cols = "\nAvailable columns:\n" + "\n".join(machine_data.index)
+        st.error(f"Missing required parameters for machine '{machine_type}': {', '.join(missing_params)}.{available_cols}")
+        return None
+
+    # Validate parameter relationships
+    if params['n2'] >= params['n1']:
+        st.error(f"Invalid parameters: n2 ({params['n2']}) must be less than n1 ({params['n1']})")
+        return None
+
+    if params['M_cont_value'] >= params['M_max_Vg1']:
+        st.error(f"Invalid parameters: Continuous torque ({params['M_cont_value']}) must be less than maximum torque ({params['M_max_Vg1']})")
+        return None
+
+    return params
+
         ],
         'M_max_Vg1': [
-            r'^m[\s_]*(?:max|maximum)[\s_]*(?:vg1)?[\s_]*(?:\[knm\]|\(knm\))?$',
-            r'^max(?:imum)?[\s_]*torque[\s_]*(?:\[knm\]|\(knm\))?$',
-            r'^drehmoment[\s_]*max(?:imum)?$'
+            r'^M\(max\)\s*\[kNm\]
+
+    def clean_column_name(col):
+        """Clean column names for consistent matching."""
+        return str(col).lower().strip().replace('-', '_').replace(' ', '_')
+    
+    def extract_numeric_value(value):
+        """Extract numeric value from string, handling different formats."""
+        if pd.isna(value):
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        # Clean string and extract numeric value
+        value_str = str(value).lower().strip()
+        # Remove units and other non-numeric characters
+        numeric_part = re.sub(r'[^\d.,\-]', '', value_str.split('[')[0])
+        try:
+            # Handle different decimal separators
+            numeric_part = numeric_part.replace(',', '.')
+            return float(numeric_part)
+        except ValueError:
+            return None
+
+    def find_matching_column(patterns):
+        """Find column matching any of the provided patterns."""
+        clean_columns = {clean_column_name(col): col for col in machine_data.index}
+        
+        for pattern in patterns:
+            for clean_col in clean_columns.keys():
+                if re.match(pattern, clean_col):
+                    value = extract_numeric_value(machine_data[clean_columns[clean_col]])
+                    if value is not None and value > 0:
+                        return value
+        return None
+
+    # Extract parameters
+    params = {}
+    missing_params = []
+    
+    for param_name, patterns in parameter_patterns.items():
+        value = find_matching_column(patterns)
+        if value is None:
+            missing_params.append(param_name)
+            continue
+        params[param_name] = value
+
+    # If any parameters are missing, return None with error message
+    if missing_params:
+        # Log available columns for debugging
+        available_cols = "\nAvailable columns:\n" + "\n".join(machine_data.index)
+        st.error(f"Missing required parameters for machine '{machine_type}': {', '.join(missing_params)}.{available_cols}")
+        return None
+
+    # Validate parameter relationships
+    if params['n2'] >= params['n1']:
+        st.error(f"Invalid parameters: n2 ({params['n2']}) must be less than n1 ({params['n1']})")
+        return None
+
+    if params['M_cont_value'] >= params['M_max_Vg1']:
+        st.error(f"Invalid parameters: Continuous torque ({params['M_cont_value']}) must be less than maximum torque ({params['M_max_Vg1']})")
+        return None
+
+    return params
+,
+            r'^M\(max\)
+
+    def clean_column_name(col):
+        """Clean column names for consistent matching."""
+        return str(col).lower().strip().replace('-', '_').replace(' ', '_')
+    
+    def extract_numeric_value(value):
+        """Extract numeric value from string, handling different formats."""
+        if pd.isna(value):
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        # Clean string and extract numeric value
+        value_str = str(value).lower().strip()
+        # Remove units and other non-numeric characters
+        numeric_part = re.sub(r'[^\d.,\-]', '', value_str.split('[')[0])
+        try:
+            # Handle different decimal separators
+            numeric_part = numeric_part.replace(',', '.')
+            return float(numeric_part)
+        except ValueError:
+            return None
+
+    def find_matching_column(patterns):
+        """Find column matching any of the provided patterns."""
+        clean_columns = {clean_column_name(col): col for col in machine_data.index}
+        
+        for pattern in patterns:
+            for clean_col in clean_columns.keys():
+                if re.match(pattern, clean_col):
+                    value = extract_numeric_value(machine_data[clean_columns[clean_col]])
+                    if value is not None and value > 0:
+                        return value
+        return None
+
+    # Extract parameters
+    params = {}
+    missing_params = []
+    
+    for param_name, patterns in parameter_patterns.items():
+        value = find_matching_column(patterns)
+        if value is None:
+            missing_params.append(param_name)
+            continue
+        params[param_name] = value
+
+    # If any parameters are missing, return None with error message
+    if missing_params:
+        # Log available columns for debugging
+        available_cols = "\nAvailable columns:\n" + "\n".join(machine_data.index)
+        st.error(f"Missing required parameters for machine '{machine_type}': {', '.join(missing_params)}.{available_cols}")
+        return None
+
+    # Validate parameter relationships
+    if params['n2'] >= params['n1']:
+        st.error(f"Invalid parameters: n2 ({params['n2']}) must be less than n1 ({params['n1']})")
+        return None
+
+    if params['M_cont_value'] >= params['M_max_Vg1']:
+        st.error(f"Invalid parameters: Continuous torque ({params['M_cont_value']}) must be less than maximum torque ({params['M_max_Vg1']})")
+        return None
+
+    return params
+,
+            r'^M max \[kNm\]
+
+    def clean_column_name(col):
+        """Clean column names for consistent matching."""
+        return str(col).lower().strip().replace('-', '_').replace(' ', '_')
+    
+    def extract_numeric_value(value):
+        """Extract numeric value from string, handling different formats."""
+        if pd.isna(value):
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        # Clean string and extract numeric value
+        value_str = str(value).lower().strip()
+        # Remove units and other non-numeric characters
+        numeric_part = re.sub(r'[^\d.,\-]', '', value_str.split('[')[0])
+        try:
+            # Handle different decimal separators
+            numeric_part = numeric_part.replace(',', '.')
+            return float(numeric_part)
+        except ValueError:
+            return None
+
+    def find_matching_column(patterns):
+        """Find column matching any of the provided patterns."""
+        clean_columns = {clean_column_name(col): col for col in machine_data.index}
+        
+        for pattern in patterns:
+            for clean_col in clean_columns.keys():
+                if re.match(pattern, clean_col):
+                    value = extract_numeric_value(machine_data[clean_columns[clean_col]])
+                    if value is not None and value > 0:
+                        return value
+        return None
+
+    # Extract parameters
+    params = {}
+    missing_params = []
+    
+    for param_name, patterns in parameter_patterns.items():
+        value = find_matching_column(patterns)
+        if value is None:
+            missing_params.append(param_name)
+            continue
+        params[param_name] = value
+
+    # If any parameters are missing, return None with error message
+    if missing_params:
+        # Log available columns for debugging
+        available_cols = "\nAvailable columns:\n" + "\n".join(machine_data.index)
+        st.error(f"Missing required parameters for machine '{machine_type}': {', '.join(missing_params)}.{available_cols}")
+        return None
+
+    # Validate parameter relationships
+    if params['n2'] >= params['n1']:
+        st.error(f"Invalid parameters: n2 ({params['n2']}) must be less than n1 ({params['n1']})")
+        return None
+
+    if params['M_cont_value'] >= params['M_max_Vg1']:
+        st.error(f"Invalid parameters: Continuous torque ({params['M_cont_value']}) must be less than maximum torque ({params['M_max_Vg1']})")
+        return None
+
+    return params
+
         ],
         'torque_constant': [
-            r'^(?:torque|drehmoment)[\s_]*(?:constant|umrechnung)[\s_]*(?:\[knm/bar\]|\(knm/bar\))?$',
-            r'^knm[\s_]*per[\s_]*bar$',
-            r'^drehmomentkonstante$'
+            r'^Drehmomentumrechnung\s*\[kNm/bar\]
+
+    def clean_column_name(col):
+        """Clean column names for consistent matching."""
+        return str(col).lower().strip().replace('-', '_').replace(' ', '_')
+    
+    def extract_numeric_value(value):
+        """Extract numeric value from string, handling different formats."""
+        if pd.isna(value):
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        # Clean string and extract numeric value
+        value_str = str(value).lower().strip()
+        # Remove units and other non-numeric characters
+        numeric_part = re.sub(r'[^\d.,\-]', '', value_str.split('[')[0])
+        try:
+            # Handle different decimal separators
+            numeric_part = numeric_part.replace(',', '.')
+            return float(numeric_part)
+        except ValueError:
+            return None
+
+    def find_matching_column(patterns):
+        """Find column matching any of the provided patterns."""
+        clean_columns = {clean_column_name(col): col for col in machine_data.index}
+        
+        for pattern in patterns:
+            for clean_col in clean_columns.keys():
+                if re.match(pattern, clean_col):
+                    value = extract_numeric_value(machine_data[clean_columns[clean_col]])
+                    if value is not None and value > 0:
+                        return value
+        return None
+
+    # Extract parameters
+    params = {}
+    missing_params = []
+    
+    for param_name, patterns in parameter_patterns.items():
+        value = find_matching_column(patterns)
+        if value is None:
+            missing_params.append(param_name)
+            continue
+        params[param_name] = value
+
+    # If any parameters are missing, return None with error message
+    if missing_params:
+        # Log available columns for debugging
+        available_cols = "\nAvailable columns:\n" + "\n".join(machine_data.index)
+        st.error(f"Missing required parameters for machine '{machine_type}': {', '.join(missing_params)}.{available_cols}")
+        return None
+
+    # Validate parameter relationships
+    if params['n2'] >= params['n1']:
+        st.error(f"Invalid parameters: n2 ({params['n2']}) must be less than n1 ({params['n1']})")
+        return None
+
+    if params['M_cont_value'] >= params['M_max_Vg1']:
+        st.error(f"Invalid parameters: Continuous torque ({params['M_cont_value']}) must be less than maximum torque ({params['M_max_Vg1']})")
+        return None
+
+    return params
+,
+            r'^Drehmomentumrechnung
+
+    def clean_column_name(col):
+        """Clean column names for consistent matching."""
+        return str(col).lower().strip().replace('-', '_').replace(' ', '_')
+    
+    def extract_numeric_value(value):
+        """Extract numeric value from string, handling different formats."""
+        if pd.isna(value):
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        # Clean string and extract numeric value
+        value_str = str(value).lower().strip()
+        # Remove units and other non-numeric characters
+        numeric_part = re.sub(r'[^\d.,\-]', '', value_str.split('[')[0])
+        try:
+            # Handle different decimal separators
+            numeric_part = numeric_part.replace(',', '.')
+            return float(numeric_part)
+        except ValueError:
+            return None
+
+    def find_matching_column(patterns):
+        """Find column matching any of the provided patterns."""
+        clean_columns = {clean_column_name(col): col for col in machine_data.index}
+        
+        for pattern in patterns:
+            for clean_col in clean_columns.keys():
+                if re.match(pattern, clean_col):
+                    value = extract_numeric_value(machine_data[clean_columns[clean_col]])
+                    if value is not None and value > 0:
+                        return value
+        return None
+
+    # Extract parameters
+    params = {}
+    missing_params = []
+    
+    for param_name, patterns in parameter_patterns.items():
+        value = find_matching_column(patterns)
+        if value is None:
+            missing_params.append(param_name)
+            continue
+        params[param_name] = value
+
+    # If any parameters are missing, return None with error message
+    if missing_params:
+        # Log available columns for debugging
+        available_cols = "\nAvailable columns:\n" + "\n".join(machine_data.index)
+        st.error(f"Missing required parameters for machine '{machine_type}': {', '.join(missing_params)}.{available_cols}")
+        return None
+
+    # Validate parameter relationships
+    if params['n2'] >= params['n1']:
+        st.error(f"Invalid parameters: n2 ({params['n2']}) must be less than n1 ({params['n1']})")
+        return None
+
+    if params['M_cont_value'] >= params['M_max_Vg1']:
+        st.error(f"Invalid parameters: Continuous torque ({params['M_cont_value']}) must be less than maximum torque ({params['M_max_Vg1']})")
+        return None
+
+    return params
+,
+            r'^Drehmoment ?umrechnung \[kNm/bar\]
+
+    def clean_column_name(col):
+        """Clean column names for consistent matching."""
+        return str(col).lower().strip().replace('-', '_').replace(' ', '_')
+    
+    def extract_numeric_value(value):
+        """Extract numeric value from string, handling different formats."""
+        if pd.isna(value):
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        # Clean string and extract numeric value
+        value_str = str(value).lower().strip()
+        # Remove units and other non-numeric characters
+        numeric_part = re.sub(r'[^\d.,\-]', '', value_str.split('[')[0])
+        try:
+            # Handle different decimal separators
+            numeric_part = numeric_part.replace(',', '.')
+            return float(numeric_part)
+        except ValueError:
+            return None
+
+    def find_matching_column(patterns):
+        """Find column matching any of the provided patterns."""
+        clean_columns = {clean_column_name(col): col for col in machine_data.index}
+        
+        for pattern in patterns:
+            for clean_col in clean_columns.keys():
+                if re.match(pattern, clean_col):
+                    value = extract_numeric_value(machine_data[clean_columns[clean_col]])
+                    if value is not None and value > 0:
+                        return value
+        return None
+
+    # Extract parameters
+    params = {}
+    missing_params = []
+    
+    for param_name, patterns in parameter_patterns.items():
+        value = find_matching_column(patterns)
+        if value is None:
+            missing_params.append(param_name)
+            continue
+        params[param_name] = value
+
+    # If any parameters are missing, return None with error message
+    if missing_params:
+        # Log available columns for debugging
+        available_cols = "\nAvailable columns:\n" + "\n".join(machine_data.index)
+        st.error(f"Missing required parameters for machine '{machine_type}': {', '.join(missing_params)}.{available_cols}")
+        return None
+
+    # Validate parameter relationships
+    if params['n2'] >= params['n1']:
+        st.error(f"Invalid parameters: n2 ({params['n2']}) must be less than n1 ({params['n1']})")
+        return None
+
+    if params['M_cont_value'] >= params['M_max_Vg1']:
+        st.error(f"Invalid parameters: Continuous torque ({params['M_cont_value']}) must be less than maximum torque ({params['M_max_Vg1']})")
+        return None
+
+    return params
+
         ]
     }
 
