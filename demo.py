@@ -593,16 +593,17 @@ def create_distance_visualization(df, columns):
 # ----------------------------
 # Machine Parameters Functions
 # ----------------------------
+# In the get_machine_params function, update the parameter_mappings dictionary:
 def get_machine_params(specs_df: pd.DataFrame, machine_type: str) -> Optional[Dict[str, float]]:
     """
-    Get machine parameters with enhanced error handling and validation.
+    Get machine parameters with enhanced error handling, validation, and default values.
     
     Args:
         specs_df (pd.DataFrame): DataFrame containing machine specifications
         machine_type (str): Selected machine type
         
     Returns:
-        dict: Machine parameters
+        dict: Machine parameters with validated values
     """
     try:
         # Filter for selected machine type
@@ -704,8 +705,13 @@ def get_machine_params(specs_df: pd.DataFrame, machine_type: str) -> Optional[Di
         if 'M_cont_value' not in params and 'M_max_Vg1' in params:
             params['M_cont_value'] = params['M_max_Vg1'] * 0.8  # Default continuous torque to 80% of max
 
-        # Validate parameter values
-        validate_machine_params(params)
+        # Validate and adjust parameter values
+        params = validate_machine_params(params)
+        
+        # Log the final parameter values
+        logger.info(f"Final machine parameters for {machine_type}:")
+        for param, value in params.items():
+            logger.info(f"{param}: {value}")
 
         return params
 
@@ -717,6 +723,8 @@ def get_machine_params(specs_df: pd.DataFrame, machine_type: str) -> Optional[Di
         logger.error(f"Unexpected error in get_machine_params: {str(e)}")
         st.error(f"Unexpected error in get_machine_params: {str(e)}")
         return None
+
+# The rest of the code remains the same as in your original implementation
 
 def validate_machine_params(params: Dict[str, float]):
     """
