@@ -594,136 +594,116 @@ def create_distance_visualization(df, columns):
 # Machine Parameters Functions
 # ----------------------------
 # In the get_machine_params function, update the parameter_mappings dictionary:
-def get_machine_params(specs_df: pd.DataFrame, machine_type: str) -> Optional[Dict[str, float]]:
+def get_machine_params(specs_df, machine_type):
     """
-    Get machine parameters with enhanced error handling, validation, and default values.
+    Get machine parameters with enhanced flexibility for different column naming conventions.
     
     Args:
-        specs_df (pd.DataFrame): DataFrame containing machine specifications
-        machine_type (str): Selected machine type
+        specs_df: DataFrame containing machine specifications
+        machine_type: Selected machine type
         
     Returns:
-        dict: Machine parameters with validated values
+        Dictionary of machine parameters if found, None if missing required parameters
     """
-    try:
-        # Filter for selected machine type
-        machine_rows = specs_df[specs_df['Projekt'] == machine_type]
-        if machine_rows.empty:
-            raise DataProcessingError(f"Machine type '{machine_type}' not found in specifications")
-
-        # Extract first matching row
-        machine_data = machine_rows.iloc[0]
-
-        # Define parameter mappings with alternatives and German translations
-        parameter_mappings = {
-            'n1': [
-                'n1[1/min]', 'n1 (1/min)', 'n1[rpm]', 'Max RPM', 'n1', 
-                'Maximum Speed', 'Max Speed', 'Drehzahl Max',
-                'MaxSpeed', 'Speed_Max', 'n_max'
-            ],
-            'n2': [
-                'n2[1/min]', 'n2 (1/min)', 'n2[rpm]', 'Min RPM', 'n2',
-                'Minimum Speed', 'Min Speed', 'Drehzahl Min',
-                'MinSpeed', 'Speed_Min', 'n_min'
-            ],
-            'M_cont_value': [
-                'M(dauer) [kNm]', 'M(dauer)[kNm]', 'M (dauer)', 'Continuous Torque',
-                'M_cont', 'Cont_Torque', 'Dauer_Drehmoment', 'M_dauer',
-                'Continuous_Torque', 'TorqueContinuous', 'M cont'
-            ],
-            'M_max_Vg1': [
-                'M(max)', 'M max', 'M (max)', 'M_max[kNm]', 'M(max)[kNm]', 
-                'Max Torque', 'Maximum_Torque', 'TorqueMax',
-                'Max_Torque', 'Drehmoment_Max', 'M maximum'
-            ],
-            'torque_constant': [
-                'Drehmomentumrechnung[kNm/bar]', 'Drehmomentumrechnung [kNm/bar]',
-                'Torque Constant', 'TorqueConstant', 'Torque_Constant',
-                'Drehmoment_Konstante', 'Torque_Factor', 'TorqueFactor',
-                'kNm/bar', 'Torque/Pressure', 'TorquePerPressure'
-            ]
-        }
-
-        # Add case-insensitive search
-        for param_name, possible_names in parameter_mappings.items():
-            # Add lowercase and uppercase versions
-            extra_names = []
-            for name in possible_names:
-                extra_names.extend([name.lower(), name.upper()])
-            parameter_mappings[param_name].extend(extra_names)
-
-        # Find parameters
-        params = {}
-        missing_params = []
-        
-        for param_name, possible_names in parameter_mappings.items():
-            found = False
-            # First try exact matches
-            for name in possible_names:
-                if name in machine_data.index:
-                    try:
-                        value = machine_data[name]
-                        # Handle string values that might contain numbers
-                        if isinstance(value, str):
-                            # Remove any units in brackets and convert to float
-                            value = float(re.sub(r'\[.*?\]', '', value).strip())
-                        params[param_name] = float(value)
-                        found = True
-                        break
-                    except (ValueError, TypeError):
-                        continue
-            
-            # If no exact match, try fuzzy matching
-            if not found:
-                for column in machine_data.index:
-                    if any(possible_name.lower() in column.lower() for possible_name in possible_names):
-                        try:
-                            value = machine_data[column]
-                            if isinstance(value, str):
-                                value = float(re.sub(r'\[.*?\]', '', value).strip())
-                            params[param_name] = float(value)
-                            found = True
-                            break
-                        except (ValueError, TypeError):
-                            continue
-            
-            if not found:
-                missing_params.append(f"{param_name} ({possible_names[0]})")
-
-        if missing_params:
-            # If parameters are missing, try to provide more helpful error message
-            available_columns = ", ".join(machine_data.index)
-            raise DataProcessingError(
-                f"Missing required parameters for machine '{machine_type}': {', '.join(missing_params)}\n"
-                f"Available columns: {available_columns}"
-            )
-
-        # Add default values for missing parameters if appropriate
-        if 'n2' not in params and 'n1' in params:
-            params['n2'] = params['n1'] * 0.1  # Default minimum speed to 10% of max speed
-        
-        if 'M_cont_value' not in params and 'M_max_Vg1' in params:
-            params['M_cont_value'] = params['M_max_Vg1'] * 0.8  # Default continuous torque to 80% of max
-
-        # Validate and adjust parameter values
-        params = validate_machine_params(params)
-        
-        # Log the final parameter values
-        logger.info(f"Final machine parameters for {machine_type}:")
-        for param, value in params.items():
-            logger.info(f"{param}: {value}")
-
-        return params
-
-    except DataProcessingError as e:
-        logger.error(f"DataProcessingError: {str(e)}")
-        st.error(f"DataProcessingError: {str(e)}")
-        return None
-    except Exception as e:
-        logger.error(f"Unexpected error in get_machine_params: {str(e)}")
-        st.error(f"Unexpected error in get_machine_params: {str(e)}")
+    # Filter for the selected machine type
+    machine_rows = specs_df[specs_df['Projekt'] == machine_type]
+    if machine_rows.empty:
+        st.error(f"Machine type '{machine_type}' not found in the specifications file.")
         return None
 
+    # Extract the first matching row
+    machine_data = machine_rows.iloc[0]
+    
+    # Define extended parameter patterns with regex
+    parameter_patterns = {
+        'n1': [
+            r'^n1[\s_]*(?:\[1/min\]|\(1/min\)|\[rpm\])?$',
+            r'^max(?:imum)?[\s_]*(?:speed|rpm|revolution)[\s_]*(?:\[1/min\]|\(1/min\)|\[rpm\])?$',
+            r'^drehzahl[\s_]*max(?:imum)?$'
+        ],
+        'n2': [
+            r'^n2[\s_]*(?:\[1/min\]|\(1/min\)|\[rpm\])?$', 
+            r'^min(?:imum)?[\s_]*(?:speed|rpm|revolution)[\s_]*(?:\[1/min\]|\(1/min\)|\[rpm\])?$',
+            r'^drehzahl[\s_]*min(?:imum)?$'
+        ],
+        'M_cont_value': [
+            r'^m[\s_]*(?:cont|continuous|dauer)[\s_]*(?:\[knm\]|\(knm\))?$',
+            r'^continuous[\s_]*torque[\s_]*(?:\[knm\]|\(knm\))?$',
+            r'^dauer[\s_]*drehmoment$'
+        ],
+        'M_max_Vg1': [
+            r'^m[\s_]*(?:max|maximum)[\s_]*(?:vg1)?[\s_]*(?:\[knm\]|\(knm\))?$',
+            r'^max(?:imum)?[\s_]*torque[\s_]*(?:\[knm\]|\(knm\))?$',
+            r'^drehmoment[\s_]*max(?:imum)?$'
+        ],
+        'torque_constant': [
+            r'^(?:torque|drehmoment)[\s_]*(?:constant|umrechnung)[\s_]*(?:\[knm/bar\]|\(knm/bar\))?$',
+            r'^knm[\s_]*per[\s_]*bar$',
+            r'^drehmomentkonstante$'
+        ]
+    }
+
+    def clean_column_name(col):
+        """Clean column names for consistent matching."""
+        return str(col).lower().strip().replace('-', '_').replace(' ', '_')
+    
+    def extract_numeric_value(value):
+        """Extract numeric value from string, handling different formats."""
+        if pd.isna(value):
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        # Clean string and extract numeric value
+        value_str = str(value).lower().strip()
+        # Remove units and other non-numeric characters
+        numeric_part = re.sub(r'[^\d.,\-]', '', value_str.split('[')[0])
+        try:
+            # Handle different decimal separators
+            numeric_part = numeric_part.replace(',', '.')
+            return float(numeric_part)
+        except ValueError:
+            return None
+
+    def find_matching_column(patterns):
+        """Find column matching any of the provided patterns."""
+        clean_columns = {clean_column_name(col): col for col in machine_data.index}
+        
+        for pattern in patterns:
+            for clean_col in clean_columns.keys():
+                if re.match(pattern, clean_col):
+                    value = extract_numeric_value(machine_data[clean_columns[clean_col]])
+                    if value is not None and value > 0:
+                        return value
+        return None
+
+    # Extract parameters
+    params = {}
+    missing_params = []
+    
+    for param_name, patterns in parameter_patterns.items():
+        value = find_matching_column(patterns)
+        if value is None:
+            missing_params.append(param_name)
+            continue
+        params[param_name] = value
+
+    # If any parameters are missing, return None with error message
+    if missing_params:
+        # Log available columns for debugging
+        available_cols = "\nAvailable columns:\n" + "\n".join(machine_data.index)
+        st.error(f"Missing required parameters for machine '{machine_type}': {', '.join(missing_params)}.{available_cols}")
+        return None
+
+    # Validate parameter relationships
+    if params['n2'] >= params['n1']:
+        st.error(f"Invalid parameters: n2 ({params['n2']}) must be less than n1 ({params['n1']})")
+        return None
+
+    if params['M_cont_value'] >= params['M_max_Vg1']:
+        st.error(f"Invalid parameters: Continuous torque ({params['M_cont_value']}) must be less than maximum torque ({params['M_max_Vg1']})")
+        return None
+
+    return params
 # The rest of the code remains the same as in your original implementation
 
 def validate_machine_params(params: Dict[str, float]):
