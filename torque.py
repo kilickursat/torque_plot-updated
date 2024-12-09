@@ -123,6 +123,12 @@ def load_data(file, file_type):
                 
                 # Remove any completely empty rows or columns
                 df = df.dropna(how='all').dropna(axis=1, how='all')
+
+                # Try converting index to datetime if possible
+                try:
+                    df.index = pd.to_datetime(df.index, format='mixed')
+                except:
+                    pass  # Keep original index if conversion fails
                 
                 return df
 
@@ -144,6 +150,12 @@ def load_data(file, file_type):
                 
                 # Remove any completely empty rows or columns
                 df = df.dropna(how='all').dropna(axis=1, how='all')
+
+                # Try converting index to datetime if possible
+                try:
+                    df.index = pd.to_datetime(df.index, format='mixed')
+                except:
+                    pass  # Keep original index if conversion fails
                 
                 return df
                 
