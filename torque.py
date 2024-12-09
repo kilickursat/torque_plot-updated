@@ -35,144 +35,91 @@ def safe_get_loc(columns, col_name):
 
 def load_data(file, file_type):
     """
-    Enhanced function to load CSV and Excel files with robust error handling
-    and multiple format support.
-    
-    Args:
-        file: File object from st.file_uploader
-        file_type: String indicating file type ('csv' or 'xlsx')
-        
-    Returns:
-        pandas.DataFrame or None if loading fails
+    Enhanced function to load problematic CSV files with mixed delimiters and formatting issues.
     """
     try:
         if file_type == 'csv':
-            # Read file content and detect encoding
+            # Read raw content
             file_content = file.read()
-            detected = chardet.detect(file_content)
-            encoding = detected['encoding']
             
-            # Convert bytes to string using detected encoding
-            try:
-                content_str = file_content.decode(encoding)
-            except UnicodeDecodeError:
-                # Fallback to common encodings if detection fails
-                for enc in ['utf-8', 'iso-8859-1', 'latin1', 'cp1252']:
-                    try:
-                        content_str = file_content.decode(enc)
-                        encoding = enc
-                        break
-                    except UnicodeDecodeError:
-                        continue
-                else:
-                    raise ValueError("Unable to decode file with any common encoding")
-
-            # Create StringIO object for pandas to read
-            string_data = StringIO(content_str)
+            # Try multiple encodings
+            for encoding in ['utf-8', 'iso-8859-1', 'latin1', 'cp1252']:
+                try:
+                    content_str = file_content.decode(encoding)
+                    break
+                except UnicodeDecodeError:
+                    continue
             
-            # Detect delimiter using csv.Sniffer
+            # Pre-process the content to handle mixed delimiters
+            cleaned_lines = []
+            for line in content_str.split('\n'):
+                if line.strip():
+                    # Replace tabs with semicolons and clean up multiple delimiters
+                    cleaned_line = line.replace('\t', ';')
+                    # Clean up multiple semicolons and spaces
+                    cleaned_line = ';'.join(part.strip() for part in cleaned_line.split(';') if part.strip())
+                    cleaned_lines.append(cleaned_line)
+            
+            # Create new content string
+            processed_content = '\n'.join(cleaned_lines)
+            
+            # Create StringIO object
+            string_data = StringIO(processed_content)
+            
             try:
-                dialect = csv.Sniffer().sniff(content_str[:4096])
-                delimiter = dialect.delimiter
-            except:
-                # Try common delimiters if sniffer fails
-                delimiters = [',', ';', '\t', '|']
-                max_columns = 0
-                best_delimiter = None
-                
-                for delim in delimiters:
-                    try:
-                        string_data.seek(0)
-                        test_df = pd.read_csv(string_data, sep=delim, nrows=5)
-                        num_columns = len(test_df.columns)
-                        
-                        if num_columns > max_columns:
-                            max_columns = num_columns
-                            best_delimiter = delim
-                    except:
-                        continue
-                
-                if best_delimiter is None:
-                    raise ValueError("Unable to determine CSV delimiter")
-                
-                delimiter = best_delimiter
-
-            # Try reading with detected parameters
-            try:
-                string_data.seek(0)
                 df = pd.read_csv(
                     string_data,
-                    sep=delimiter,
+                    sep=';',
                     encoding=encoding,
                     on_bad_lines='warn',
                     low_memory=False,
-                    decimal=',',  # Handle European number format
-                    thousands='.'  # Handle European number format
+                    thousands='.',  # Handle thousand separators
+                    decimal=',',    # Handle decimal separators
+                    skipinitialspace=True,
+                    dtype=str  # Read all columns as string initially
                 )
                 
-                # Validate the DataFrame
+                # Clean column names
+                df.columns = df.columns.str.strip()
+                
+                # Convert numeric columns
+                for col in df.columns:
+                    try:
+                        # Remove any extra spaces
+                        df[col] = df[col].str.strip()
+                        # Replace ',' with '.' for decimal points
+                        df[col] = df[col].str.replace(',', '.')
+                        # Convert to numeric
+                        df[col] = pd.to_numeric(df[col], errors='ignore')
+                    except:
+                        continue
+                
+                # Remove empty rows/columns
+                df = df.dropna(how='all').dropna(axis=1, how='all')
+                
                 if df.empty:
-                    raise ValueError("The resulting DataFrame is empty")
-                
-                if len(df.columns) == 1:
-                    # If only one column, the delimiter might be wrong
-                    raise ValueError("Only one column detected, delimiter might be incorrect")
-                
-                # Clean column names
-                df.columns = df.columns.str.strip()
-                
-                # Remove any completely empty rows or columns
-                df = df.dropna(how='all').dropna(axis=1, how='all')
-
-                # Try converting index to datetime if possible
-                try:
-                    df.index = pd.to_datetime(df.index, format='mixed')
-                except:
-                    pass  # Keep original index if conversion fails
+                    raise ValueError("Resulting DataFrame is empty")
                 
                 return df
-
+                
             except Exception as e:
-                st.error(f"Error reading CSV with detected parameters: {str(e)}")
+                st.error(f"Error processing CSV: {str(e)}")
                 raise
-
+                
         elif file_type == 'xlsx':
-            try:
-                df = pd.read_excel(
-                    file,
-                    engine='openpyxl',
-                    na_values=['NA', 'N/A', ''],  # Common NA values
-                    keep_default_na=True
-                )
-                
-                # Clean column names
-                df.columns = df.columns.str.strip()
-                
-                # Remove any completely empty rows or columns
-                df = df.dropna(how='all').dropna(axis=1, how='all')
-
-                # Try converting index to datetime if possible
-                try:
-                    df.index = pd.to_datetime(df.index, format='mixed')
-                except:
-                    pass  # Keep original index if conversion fails
-                
-                return df
-                
-            except Exception as e:
-                st.error(f"Error reading Excel file: {str(e)}")
-                raise
-
-        else:
-            raise ValueError(f"Unsupported file type: {file_type}")
-
+            # Excel handling remains the same
+            df = pd.read_excel(
+                file,
+                engine='openpyxl',
+                na_values=['NA', 'N/A', ''],
+                keep_default_na=True
+            )
+            df.columns = df.columns.str.strip()
+            df = df.dropna(how='all').dropna(axis=1, how='all')
+            return df
+            
     except Exception as e:
         st.error(f"Error loading file: {str(e)}")
-        # Log additional debug information
-        st.error("Debug information:")
-        if file_type == 'csv':
-            st.error(f"Detected encoding: {encoding}")
-            st.error(f"Detected delimiter: {delimiter}")
         return None
 # Update the sensor column map with more potential column names
 sensor_column_map = {
