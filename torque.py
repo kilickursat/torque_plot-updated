@@ -159,11 +159,7 @@ sensor_column_map = {
     "distance": ["Distance", "Chainage", "Position", "Kette", "Station","V34_TL_SR_m_Z","TL_SR_m_Z","SR_m_Z","Weg","weg"]
 }
 
-# Add after finding sensor columns
-st.write("Found sensor mappings:", sensor_column_map)
-for sensor, col in sensor_column_map.items():
-    if col not in df.columns:
-        st.error(f"Mapped column {col} for {sensor} not found in data")
+
         
 def find_sensor_columns(df):
     found_columns = {}
