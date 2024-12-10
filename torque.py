@@ -158,8 +158,6 @@ sensor_column_map = {
     "thrust_force": ["Thrust Force", "Thrust", "Vorschubkraft", "Force", "Force at Cutting Head", "Thrust Force [kN]","15_thrust cylinder.TZylGrABCDForce","thrust cylinder.TZylGrABCDForce","TZylGrABCDForce"],
     "distance": ["Distance", "Chainage", "Position", "Kette", "Station","V34_TL_SR_m_Z","TL_SR_m_Z","SR_m_Z","Weg","weg"]
 }
-
-
         
 def find_sensor_columns(df):
     found_columns = {}
@@ -178,11 +176,7 @@ def find_sensor_columns(df):
                     break
     return found_columns
     
-# Add after finding sensor columns
-st.write("Found sensor mappings:", sensor_column_map)
-for sensor, col in sensor_column_map.items():
-    if col not in df.columns:
-        st.error(f"Mapped column {col} for {sensor} not found in data")
+
         
 def load_machine_specs(file, file_type):
     """Load machine specifications from XLSX or CSV file."""
