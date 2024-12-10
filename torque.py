@@ -498,7 +498,51 @@ def original_page():
     else:
         st.warning("Please upload Machine Specifications XLSX file.")
         return
-
+        
+def calculate_torque(df, pressure_col, revolution_col, machine_params):
+    """
+    Enhanced torque calculation with validation and debugging.
+    """
+    try:
+        # Validate inputs
+        if not all(col in df.columns for col in [pressure_col, revolution_col]):
+            raise ValueError(f"Missing required columns: {pressure_col} or {revolution_col}")
+            
+        # Create copy to avoid modifying original
+        df_calc = df.copy()
+        
+        # Validate pressure and revolution values
+        df_calc[pressure_col] = pd.to_numeric(df_calc[pressure_col], errors='coerce')
+        df_calc[revolution_col] = pd.to_numeric(df_calc[revolution_col], errors='coerce')
+        
+        # Calculate torque
+        def calculate_torque_value(row):
+            try:
+                if pd.isna(row[pressure_col]) or pd.isna(row[revolution_col]):
+                    return np.nan
+                    
+                if row[revolution_col] < machine_params['n1']:
+                    return row[pressure_col] * machine_params['torque_constant']
+                else:
+                    return (machine_params['n1'] / row[revolution_col]) * \
+                           machine_params['torque_constant'] * row[pressure_col]
+            except Exception as e:
+                st.warning(f"Calculation error: {str(e)}")
+                return np.nan
+        
+        df_calc['Calculated torque [kNm]'] = df_calc.apply(calculate_torque_value, axis=1)
+        
+        # Validate results
+        invalid_torque = df_calc['Calculated torque [kNm]'].isna().sum()
+        if invalid_torque > 0:
+            st.warning(f"Found {invalid_torque} invalid torque calculations")
+            
+        return df_calc
+        
+    except Exception as e:
+        st.error(f"Error in torque calculation: {str(e)}")
+        return None
+        
     # Sidebar for user inputs
     st.sidebar.header("Parameter Settings")
     P_max = st.sidebar.number_input("Maximum power (kW)", value=132.0, min_value=1.0, max_value=500.0)
@@ -654,49 +698,7 @@ def original_page():
     else:
         st.info("Please upload a Raw Data file to begin the analysis.")
 
-def calculate_torque(df, pressure_col, revolution_col, machine_params):
-    """
-    Enhanced torque calculation with validation and debugging.
-    """
-    try:
-        # Validate inputs
-        if not all(col in df.columns for col in [pressure_col, revolution_col]):
-            raise ValueError(f"Missing required columns: {pressure_col} or {revolution_col}")
-            
-        # Create copy to avoid modifying original
-        df_calc = df.copy()
-        
-        # Validate pressure and revolution values
-        df_calc[pressure_col] = pd.to_numeric(df_calc[pressure_col], errors='coerce')
-        df_calc[revolution_col] = pd.to_numeric(df_calc[revolution_col], errors='coerce')
-        
-        # Calculate torque
-        def calculate_torque_value(row):
-            try:
-                if pd.isna(row[pressure_col]) or pd.isna(row[revolution_col]):
-                    return np.nan
-                    
-                if row[revolution_col] < machine_params['n1']:
-                    return row[pressure_col] * machine_params['torque_constant']
-                else:
-                    return (machine_params['n1'] / row[revolution_col]) * \
-                           machine_params['torque_constant'] * row[pressure_col]
-            except Exception as e:
-                st.warning(f"Calculation error: {str(e)}")
-                return np.nan
-        
-        df_calc['Calculated torque [kNm]'] = df_calc.apply(calculate_torque_value, axis=1)
-        
-        # Validate results
-        invalid_torque = df_calc['Calculated torque [kNm]'].isna().sum()
-        if invalid_torque > 0:
-            st.warning(f"Found {invalid_torque} invalid torque calculations")
-            
-        return df_calc
-        
-    except Exception as e:
-        st.error(f"Error in torque calculation: {str(e)}")
-        return None
+
 # Helper Function Defined Outside
 def format_timedelta(td):
     """
