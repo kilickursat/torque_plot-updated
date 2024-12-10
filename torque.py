@@ -35,96 +35,125 @@ def safe_get_loc(columns, col_name):
 
 def load_data(file, file_type):
     """
-    Enhanced function to load problematic CSV files with mixed delimiters and formatting issues.
+    Enhanced function to load CSV or Excel files with robust error handling and data cleaning.
+    
+    Args:
+        file: The uploaded file object
+        file_type: String indicating file type ('csv' or 'xlsx')
+    
+    Returns:
+        pandas.DataFrame or None if loading fails
     """
     try:
         if file_type == 'csv':
-            # Read raw content
-            file_content = file.read()
-            
-            # Try multiple encodings
-            for encoding in ['utf-8', 'iso-8859-1', 'latin1', 'cp1252']:
-                try:
-                    content_str = file_content.decode(encoding)
-                    break
-                except UnicodeDecodeError:
-                    continue
-            
-            # Pre-process the content to handle mixed delimiters
-            cleaned_lines = []
-            for line in content_str.split('\n'):
-                if line.strip():
-                    # Replace tabs with semicolons and clean up multiple delimiters
-                    cleaned_line = line.replace('\t', ';')
-                    # Clean up multiple semicolons and spaces
-                    cleaned_line = ';'.join(part.strip() for part in cleaned_line.split(';') if part.strip())
-                    cleaned_lines.append(cleaned_line)
-            
-            # Create new content string
-            processed_content = '\n'.join(cleaned_lines)
-            
-            # Create StringIO object
-            string_data = StringIO(processed_content)
-            
+            # Try multiple approaches to read the CSV file
             try:
+                # First attempt: Basic CSV reading with flexible engine
+                df = pd.read_csv(
+                    file,
+                    sep=';',
+                    engine='python',
+                    encoding='utf-8',
+                    skipinitialspace=True,
+                    on_bad_lines='warn'
+                )
+            except Exception as e:
+                # Second attempt: Read raw content for more control
+                file_content = file.read()
+                
+                # Try multiple encodings
+                for encoding in ['utf-8', 'iso-8859-1', 'latin1', 'cp1252']:
+                    try:
+                        content_str = file_content.decode(encoding)
+                        break
+                    except UnicodeDecodeError:
+                        continue
+                
+                # Pre-process content
+                cleaned_lines = []
+                for line in content_str.split('\n'):
+                    if line.strip():
+                        # Clean up the line
+                        cleaned_line = line.replace('\t', '').strip()
+                        # Ensure consistent delimiter
+                        cleaned_line = ';'.join(part.strip() for part in cleaned_line.split(';') if part.strip())
+                        cleaned_lines.append(cleaned_line)
+                
+                # Create cleaned content string
+                processed_content = '\n'.join(cleaned_lines)
+                
+                # Convert to StringIO for pandas
+                from io import StringIO
+                string_data = StringIO(processed_content)
+                
+                # Read the processed content
                 df = pd.read_csv(
                     string_data,
                     sep=';',
                     encoding=encoding,
-                    on_bad_lines='warn',
-                    low_memory=False,
-                    thousands='.',  # Handle thousand separators
-                    decimal=',',    # Handle decimal separators
                     skipinitialspace=True,
-                    dtype=str  # Read all columns as string initially
+                    on_bad_lines='warn'
                 )
+            
+            # Clean up column names
+            df.columns = df.columns.str.strip()
+            
+            # Remove any completely empty rows/columns
+            df = df.dropna(how='all').dropna(axis=1, how='all')
+            
+            # Clean data in each column
+            for col in df.columns:
+                # Strip whitespace if string column
+                if df[col].dtype == 'object':
+                    df[col] = df[col].str.strip()
                 
-                # Clean column names
-                df.columns = df.columns.str.strip()
-                
-                # Convert numeric columns
-                for col in df.columns:
-                    try:
-                        # Remove any extra spaces
-                        df[col] = df[col].str.strip()
-                        # Replace ',' with '.' for decimal points
-                        df[col] = df[col].str.replace(',', '.')
-                        # Convert to numeric
-                        df[col] = pd.to_numeric(df[col], errors='ignore')
-                    except:
-                        continue
-                
-                # Remove empty rows/columns
-                df = df.dropna(how='all').dropna(axis=1, how='all')
-                
-                if df.empty:
-                    raise ValueError("Resulting DataFrame is empty")
-                
-                return df
-                
-            except Exception as e:
-                st.error(f"Error processing CSV: {str(e)}")
-                raise
-                
+                try:
+                    # Try to convert to numeric, handling both . and , as decimal points
+                    if df[col].dtype == 'object':
+                        # Replace comma with period for decimal points
+                        cleaned_values = df[col].str.replace(',', '.').str.strip()
+                        df[col] = pd.to_numeric(cleaned_values, errors='ignore')
+                except Exception:
+                    continue
+            
+            # Verify we still have data
+            if df.empty:
+                raise ValueError("Resulting DataFrame is empty")
+            
+            return df
+            
         elif file_type == 'xlsx':
-            # Excel handling remains the same
+            # Handle Excel files
             df = pd.read_excel(
                 file,
                 engine='openpyxl',
                 na_values=['NA', 'N/A', ''],
                 keep_default_na=True
             )
+            
+            # Clean up column names
             df.columns = df.columns.str.strip()
+            
+            # Remove any completely empty rows/columns
             df = df.dropna(how='all').dropna(axis=1, how='all')
+            
+            # Verify we have data
+            if df.empty:
+                raise ValueError("Resulting DataFrame is empty")
+                
             return df
+            
+        else:
+            raise ValueError(f"Unsupported file type: {file_type}")
             
     except Exception as e:
         st.error(f"Error loading file: {str(e)}")
+        logging.error(f"File loading error: {str(e)}")
         return None
 # Update the sensor column map with more potential column names
 sensor_column_map = {
-    "pressure": ["Working pressure [bar]", "AzV.V13_SR_ArbDr_Z | DB 60.DBD 26", "Pression [bar]", "Presión [bar]", "Pressure", "Pressure [bar]", "Working Pressure","cutting wheel.MPU1WPr","MPU1WPr"],
-    "revolution": ["Revolution [rpm]", "AzV.V13_SR_Drehz_nach_Abgl_Z | DB 60.DBD 30", "Vitesse [rpm]", "Revoluciones [rpm]", "RPM", "Speed", "Rotation Speed","cutting wheel.CWSpeed","CWSpeed","cutting wheel"],
+    "pressure": ["Working pressure [bar]", "AzV.V13_SR_ArbDr_Z | DB 60.DBD 26", "Pression [bar]", "Presión [bar]", "Pressure", "Pressure [bar]", "Working Pressure","cutting wheel.MPU1WPr","MPU1WPr","V13_SR_ArbDr_Z", "Working pressure [bar]", "AzV.V13_SR_ArbDr_Z"],
+    "revolution": ["Revolution [rpm]", "AzV.V13_SR_Drehz_nach_Abgl_Z | DB 60.DBD 30", "Vitesse [rpm]", "Revoluciones [rpm]", "RPM", "Speed", "Rotation Speed","cutting wheel.CWSpeed","CWSpeed","cutting wheel","V13_SR_Drehz_nach_Abgl_Z", "Revolution [rpm]", "AzV.V13_SR_Drehz_nach_Abgl_Z"],
     "time": ["Time", "Timestamp", "DateTime", "Date", "Zeit", "Relativzeit", "Uhrzeit", "Datum", "ts(utc)"],
     "advance_rate": ["Advance Rate", "Vorschubgeschwindigkeit", "Avance", "Rate of Penetration", "ROP", "Advance [m/min]", "Advance [mm/min]","VTgeschw_Z","VTgeschw"],
     "thrust_force": ["Thrust Force", "Thrust", "Vorschubkraft", "Force", "Force at Cutting Head", "Thrust Force [kN]","15_thrust cylinder.TZylGrABCDForce","thrust cylinder.TZylGrABCDForce","TZylGrABCDForce"],
