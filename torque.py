@@ -179,93 +179,99 @@ def find_sensor_columns(df):
 
         
 def load_machine_specs(file, file_type):
-    """Load machine specifications from XLSX or CSV file."""
+    """Load and validate machine specifications from XLSX or CSV file."""
     try:
         if file_type == 'xlsx':
             specs_df = pd.read_excel(file)
+            st.write("Loaded Excel specifications:")
         elif file_type == 'csv':
             specs_df = pd.read_csv(file)
+            st.write("Loaded CSV specifications:")
         else:
             raise ValueError("Unsupported file type")
-        specs_df.columns = specs_df.columns.str.strip()  # Strip any leading/trailing whitespace and newlines
+            
+        specs_df.columns = specs_df.columns.str.strip()
+        
+        # Display data for validation
+        st.write("Sample of specifications data:")
+        st.write(specs_df.head())
+        st.write("Specification columns:", specs_df.columns.tolist())
+        st.write("Data types:", specs_df.dtypes)
+        
+        if 'Projekt' not in specs_df.columns:
+            st.error("Required 'Projekt' column missing in specifications file")
+            return None
+            
         return specs_df
+        
     except Exception as e:
         st.error(f"Error loading machine specifications: {str(e)}")
+        st.error(f"Detailed error: {traceback.format_exc()}")
         return None
-        
-# After loading machine parameters
-st.write("Machine parameters:")
-for key, value in load_machine_specs.items():
-    if pd.isna(value):
-        st.error(f"Invalid {key}: {value}")
-    else:
-        st.info(f"{key}: {value}")
 
 def get_machine_params(specs_df, machine_type):
-    # Filter the DataFrame for the selected machine type
-    machine_rows = specs_df[specs_df['Projekt'] == machine_type]
-    if machine_rows.empty:
-        st.error(f"Machine type '{machine_type}' not found in the specifications file.")
+    """Extract and validate machine parameters."""
+    try:
+        # Display input validation
+        st.write("Looking for machine type:", machine_type)
+        st.write("Available machine types:", specs_df['Projekt'].unique().tolist())
+        
+        # Filter for machine type
+        machine_rows = specs_df[specs_df['Projekt'] == machine_type]
+        if machine_rows.empty:
+            st.error(f"Machine type '{machine_type}' not found in specifications")
+            return None
+            
+        # Extract first matching row
+        machine_data = machine_rows.iloc[0]
+        st.write("Found machine data:", machine_data.to_dict())
+        
+        # Define parameter mappings
+        param_mappings = {
+            'n1': ['n1[1/min]', 'n1 (1/min)', 'n1[rpm]', 'Max RPM'],
+            'n2': ['n2[1/min]', 'n2 (1/min)', 'n2[rpm]', 'Min RPM'],
+            'M_cont_value': ['M(dauer) [kNm]', 'M(dauer)[kNm]', 'M (dauer)', 'Continuous Torque'],
+            'M_max_Vg1': ['M(max)', 'M max', 'M (max)', 'M_max[kNm]', 'M(max)[kNm]', 'Max Torque'],
+            'torque_constant': ['Drehmomentumrechnung[kNm/bar]', 'Drehmomentumrechnung [kNm/bar]', 'Torque Constant']
+        }
+        
+        # Find parameters
+        params = {}
+        missing_params = []
+        for param, possible_names in param_mappings.items():
+            found = False
+            for name in possible_names:
+                if name in machine_data.index:
+                    params[param] = machine_data[name]
+                    st.info(f"Found {param}: {params[param]} from column {name}")
+                    found = True
+                    break
+            if not found:
+                missing_params.append(f"{param} (tried: {', '.join(possible_names)})")
+        
+        # Validate parameters
+        if missing_params:
+            st.error(f"Missing parameters for '{machine_type}': {', '.join(missing_params)}")
+            return None
+            
+        # Check for invalid values
+        for param, value in params.items():
+            if pd.isna(value):
+                st.error(f"Invalid value for {param}: {value}")
+            elif not isinstance(value, (int, float)):
+                try:
+                    params[param] = float(str(value).replace(',', '.'))
+                    st.warning(f"Converted {param} to numeric: {params[param]}")
+                except:
+                    st.error(f"Could not convert {param} to numeric: {value}")
+                    return None
+                    
+        return params
+        
+    except Exception as e:
+        st.error(f"Error getting machine parameters: {str(e)}")
+        st.error(f"Detailed error: {traceback.format_exc()}")
         return None
-
-    # Extract the first matching row
-    machine_data = machine_rows.iloc[0]
-
-    # Define possible column names for each parameter
-    n1_names = ['n1[1/min]', 'n1 (1/min)', 'n1[rpm]', 'Max RPM']
-    n2_names = ['n2[1/min]', 'n2 (1/min)', 'n2[rpm]', 'Min RPM']
-    m_cont_names = ['M(dauer) [kNm]', 'M(dauer)[kNm]', 'M (dauer)', 'Continuous Torque']
-    m_max_names = ['M(max)', 'M max', 'M (max)', 'M_max[kNm]', 'M(max)[kNm]', 'Max Torque']
-    torque_constant_names = ['Drehmomentumrechnung[kNm/bar]', 'Drehmomentumrechnung [kNm/bar]', 'Torque Constant']
-
-    # Function to find the correct column name
-    def find_column(possible_names):
-        for name in possible_names:
-            if name in machine_data.index:
-                return name
-        return None
-
-    # Attempt to find each parameter
-    n1_col = find_column(n1_names)
-    n2_col = find_column(n2_names)
-    m_cont_col = find_column(m_cont_names)
-    m_max_col = find_column(m_max_names)
-    torque_constant_col = find_column(torque_constant_names)
-
-    # Collect missing parameters
-    missing_params = []
-    if n1_col is None:
-        missing_params.append('n1 (Maximum RPM)')
-    if n2_col is None:
-        missing_params.append('n2 (Minimum RPM)')
-    if m_cont_col is None:
-        missing_params.append('M_cont_value (Continuous Torque)')
-    if m_max_col is None:
-        missing_params.append('M_max_Vg1 (Maximum Torque)')
-    if torque_constant_col is None:
-        missing_params.append('torque_constant')
-
-    # If any parameters are missing, return None
-    if missing_params:
-        st.error(f"Missing parameters for machine '{machine_type}': {', '.join(missing_params)}. Please check the specifications file.")
-        return None
-
-    # Return the found parameters
-    return {
-        'n1': machine_data[n1_col],
-        'n2': machine_data[n2_col],
-        'M_cont_value': machine_data[m_cont_col],
-        'M_max_Vg1': machine_data[m_max_col],
-        'torque_constant': machine_data[torque_constant_col]
-    }
-
-# After loading machine parameters
-st.write("Machine parameters:")
-for key, value in get_machine_params.items():
-    if pd.isna(value):
-        st.error(f"Invalid {key}: {value}")
-    else:
-        st.info(f"{key}: {value}")
         
 def calculate_whisker_and_outliers(data):
     """Calculate whiskers and outliers for a given dataset."""
