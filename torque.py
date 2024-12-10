@@ -174,8 +174,6 @@ def load_data(file, file_type):
         st.error(f"Detailed error: {traceback.format_exc()}")
         return None
 
-
-
 def find_sensor_columns(df):
     """
     Enhanced function to find and validate sensor columns with debugging.
@@ -193,7 +191,7 @@ def find_sensor_columns(df):
     # Debug information
     st.info(f"Available columns: {df.columns.tolist()}")
     
-    for sensor, possible_names in sensor_mapping.items():
+    for sensor, possible_names in sensor_column_map.items():
         for name in possible_names:
             if name in df.columns:
                 found_columns[sensor] = name
