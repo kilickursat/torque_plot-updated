@@ -35,6 +35,11 @@ def safe_get_loc(columns, col_name):
 
 
 def load_data(file, file_type):
+    try:
+        raw_content = file.read()
+        st.write("File encoding:", chardet.detect(raw_content))
+        content_str = raw_content.decode('utf-8')
+        st.write("First few lines:", content_str[:200])
     """
     Load and process CSV or Excel files with comprehensive error handling and data cleaning.
     
@@ -173,6 +178,11 @@ def load_data(file, file_type):
         st.error(f"Error loading file: {str(e)}")
         st.error(f"Detailed error: {traceback.format_exc()}")
         return None
+        
+# Add this after loading the CSV
+st.write("Sample of raw data:")
+st.write(df.head())
+st.write("Data types:", df.dtypes)
 
 # Update the sensor column map with more potential column names
 sensor_column_map = {
@@ -184,6 +194,12 @@ sensor_column_map = {
     "distance": ["Distance", "Chainage", "Position", "Kette", "Station","V34_TL_SR_m_Z","TL_SR_m_Z","SR_m_Z","Weg","weg"]
 }
 
+# Add after finding sensor columns
+st.write("Found sensor mappings:", sensor_columns)
+for sensor, col in sensor_column_map.items():
+    if col not in df.columns:
+        st.error(f"Mapped column {col} for {sensor} not found in data")
+        
 def find_sensor_columns(df):
     found_columns = {}
     for sensor, possible_names in sensor_column_map.items():
@@ -200,7 +216,13 @@ def find_sensor_columns(df):
                     found_columns[sensor] = col
                     break
     return found_columns
-
+    
+# Add after finding sensor columns
+st.write("Found sensor mappings:", sensor_columns)
+for sensor, col in sensor_column_map.items():
+    if col not in df.columns:
+        st.error(f"Mapped column {col} for {sensor} not found in data")
+        
 def load_machine_specs(file, file_type):
     """Load machine specifications from XLSX or CSV file."""
     try:
@@ -215,7 +237,14 @@ def load_machine_specs(file, file_type):
     except Exception as e:
         st.error(f"Error loading machine specifications: {str(e)}")
         return None
-
+        
+# After loading machine parameters
+st.write("Machine parameters:")
+for key, value in load_machine_specs.items():
+    if pd.isna(value):
+        st.error(f"Invalid {key}: {value}")
+    else:
+        st.info(f"{key}: {value}")
 
 def get_machine_params(specs_df, machine_type):
     # Filter the DataFrame for the selected machine type
@@ -275,7 +304,14 @@ def get_machine_params(specs_df, machine_type):
         'torque_constant': machine_data[torque_constant_col]
     }
 
-
+# After loading machine parameters
+st.write("Machine parameters:")
+for key, value in get_machine_params.items():
+    if pd.isna(value):
+        st.error(f"Invalid {key}: {value}")
+    else:
+        st.info(f"{key}: {value}")
+        
 def calculate_whisker_and_outliers(data):
     """Calculate whiskers and outliers for a given dataset."""
     Q1 = data.quantile(0.25)
