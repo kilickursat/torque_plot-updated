@@ -174,39 +174,31 @@ def load_data(file, file_type):
         st.error(f"Detailed error: {traceback.format_exc()}")
         return None
 
+# Update the sensor column map with more potential column names
+sensor_column_map = {
+    "pressure": ["Working pressure [bar]", "AzV.V13_SR_ArbDr_Z | DB 60.DBD 26", "Pression [bar]", "Presión [bar]", "Pressure", "Pressure [bar]", "Working Pressure","cutting wheel.MPU1WPr","MPU1WPr","V13_SR_ArbDr_Z", "Working pressure [bar]", "AzV.V13_SR_ArbDr_Z"],
+    "revolution": ["Revolution [rpm]", "AzV.V13_SR_Drehz_nach_Abgl_Z | DB 60.DBD 30", "Vitesse [rpm]", "Revoluciones [rpm]", "RPM", "Speed", "Rotation Speed","cutting wheel.CWSpeed","CWSpeed","cutting wheel","V13_SR_Drehz_nach_Abgl_Z", "Revolution [rpm]", "AzV.V13_SR_Drehz_nach_Abgl_Z"],
+    "time": ["Time", "Timestamp", "DateTime", "Date", "Zeit", "Relativzeit", "Uhrzeit", "Datum", "ts(utc)"],
+    "advance_rate": ["Advance Rate", "Vorschubgeschwindigkeit", "Avance", "Rate of Penetration", "ROP", "Advance [m/min]", "Advance [mm/min]","VTgeschw_Z","VTgeschw"],
+    "thrust_force": ["Thrust Force", "Thrust", "Vorschubkraft", "Force", "Force at Cutting Head", "Thrust Force [kN]","15_thrust cylinder.TZylGrABCDForce","thrust cylinder.TZylGrABCDForce","TZylGrABCDForce"],
+    "distance": ["Distance", "Chainage", "Position", "Kette", "Station","V34_TL_SR_m_Z","TL_SR_m_Z","SR_m_Z","Weg","weg"]
+}
+
 def find_sensor_columns(df):
-    """
-    Enhanced function to find and validate sensor columns with debugging.
-    """
     found_columns = {}
-    sensor_column_map = {
-        "pressure": ["Working pressure [bar]", "AzV.V13_SR_ArbDr_Z | DB 60.DBD 26", "Pression [bar]", "Presión [bar]", "Pressure", "Pressure [bar]", "Working Pressure","cutting wheel.MPU1WPr","MPU1WPr","V13_SR_ArbDr_Z", "Working pressure [bar]", "AzV.V13_SR_ArbDr_Z"],
-        "revolution": ["Revolution [rpm]", "AzV.V13_SR_Drehz_nach_Abgl_Z | DB 60.DBD 30", "Vitesse [rpm]", "Revoluciones [rpm]", "RPM", "Speed", "Rotation Speed","cutting wheel.CWSpeed","CWSpeed","cutting wheel","V13_SR_Drehz_nach_Abgl_Z", "Revolution [rpm]", "AzV.V13_SR_Drehz_nach_Abgl_Z"],
-        "time": ["Time", "Timestamp", "DateTime", "Date", "Zeit", "Relativzeit", "Uhrzeit", "Datum", "ts(utc)"],
-        "advance_rate": ["Advance Rate", "Vorschubgeschwindigkeit", "Avance", "Rate of Penetration", "ROP", "Advance [m/min]", "Advance [mm/min]","VTgeschw_Z","VTgeschw"],
-        "thrust_force": ["Thrust Force", "Thrust", "Vorschubkraft", "Force", "Force at Cutting Head", "Thrust Force [kN]","15_thrust cylinder.TZylGrABCDForce","thrust cylinder.TZylGrABCDForce","TZylGrABCDForce"],
-        "distance": ["Distance", "Chainage", "Position", "Kette", "Station","V34_TL_SR_m_Z","TL_SR_m_Z","SR_m_Z","Weg","weg"]
-    }
-    
-    # Debug information
-    st.info(f"Available columns: {df.columns.tolist()}")
-    
     for sensor, possible_names in sensor_column_map.items():
         for name in possible_names:
-            if name in df.columns:
-                found_columns[sensor] = name
-                break
-                
-        if sensor not in found_columns:
-            # Try case-insensitive matching
+            # Case-insensitive and whitespace-stripped matching
             for col in df.columns:
-                if any(name.lower() == col.lower() for name in possible_names):
+                if name.strip().lower() == col.strip().lower():
                     found_columns[sensor] = col
                     break
-    
-    # Validate found columns
-    st.info(f"Found sensor columns: {found_columns}")
-    
+        # If still not found, attempt partial matches
+        if sensor not in found_columns:
+            for col in df.columns:
+                if any(name.lower() in col.lower() for name in possible_names):
+                    found_columns[sensor] = col
+                    break
     return found_columns
 
 def load_machine_specs(file, file_type):
@@ -499,49 +491,6 @@ def original_page():
         st.warning("Please upload Machine Specifications XLSX file.")
         return
         
-def calculate_torque(df, pressure_col, revolution_col, machine_params):
-    """
-    Enhanced torque calculation with validation and debugging.
-    """
-    try:
-        # Validate inputs
-        if not all(col in df.columns for col in [pressure_col, revolution_col]):
-            raise ValueError(f"Missing required columns: {pressure_col} or {revolution_col}")
-            
-        # Create copy to avoid modifying original
-        df_calc = df.copy()
-        
-        # Validate pressure and revolution values
-        df_calc[pressure_col] = pd.to_numeric(df_calc[pressure_col], errors='coerce')
-        df_calc[revolution_col] = pd.to_numeric(df_calc[revolution_col], errors='coerce')
-        
-        # Calculate torque
-        def calculate_torque_value(row):
-            try:
-                if pd.isna(row[pressure_col]) or pd.isna(row[revolution_col]):
-                    return np.nan
-                    
-                if row[revolution_col] < machine_params['n1']:
-                    return row[pressure_col] * machine_params['torque_constant']
-                else:
-                    return (machine_params['n1'] / row[revolution_col]) * \
-                           machine_params['torque_constant'] * row[pressure_col]
-            except Exception as e:
-                st.warning(f"Calculation error: {str(e)}")
-                return np.nan
-        
-        df_calc['Calculated torque [kNm]'] = df_calc.apply(calculate_torque_value, axis=1)
-        
-        # Validate results
-        invalid_torque = df_calc['Calculated torque [kNm]'].isna().sum()
-        if invalid_torque > 0:
-            st.warning(f"Found {invalid_torque} invalid torque calculations")
-            
-        return df_calc
-        
-    except Exception as e:
-        st.error(f"Error in torque calculation: {str(e)}")
-        return None
         
     # Sidebar for user inputs
     st.sidebar.header("Parameter Settings")
@@ -588,9 +537,20 @@ def calculate_torque(df, pressure_col, revolution_col, machine_params):
 
                 # Filter data points between n2 and n1 rpm
                 df = df[(df[revolution_col] >= machine_params['n2']) & (df[revolution_col] <= machine_params['n1'])]
-                # torque formula was here!
 
+                # Calculate torque
+                def calculate_torque_wrapper(row):
+                    working_pressure = row[pressure_col]
+                    current_speed = row[revolution_col]
 
+                    if current_speed < machine_params['n1']:
+                        torque = working_pressure * machine_params['torque_constant']
+                    else:
+                        torque = (machine_params['n1'] / current_speed) * machine_params['torque_constant'] * working_pressure
+
+                    return round(torque, 2)
+
+                df['Calculated torque [kNm]'] = df.apply(calculate_torque_wrapper, axis=1)
 
                 # Calculate whiskers and outliers for torque
                 torque_lower_whisker, torque_upper_whisker, torque_outliers = calculate_whisker_and_outliers(df['Calculated torque [kNm]'])
