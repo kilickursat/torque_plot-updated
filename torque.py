@@ -35,145 +35,119 @@ def safe_get_loc(columns, col_name):
 
 
 def load_data(file, file_type):
+    """
+    Load and process CSV or Excel files with comprehensive error handling and data cleaning.
+    """
     try:
+        # Initial file read for debugging
         raw_content = file.read()
-        st.write("File encoding:", chardet.detect(raw_content))
-        content_str = raw_content.decode('utf-8')
-        st.write("First few lines:", content_str[:200])
-
-    try:
+        encoding_info = chardet.detect(raw_content)
+        st.write("File encoding:", encoding_info)
+        
         if file_type == 'csv':
-            # Read raw content
-            file_content = file.read()
-            
-            # Detect encoding
-            detection = chardet.detect(file_content)
-            encoding = detection['encoding'] if detection['confidence'] > 0.7 else 'utf-8'
+            # Use detected encoding or fallback
+            encoding = encoding_info['encoding'] if encoding_info['confidence'] > 0.7 else 'utf-8'
             
             try:
-                content_str = file_content.decode(encoding)
+                content_str = raw_content.decode(encoding)
             except UnicodeDecodeError:
-                # Fallback encodings
                 for enc in ['utf-8', 'iso-8859-1', 'latin1', 'cp1252']:
                     try:
-                        content_str = file_content.decode(enc)
+                        content_str = raw_content.decode(enc)
                         encoding = enc
+                        st.info(f"Successfully decoded with {enc}")
                         break
                     except UnicodeDecodeError:
                         continue
             
-            # Clean content
+            # Display first few lines for debugging
+            st.write("First few lines:", content_str[:200])
+            
+            # Clean and process content
             cleaned_lines = []
             for line in content_str.split('\n'):
                 if line.strip():
-                    # Remove tabs and clean spaces
                     clean_line = ' '.join(line.replace('\t', ' ').split())
-                    # Clean delimiter regions
                     parts = [part.strip() for part in clean_line.split(';')]
                     cleaned_lines.append(';'.join(parts))
             
-            # Create StringIO object
-            string_data = StringIO('\n'.join(cleaned_lines))
+            processed_content = '\n'.join(cleaned_lines)
+            string_data = StringIO(processed_content)
             
+            # Try reading with different delimiters
             try:
-                # First attempt with semicolon
-                df = pd.read_csv(
-                    string_data,
-                    sep=';',
-                    encoding=encoding,
-                    skipinitialspace=True,
-                    on_bad_lines='warn',
-                    low_memory=False
-                )
-            except Exception:
-                # Second attempt with comma if semicolon fails
+                df = pd.read_csv(string_data, sep=';', encoding=encoding, skipinitialspace=True)
+            except:
                 string_data.seek(0)
-                df = pd.read_csv(
-                    string_data,
-                    sep=',',
-                    encoding=encoding,
-                    skipinitialspace=True,
-                    on_bad_lines='warn',
-                    low_memory=False
-                )
+                df = pd.read_csv(string_data, sep=',', encoding=encoding, skipinitialspace=True)
+            
+            # Display raw data for debugging
+            st.write("Raw DataFrame Head:", df.head())
+            st.write("Initial Data Types:", df.dtypes)
             
             # Clean column names
             df.columns = df.columns.str.strip()
             
-            # Process each column
+            # Process numeric columns
             for col in df.columns:
-                # Strip whitespace if string
                 if df[col].dtype == 'object':
                     df[col] = df[col].str.strip()
-                    
                     try:
-                        # Handle European number format (comma decimal)
                         cleaned_values = df[col].str.replace(',', '.').str.strip()
                         df[col] = pd.to_numeric(cleaned_values)
+                        st.info(f"Converted {col} to numeric")
                     except:
-                        # Keep as string if conversion fails
-                        continue
+                        st.warning(f"Keeping {col} as string")
             
-            # Remove empty rows/columns
+            # Clean data
             df = df.dropna(how='all').dropna(axis=1, how='all')
             
-            # Validate DataFrame
+            # Validate results
             if df.empty:
                 raise ValueError("DataFrame is empty after processing")
-                
-            # Basic data validation
-            numeric_cols = df.select_dtypes(include=[np.number]).columns
-            for col in numeric_cols:
-                # Check for infinite values
-                inf_mask = np.isinf(df[col])
-                if inf_mask.any():
-                    df.loc[inf_mask, col] = np.nan
-                    
-                # Check for unreasonable values (e.g., negative where inappropriate)
-                if col.lower().find('pressure') >= 0 or col.lower().find('force') >= 0:
-                    neg_mask = df[col] < 0
-                    if neg_mask.any():
-                        df.loc[neg_mask, col] = np.abs(df[col])
             
+            # Add this after loading the CSV
+            st.write("Sample of raw data:")
+            st.write(df.head())
+            st.write("Data types:", df.dtypes)
+            
+            file.seek(0)  # Reset file pointer
             return df
             
         elif file_type == 'xlsx':
+            file.seek(0)  # Reset file pointer
             try:
                 df = pd.read_excel(
                     file,
                     engine='openpyxl',
-                    na_values=['NA', 'N/A', ''],
-                    keep_default_na=True
+                    na_values=['NA', 'N/A', '']
                 )
                 
-                # Clean column names
-                df.columns = df.columns.str.strip()
-                
-                # Remove empty rows/columns
-                df = df.dropna(how='all').dropna(axis=1, how='all')
-                
-                # Validate DataFrame
                 if df.empty:
                     raise ValueError("Excel file contains no data")
-                    
+                
+                df.columns = df.columns.str.strip()
+                df = df.dropna(how='all').dropna(axis=1, how='all')
+                
+                # Add this after loading the Excel
+                st.write("Sample of raw data:")
+                st.write(df.head())
+                st.write("Data types:", df.dtypes)
+                
                 return df
                 
             except Exception as excel_error:
-                st.error(f"Error processing Excel file: {str(excel_error)}")
+                st.error(f"Excel processing error: {str(excel_error)}")
+                st.error(traceback.format_exc())
                 return None
-                
+        
         else:
             raise ValueError(f"Unsupported file type: {file_type}")
             
     except Exception as e:
-        st.error(f"Error loading file: {str(e)}")
-        st.error(f"Detailed error: {traceback.format_exc()}")
+        st.error(f"File loading error: {str(e)}")
+        st.error(traceback.format_exc())
         return None
-        
-# Add this after loading the CSV
-st.write("Sample of raw data:")
-st.write(df.head())
-st.write("Data types:", df.dtypes)
 
 # Update the sensor column map with more potential column names
 sensor_column_map = {
