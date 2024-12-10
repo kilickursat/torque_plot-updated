@@ -40,16 +40,7 @@ def load_data(file, file_type):
         st.write("File encoding:", chardet.detect(raw_content))
         content_str = raw_content.decode('utf-8')
         st.write("First few lines:", content_str[:200])
-    """
-    Load and process CSV or Excel files with comprehensive error handling and data cleaning.
-    
-    Args:
-        file: File object from streamlit uploader
-        file_type: String ('csv' or 'xlsx')
-    
-    Returns:
-        pandas.DataFrame or None if error
-    """
+
     try:
         if file_type == 'csv':
             # Read raw content
