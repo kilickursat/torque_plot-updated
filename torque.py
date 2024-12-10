@@ -36,94 +36,103 @@ def safe_get_loc(columns, col_name):
 def load_data(file, file_type):
     """
     Enhanced function to load CSV or Excel files with robust error handling and data cleaning.
-    
-    Args:
-        file: The uploaded file object
-        file_type: String indicating file type ('csv' or 'xlsx')
-    
-    Returns:
-        pandas.DataFrame or None if loading fails
     """
     try:
         if file_type == 'csv':
-            # Try multiple approaches to read the CSV file
+            # Read the file content first
+            file_content = file.read()
+            
             try:
-                # First attempt: Basic CSV reading with flexible engine
-                df = pd.read_csv(
-                    file,
-                    sep=';',
-                    engine='python',
-                    encoding='utf-8',
-                    skipinitialspace=True,
-                    on_bad_lines='warn'
-                )
-            except Exception as e:
-                # Second attempt: Read raw content for more control
-                file_content = file.read()
-                
-                # Try multiple encodings
-                for encoding in ['utf-8', 'iso-8859-1', 'latin1', 'cp1252']:
+                # Try UTF-8 first
+                content_str = file_content.decode('utf-8')
+            except UnicodeDecodeError:
+                # Fallback encodings
+                for encoding in ['iso-8859-1', 'latin1', 'cp1252']:
                     try:
                         content_str = file_content.decode(encoding)
                         break
                     except UnicodeDecodeError:
                         continue
-                
-                # Pre-process content
-                cleaned_lines = []
-                for line in content_str.split('\n'):
-                    if line.strip():
-                        # Clean up the line
-                        cleaned_line = line.replace('\t', '').strip()
-                        # Ensure consistent delimiter
-                        cleaned_line = ';'.join(part.strip() for part in cleaned_line.split(';') if part.strip())
-                        cleaned_lines.append(cleaned_line)
-                
-                # Create cleaned content string
-                processed_content = '\n'.join(cleaned_lines)
-                
-                # Convert to StringIO for pandas
-                from io import StringIO
-                string_data = StringIO(processed_content)
-                
-                # Read the processed content
-                df = pd.read_csv(
-                    string_data,
-                    sep=';',
-                    encoding=encoding,
-                    skipinitialspace=True,
-                    on_bad_lines='warn'
-                )
             
-            # Clean up column names
+            # Clean up content
+            from io import StringIO
+            
+            # Remove trailing tabs and extra whitespace
+            cleaned_lines = []
+            for line in content_str.split('\n'):
+                if line.strip():
+                    # Remove tabs and clean up multiple spaces
+                    cleaned_line = ' '.join(line.replace('\t', ' ').split())
+                    # Ensure semicolon-separated format
+                    parts = [part.strip() for part in cleaned_line.split(';')]
+                    cleaned_lines.append(';'.join(parts))
+            
+            processed_content = '\n'.join(cleaned_lines)
+            string_data = StringIO(processed_content)
+            
+            # Read CSV with pandas
+            df = pd.read_csv(
+                string_data,
+                sep=';',
+                skipinitialspace=True,
+                parse_dates=['ts(utc)'] if 'ts(utc)' in processed_content else None,
+                dtype={
+                    'V13_SR_ArbDr_Z': float,
+                    'V13_SR_DM_Z': float,
+                    'V13_SR_Drehz_nach_Abgl_Z': float,
+                    'V15_Dehn_Weg_ges_Z': float,
+                    'V18_GesamtKraft_STZ_Z': float,
+                    'V34_VTgeschw_Z': float
+                }
+            )
+            
+            # Clean column names
             df.columns = df.columns.str.strip()
             
-            # Remove any completely empty rows/columns
-            df = df.dropna(how='all').dropna(axis=1, how='all')
+            # Handle numeric conversions
+            numeric_columns = df.select_dtypes(include=['object']).columns
+            for col in numeric_columns:
+                if col != 'ts(utc)':  # Skip timestamp column
+                    try:
+                        # Replace any commas with periods for decimal points
+                        df[col] = df[col].str.replace(',', '.').astype(float)
+                    except:
+                        # If conversion fails, try to clean the data further
+                        df[col] = pd.to_numeric(
+                            df[col].str.replace(',', '.').str.strip(),
+                            errors='coerce'
+                        )
             
-            # Clean data in each column
-            for col in df.columns:
-                # Strip whitespace if string column
-                if df[col].dtype == 'object':
-                    df[col] = df[col].str.strip()
+            # Drop rows with all NaN values
+            df = df.dropna(how='all')
+            
+            # Verify calculations are possible
+            required_columns = {
+                'V13_SR_ArbDr_Z': 'pressure',
+                'V13_SR_Drehz_nach_Abgl_Z': 'revolution',
+                'V34_VTgeschw_Z': 'advance_rate',
+                'V18_GesamtKraft_STZ_Z': 'thrust_force'
+            }
+            
+            missing_columns = [col for col, purpose in required_columns.items() 
+                             if col not in df.columns]
+            
+            if missing_columns:
+                missing_str = ', '.join(missing_columns)
+                st.warning(f"Missing required columns for calculations: {missing_str}")
                 
-                try:
-                    # Try to convert to numeric, handling both . and , as decimal points
-                    if df[col].dtype == 'object':
-                        # Replace comma with period for decimal points
-                        cleaned_values = df[col].str.replace(',', '.').str.strip()
-                        df[col] = pd.to_numeric(cleaned_values, errors='ignore')
-                except Exception:
-                    continue
+            # Add debugging information
+            st.info(f"Data shape: {df.shape}")
+            st.info(f"Column dtypes: {df.dtypes.to_dict()}")
             
-            # Verify we still have data
-            if df.empty:
-                raise ValueError("Resulting DataFrame is empty")
+            # Verify no infinite values
+            inf_cols = df.isin([np.inf, -np.inf]).any()
+            if inf_cols.any():
+                st.warning(f"Infinite values found in columns: {inf_cols[inf_cols].index.tolist()}")
             
             return df
             
         elif file_type == 'xlsx':
-            # Handle Excel files
             df = pd.read_excel(
                 file,
                 engine='openpyxl',
@@ -131,53 +140,55 @@ def load_data(file, file_type):
                 keep_default_na=True
             )
             
-            # Clean up column names
+            # Clean column names
             df.columns = df.columns.str.strip()
             
-            # Remove any completely empty rows/columns
+            # Drop empty rows/columns
             df = df.dropna(how='all').dropna(axis=1, how='all')
             
-            # Verify we have data
-            if df.empty:
-                raise ValueError("Resulting DataFrame is empty")
-                
             return df
-            
-        else:
-            raise ValueError(f"Unsupported file type: {file_type}")
             
     except Exception as e:
         st.error(f"Error loading file: {str(e)}")
-        logging.error(f"File loading error: {str(e)}")
+        st.error(f"Detailed error information: {traceback.format_exc()}")
         return None
-# Update the sensor column map with more potential column names
-sensor_column_map = {
-    "pressure": ["Working pressure [bar]", "AzV.V13_SR_ArbDr_Z | DB 60.DBD 26", "Pression [bar]", "Presión [bar]", "Pressure", "Pressure [bar]", "Working Pressure","cutting wheel.MPU1WPr","MPU1WPr","V13_SR_ArbDr_Z", "Working pressure [bar]", "AzV.V13_SR_ArbDr_Z"],
-    "revolution": ["Revolution [rpm]", "AzV.V13_SR_Drehz_nach_Abgl_Z | DB 60.DBD 30", "Vitesse [rpm]", "Revoluciones [rpm]", "RPM", "Speed", "Rotation Speed","cutting wheel.CWSpeed","CWSpeed","cutting wheel","V13_SR_Drehz_nach_Abgl_Z", "Revolution [rpm]", "AzV.V13_SR_Drehz_nach_Abgl_Z"],
-    "time": ["Time", "Timestamp", "DateTime", "Date", "Zeit", "Relativzeit", "Uhrzeit", "Datum", "ts(utc)"],
-    "advance_rate": ["Advance Rate", "Vorschubgeschwindigkeit", "Avance", "Rate of Penetration", "ROP", "Advance [m/min]", "Advance [mm/min]","VTgeschw_Z","VTgeschw"],
-    "thrust_force": ["Thrust Force", "Thrust", "Vorschubkraft", "Force", "Force at Cutting Head", "Thrust Force [kN]","15_thrust cylinder.TZylGrABCDForce","thrust cylinder.TZylGrABCDForce","TZylGrABCDForce"],
-    "distance": ["Distance", "Chainage", "Position", "Kette", "Station","V34_TL_SR_m_Z","TL_SR_m_Z","SR_m_Z","Weg","weg"]
-}
+
+
 
 def find_sensor_columns(df):
+    """
+    Enhanced function to find and validate sensor columns with debugging.
+    """
     found_columns = {}
-    for sensor, possible_names in sensor_column_map.items():
+    sensor_column_map = {
+        "pressure": ["Working pressure [bar]", "AzV.V13_SR_ArbDr_Z | DB 60.DBD 26", "Pression [bar]", "Presión [bar]", "Pressure", "Pressure [bar]", "Working Pressure","cutting wheel.MPU1WPr","MPU1WPr","V13_SR_ArbDr_Z", "Working pressure [bar]", "AzV.V13_SR_ArbDr_Z"],
+        "revolution": ["Revolution [rpm]", "AzV.V13_SR_Drehz_nach_Abgl_Z | DB 60.DBD 30", "Vitesse [rpm]", "Revoluciones [rpm]", "RPM", "Speed", "Rotation Speed","cutting wheel.CWSpeed","CWSpeed","cutting wheel","V13_SR_Drehz_nach_Abgl_Z", "Revolution [rpm]", "AzV.V13_SR_Drehz_nach_Abgl_Z"],
+        "time": ["Time", "Timestamp", "DateTime", "Date", "Zeit", "Relativzeit", "Uhrzeit", "Datum", "ts(utc)"],
+        "advance_rate": ["Advance Rate", "Vorschubgeschwindigkeit", "Avance", "Rate of Penetration", "ROP", "Advance [m/min]", "Advance [mm/min]","VTgeschw_Z","VTgeschw"],
+        "thrust_force": ["Thrust Force", "Thrust", "Vorschubkraft", "Force", "Force at Cutting Head", "Thrust Force [kN]","15_thrust cylinder.TZylGrABCDForce","thrust cylinder.TZylGrABCDForce","TZylGrABCDForce"],
+        "distance": ["Distance", "Chainage", "Position", "Kette", "Station","V34_TL_SR_m_Z","TL_SR_m_Z","SR_m_Z","Weg","weg"]
+    }
+    
+    # Debug information
+    st.info(f"Available columns: {df.columns.tolist()}")
+    
+    for sensor, possible_names in sensor_mapping.items():
         for name in possible_names:
-            # Case-insensitive and whitespace-stripped matching
-            for col in df.columns:
-                if name.strip().lower() == col.strip().lower():
-                    found_columns[sensor] = col
-                    break
-        # If still not found, attempt partial matches
+            if name in df.columns:
+                found_columns[sensor] = name
+                break
+                
         if sensor not in found_columns:
+            # Try case-insensitive matching
             for col in df.columns:
-                if any(name.lower() in col.lower() for name in possible_names):
+                if any(name.lower() == col.lower() for name in possible_names):
                     found_columns[sensor] = col
                     break
+    
+    # Validate found columns
+    st.info(f"Found sensor columns: {found_columns}")
+    
     return found_columns
-
-
 
 def load_machine_specs(file, file_type):
     """Load machine specifications from XLSX or CSV file."""
@@ -514,20 +525,51 @@ def original_page():
 
                 # Filter data points between n2 and n1 rpm
                 df = df[(df[revolution_col] >= machine_params['n2']) & (df[revolution_col] <= machine_params['n1'])]
+                # torque formula was here!
+def calculate_torque(df, pressure_col, revolution_col, machine_params):
+    """
+    Enhanced torque calculation with validation and debugging.
+    """
+    try:
+        # Validate inputs
+        if not all(col in df.columns for col in [pressure_col, revolution_col]):
+            raise ValueError(f"Missing required columns: {pressure_col} or {revolution_col}")
+            
+        # Create copy to avoid modifying original
+        df_calc = df.copy()
+        
+        # Validate pressure and revolution values
+        df_calc[pressure_col] = pd.to_numeric(df_calc[pressure_col], errors='coerce')
+        df_calc[revolution_col] = pd.to_numeric(df_calc[revolution_col], errors='coerce')
+        
+        # Calculate torque
+        def calculate_torque_value(row):
+            try:
+                if pd.isna(row[pressure_col]) or pd.isna(row[revolution_col]):
+                    return np.nan
+                    
+                if row[revolution_col] < machine_params['n1']:
+                    return row[pressure_col] * machine_params['torque_constant']
+                else:
+                    return (machine_params['n1'] / row[revolution_col]) * \
+                           machine_params['torque_constant'] * row[pressure_col]
+            except Exception as e:
+                st.warning(f"Calculation error: {str(e)}")
+                return np.nan
+        
+        df_calc['Calculated torque [kNm]'] = df_calc.apply(calculate_torque_value, axis=1)
+        
+        # Validate results
+        invalid_torque = df_calc['Calculated torque [kNm]'].isna().sum()
+        if invalid_torque > 0:
+            st.warning(f"Found {invalid_torque} invalid torque calculations")
+            
+        return df_calc
+        
+    except Exception as e:
+        st.error(f"Error in torque calculation: {str(e)}")
+        return None
 
-                # Calculate torque
-                def calculate_torque_wrapper(row):
-                    working_pressure = row[pressure_col]
-                    current_speed = row[revolution_col]
-
-                    if current_speed < machine_params['n1']:
-                        torque = working_pressure * machine_params['torque_constant']
-                    else:
-                        torque = (machine_params['n1'] / current_speed) * machine_params['torque_constant'] * working_pressure
-
-                    return round(torque, 2)
-
-                df['Calculated torque [kNm]'] = df.apply(calculate_torque_wrapper, axis=1)
 
                 # Calculate whiskers and outliers for torque
                 torque_lower_whisker, torque_upper_whisker, torque_outliers = calculate_whisker_and_outliers(df['Calculated torque [kNm]'])
