@@ -8,6 +8,7 @@ from datetime import timedelta
 import csv
 from io import StringIO
 import chardet
+import traceback
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -35,122 +36,142 @@ def safe_get_loc(columns, col_name):
 
 def load_data(file, file_type):
     """
-    Enhanced function to load CSV or Excel files with robust error handling and data cleaning.
+    Load and process CSV or Excel files with comprehensive error handling and data cleaning.
+    
+    Args:
+        file: File object from streamlit uploader
+        file_type: String ('csv' or 'xlsx')
+    
+    Returns:
+        pandas.DataFrame or None if error
     """
     try:
         if file_type == 'csv':
-            # Read the file content first
+            # Read raw content
             file_content = file.read()
             
+            # Detect encoding
+            detection = chardet.detect(file_content)
+            encoding = detection['encoding'] if detection['confidence'] > 0.7 else 'utf-8'
+            
             try:
-                # Try UTF-8 first
-                content_str = file_content.decode('utf-8')
+                content_str = file_content.decode(encoding)
             except UnicodeDecodeError:
                 # Fallback encodings
-                for encoding in ['iso-8859-1', 'latin1', 'cp1252']:
+                for enc in ['utf-8', 'iso-8859-1', 'latin1', 'cp1252']:
                     try:
-                        content_str = file_content.decode(encoding)
+                        content_str = file_content.decode(enc)
+                        encoding = enc
                         break
                     except UnicodeDecodeError:
                         continue
             
-            # Clean up content
-            from io import StringIO
-            
-            # Remove trailing tabs and extra whitespace
+            # Clean content
             cleaned_lines = []
             for line in content_str.split('\n'):
                 if line.strip():
-                    # Remove tabs and clean up multiple spaces
-                    cleaned_line = ' '.join(line.replace('\t', ' ').split())
-                    # Ensure semicolon-separated format
-                    parts = [part.strip() for part in cleaned_line.split(';')]
+                    # Remove tabs and clean spaces
+                    clean_line = ' '.join(line.replace('\t', ' ').split())
+                    # Clean delimiter regions
+                    parts = [part.strip() for part in clean_line.split(';')]
                     cleaned_lines.append(';'.join(parts))
             
-            processed_content = '\n'.join(cleaned_lines)
-            string_data = StringIO(processed_content)
+            # Create StringIO object
+            string_data = StringIO('\n'.join(cleaned_lines))
             
-            # Read CSV with pandas
-            df = pd.read_csv(
-                string_data,
-                sep=';',
-                skipinitialspace=True,
-                parse_dates=['ts(utc)'] if 'ts(utc)' in processed_content else None,
-                dtype={
-                    'V13_SR_ArbDr_Z': float,
-                    'V13_SR_DM_Z': float,
-                    'V13_SR_Drehz_nach_Abgl_Z': float,
-                    'V15_Dehn_Weg_ges_Z': float,
-                    'V18_GesamtKraft_STZ_Z': float,
-                    'V34_VTgeschw_Z': float
-                }
-            )
+            try:
+                # First attempt with semicolon
+                df = pd.read_csv(
+                    string_data,
+                    sep=';',
+                    encoding=encoding,
+                    skipinitialspace=True,
+                    on_bad_lines='warn',
+                    low_memory=False
+                )
+            except Exception:
+                # Second attempt with comma if semicolon fails
+                string_data.seek(0)
+                df = pd.read_csv(
+                    string_data,
+                    sep=',',
+                    encoding=encoding,
+                    skipinitialspace=True,
+                    on_bad_lines='warn',
+                    low_memory=False
+                )
             
             # Clean column names
             df.columns = df.columns.str.strip()
             
-            # Handle numeric conversions
-            numeric_columns = df.select_dtypes(include=['object']).columns
-            for col in numeric_columns:
-                if col != 'ts(utc)':  # Skip timestamp column
+            # Process each column
+            for col in df.columns:
+                # Strip whitespace if string
+                if df[col].dtype == 'object':
+                    df[col] = df[col].str.strip()
+                    
                     try:
-                        # Replace any commas with periods for decimal points
-                        df[col] = df[col].str.replace(',', '.').astype(float)
+                        # Handle European number format (comma decimal)
+                        cleaned_values = df[col].str.replace(',', '.').str.strip()
+                        df[col] = pd.to_numeric(cleaned_values)
                     except:
-                        # If conversion fails, try to clean the data further
-                        df[col] = pd.to_numeric(
-                            df[col].str.replace(',', '.').str.strip(),
-                            errors='coerce'
-                        )
+                        # Keep as string if conversion fails
+                        continue
             
-            # Drop rows with all NaN values
-            df = df.dropna(how='all')
+            # Remove empty rows/columns
+            df = df.dropna(how='all').dropna(axis=1, how='all')
             
-            # Verify calculations are possible
-            required_columns = {
-                'V13_SR_ArbDr_Z': 'pressure',
-                'V13_SR_Drehz_nach_Abgl_Z': 'revolution',
-                'V34_VTgeschw_Z': 'advance_rate',
-                'V18_GesamtKraft_STZ_Z': 'thrust_force'
-            }
-            
-            missing_columns = [col for col, purpose in required_columns.items() 
-                             if col not in df.columns]
-            
-            if missing_columns:
-                missing_str = ', '.join(missing_columns)
-                st.warning(f"Missing required columns for calculations: {missing_str}")
+            # Validate DataFrame
+            if df.empty:
+                raise ValueError("DataFrame is empty after processing")
                 
-            # Add debugging information
-            st.info(f"Data shape: {df.shape}")
-            st.info(f"Column dtypes: {df.dtypes.to_dict()}")
-            
-            # Verify no infinite values
-            inf_cols = df.isin([np.inf, -np.inf]).any()
-            if inf_cols.any():
-                st.warning(f"Infinite values found in columns: {inf_cols[inf_cols].index.tolist()}")
+            # Basic data validation
+            numeric_cols = df.select_dtypes(include=[np.number]).columns
+            for col in numeric_cols:
+                # Check for infinite values
+                inf_mask = np.isinf(df[col])
+                if inf_mask.any():
+                    df.loc[inf_mask, col] = np.nan
+                    
+                # Check for unreasonable values (e.g., negative where inappropriate)
+                if col.lower().find('pressure') >= 0 or col.lower().find('force') >= 0:
+                    neg_mask = df[col] < 0
+                    if neg_mask.any():
+                        df.loc[neg_mask, col] = np.abs(df[col])
             
             return df
             
         elif file_type == 'xlsx':
-            df = pd.read_excel(
-                file,
-                engine='openpyxl',
-                na_values=['NA', 'N/A', ''],
-                keep_default_na=True
-            )
-            
-            # Clean column names
-            df.columns = df.columns.str.strip()
-            
-            # Drop empty rows/columns
-            df = df.dropna(how='all').dropna(axis=1, how='all')
-            
-            return df
+            try:
+                df = pd.read_excel(
+                    file,
+                    engine='openpyxl',
+                    na_values=['NA', 'N/A', ''],
+                    keep_default_na=True
+                )
+                
+                # Clean column names
+                df.columns = df.columns.str.strip()
+                
+                # Remove empty rows/columns
+                df = df.dropna(how='all').dropna(axis=1, how='all')
+                
+                # Validate DataFrame
+                if df.empty:
+                    raise ValueError("Excel file contains no data")
+                    
+                return df
+                
+            except Exception as excel_error:
+                st.error(f"Error processing Excel file: {str(excel_error)}")
+                return None
+                
+        else:
+            raise ValueError(f"Unsupported file type: {file_type}")
             
     except Exception as e:
         st.error(f"Error loading file: {str(e)}")
-        st.error(f"Detailed error information: {traceback.format_exc()}")
+        st.error(f"Detailed error: {traceback.format_exc()}")
         return None
 
 
