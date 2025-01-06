@@ -616,6 +616,13 @@ def original_page():
                 df[revolution_col] = pd.to_numeric(df[revolution_col], errors='coerce')
                 df[pressure_col] = pd.to_numeric(df[pressure_col], errors='coerce')
                 df = df.dropna(subset=[revolution_col, pressure_col])
+
+                # Time Column selection
+                time_col = st.selectbox(
+                    "Select Time Column",
+                    options=df.columns,
+                    index=safe_get_loc(df.columns, sensor_columns.get('time', df.columns[0]))
+                )
             
                 # Add time handling here
                 df["Time_unit"] = handle_time_column(df, time_col)
@@ -949,12 +956,7 @@ def advanced_page():
                 options=df.columns,
                 index=safe_get_loc(df.columns, default_revolution_col)
             )
-            # Time Column selection
-            time_col = st.selectbox(
-                "Select Time Column",
-                options=df.columns,
-                index=safe_get_loc(df.columns, sensor_columns.get('time', df.columns[0]))
-            )
+
 
             # Advance Rate Column
             if "advance_rate" in sensor_columns and sensor_columns["advance_rate"] in df.columns:
