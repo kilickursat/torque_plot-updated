@@ -62,7 +62,6 @@ def load_data(uploaded_file):
             return None
     return None
 
-
 def analyze_tbm_data(df):
     """Analyze TBM-specific parameters"""
     try:
@@ -88,20 +87,28 @@ def analyze_tbm_data(df):
 
 def analyze_machine_specs(df):
     try:
+        # Print column names for debugging
+        st.write("Available columns:", df.columns.tolist())
+        
+        # Find the diameter column - handle both formats
+        diameter_col = next((col for col in df.columns if 'DA[mm]' in col), None)
+        torque_cont_col = next((col for col in df.columns if 'M(dauer)[kNm]' in col), None)
+        torque_max_col = next((col for col in df.columns if 'M(max)[kNm]' in col), None)
+        
         specs = {
-            'Machine Series': df['Baureihe'].dropna().unique().tolist(),
+            'Machine Series': df['Baureihe'].dropna().unique().tolist() if 'Baureihe' in df.columns else [],
             'Diameter Range (mm)': {
-                'Min': float(df['DA[mm]'].dropna().min()),
-                'Max': float(df['DA[mm]'].dropna().max())
+                'Min': float(df[diameter_col].dropna().min()) if diameter_col else 0,
+                'Max': float(df[diameter_col].dropna().max()) if diameter_col else 0
             },
             'Torque Range (kNm)': {
                 'Continuous': {
-                    'Min': float(df['M(dauer)[kNm]'].dropna().min()),
-                    'Max': float(df['M(dauer)[kNm]'].dropna().max())
+                    'Min': float(df[torque_cont_col].dropna().min()) if torque_cont_col else 0,
+                    'Max': float(df[torque_cont_col].dropna().max()) if torque_cont_col else 0
                 },
                 'Maximum': {
-                    'Min': float(df['M(max)[kNm]'].dropna().min()),
-                    'Max': float(df['M(max)[kNm]'].dropna().max())
+                    'Min': float(df[torque_max_col].dropna().min()) if torque_max_col else 0,
+                    'Max': float(df[torque_max_col].dropna().max()) if torque_max_col else 0
                 }
             }
         }
@@ -109,63 +116,6 @@ def analyze_machine_specs(df):
     except Exception as e:
         st.error(f"Error analyzing machine specs: {str(e)}")
         return None
-
-def plot_tbm_parameters(df, selected_columns, window_size):
-    n_plots = len(selected_columns)
-    fig = make_subplots(rows=n_plots, cols=1, 
-                       subplot_titles=selected_columns,
-                       vertical_spacing=0.05, 
-                       height=300*n_plots)
-    
-    time_col = None
-    if 'ts(utc)' in df.columns:
-        time_col = 'ts(utc)'
-    elif 'Relativzeit' in df.columns:
-        time_col = 'Relativzeit'
-    
-    for i, col in enumerate(selected_columns, 1):
-        x_values = df.index if time_col is None else df[time_col]
-        
-        # Original data
-        fig.add_trace(
-            go.Scatter(x=x_values, y=df[col], 
-                      name=f'{col} - Raw',
-                      line=dict(color='blue', width=1)),
-            row=i, col=1
-        )
-        
-        # Rolling mean
-        if window_size > 1:
-            rolling_mean = df[col].rolling(window=window_size).mean()
-            fig.add_trace(
-                go.Scatter(x=x_values, y=rolling_mean, 
-                          name=f'{col} - Rolling Mean ({window_size})',
-                          line=dict(color='red', width=2)),
-                row=i, col=1
-            )
-    
-    fig.update_layout(height=300*n_plots + 100, showlegend=True)
-    return fig
-
-def analyze_machine_specs(df):
-    specs = {
-        'Machine Series': df['Baureihe'].unique().tolist(),
-        'Diameter Range (mm)': {
-            'Min': float(df['DA[mm]\r\n'].min()),
-            'Max': float(df['DA[mm]\r\n'].max())
-        },
-        'Torque Range (kNm)': {
-            'Continuous': {
-                'Min': float(df['M(dauer)[kNm]\r\n'].min()),
-                'Max': float(df['M(dauer)[kNm]\r\n'].max())
-            },
-            'Maximum': {
-                'Min': float(df['M(max)[kNm]\r\n'].min()),
-                'Max': float(df['M(max)[kNm]\r\n'].max())
-            }
-        }
-    }
-    return specs
 
 def export_data(df, filename):
     output = BytesIO()
