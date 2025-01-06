@@ -117,6 +117,7 @@ def analyze_machine_specs(df):
         st.error(f"Error analyzing machine specs: {str(e)}")
         return None
 
+
 def export_data(df, filename):
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
