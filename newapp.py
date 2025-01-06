@@ -63,6 +63,29 @@ def load_data(uploaded_file):
     return None
 
 
+def analyze_tbm_data(df):
+    """Analyze TBM-specific parameters"""
+    try:
+        analysis = {}
+        
+        # Dataset 1 specific analysis
+        if 'Gesteinsart' in df.columns:
+            analysis['rock_types'] = df['Gesteinsart'].dropna().value_counts().to_dict()
+            if 'Bohrkopf' in df.columns:
+                analysis['drilling_head_types'] = df['Bohrkopf'].dropna().value_counts().to_dict()
+        
+        # Dataset 2 specific analysis
+        if 'V13_SR_ArbDr_Z' in df.columns:
+            analysis['working_pressure'] = {
+                'mean': float(df['V13_SR_ArbDr_Z'].dropna().mean()),
+                'max': float(df['V13_SR_ArbDr_Z'].dropna().max())
+            }
+        
+        return analysis
+    except Exception as e:
+        st.error(f"Error analyzing TBM data: {str(e)}")
+        return {}
+
 def analyze_machine_specs(df):
     try:
         specs = {
