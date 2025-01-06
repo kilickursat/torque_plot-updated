@@ -949,6 +949,12 @@ def advanced_page():
                 options=df.columns,
                 index=safe_get_loc(df.columns, default_revolution_col)
             )
+            # Time Column selection
+            time_col = st.selectbox(
+                "Select Time Column",
+                options=df.columns,
+                index=safe_get_loc(df.columns, sensor_columns.get('time', df.columns[0]))
+            )
 
             # Advance Rate Column
             if "advance_rate" in sensor_columns and sensor_columns["advance_rate"] in df.columns:
