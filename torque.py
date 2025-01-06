@@ -149,34 +149,122 @@ def load_data(file, file_type):
         st.error(traceback.format_exc())
         return None
 
-# Update the sensor column map with more potential column names
 sensor_column_map = {
-    "pressure": ["Working pressure [bar]", "AzV.V13_SR_ArbDr_Z | DB 60.DBD 26", "Pression [bar]", "Presión [bar]", "Pressure", "Pressure [bar]", "Working Pressure","cutting wheel.MPU1WPr","MPU1WPr","V13_SR_ArbDr_Z", "Working pressure [bar]", "AzV.V13_SR_ArbDr_Z"],
-    "revolution": ["Revolution [rpm]", "AzV.V13_SR_Drehz_nach_Abgl_Z | DB 60.DBD 30", "Vitesse [rpm]", "Revoluciones [rpm]", "RPM", "Speed", "Rotation Speed","cutting wheel.CWSpeed","CWSpeed","cutting wheel","V13_SR_Drehz_nach_Abgl_Z", "Revolution [rpm]", "AzV.V13_SR_Drehz_nach_Abgl_Z"],
-    "time": ["Time", "Timestamp", "DateTime", "Date", "Zeit", "Relativzeit", "Uhrzeit", "Datum", "ts(utc)"],
-    "advance_rate": ["Advance Rate", "Vorschubgeschwindigkeit", "Avance", "Rate of Penetration", "ROP", "Advance [m/min]", "Advance [mm/min]","VTgeschw_Z","VTgeschw"],
-    "thrust_force": ["Thrust Force", "Thrust", "Vorschubkraft", "Force", "Force at Cutting Head", "Thrust Force [kN]","15_thrust cylinder.TZylGrABCDForce","thrust cylinder.TZylGrABCDForce","TZylGrABCDForce"],
-    "distance": ["Distance", "Chainage", "Position", "Kette", "Station","V34_TL_SR_m_Z","TL_SR_m_Z","SR_m_Z","Weg","weg"]
+    "pressure": [
+        "Working pressure [bar]", 
+        "AzV.V13_SR_ArbDr_Z | DB 60.DBD 26",
+        "V13_SR_ArbDr_Z",
+        "Pressure",
+        "Pressure [bar]", 
+        "Working Pressure",
+        "cutting wheel.MPU1WPr",
+        "MPU1WPr",
+        "AzV.V13_SR_ArbDr_Z",
+        "Pression [bar]", 
+        "Presión [bar]"
+    ],
+    "revolution": [
+        "Revolution [rpm]",
+        "AzV.V13_SR_Drehz_nach_Abgl_Z | DB 60.DBD 30",
+        "V13_SR_Drehz_nach_Abgl_Z",
+        "Vitesse [rpm]",
+        "Revoluciones [rpm]",
+        "RPM",
+        "Speed",
+        "Rotation Speed",
+        "cutting wheel.CWSpeed",
+        "CWSpeed",
+        "cutting wheel",
+        "AzV.V13_SR_Drehz_nach_Abgl_Z"
+    ],
+    "time": [
+        "Time",
+        "Timestamp",
+        "DateTime",
+        "Date",
+        "Zeit",
+        "Relativzeit",
+        "Uhrzeit",
+        "Datum",
+        "ts(utc)"
+    ],
+    "advance_rate": [
+        "Advance Rate",
+        "V34_VTgeschw_Z",
+        "VTgeschw_Z",
+        "VTgeschw",
+        "Vorschubgeschwindigkeit",
+        "Avance",
+        "Rate of Penetration",
+        "ROP",
+        "Advance [m/min]",
+        "Advance [mm/min]"
+    ],
+    "thrust_force": [
+        "Thrust Force",
+        "V15_VTP_Kraft_max_V",
+        "Thrust",
+        "Vorschubkraft",
+        "Force",
+        "Force at Cutting Head",
+        "Thrust Force [kN]",
+        "15_thrust cylinder.TZylGrABCDForce",
+        "thrust cylinder.TZylGrABCDForce",
+        "TZylGrABCDForce"
+    ],
+    "distance": [
+        "Distance",
+        "V15_Dehn_Weg_ges_Z",
+        "Chainage",
+        "Position",
+        "Kette",
+        "Station",
+        "V34_TL_SR_m_Z",
+        "TL_SR_m_Z",
+        "SR_m_Z",
+        "Weg",
+        "weg"
+    ]
 }
-        
+
 def find_sensor_columns(df):
     found_columns = {}
+    
+    # Clean column names
+    df.columns = df.columns.str.strip()
+    
     for sensor, possible_names in sensor_column_map.items():
+        # First try exact matches (case-insensitive)
         for name in possible_names:
-            # Case-insensitive and whitespace-stripped matching
+            name_lower = name.strip().lower()
             for col in df.columns:
-                if name.strip().lower() == col.strip().lower():
+                if name_lower == col.lower():
                     found_columns[sensor] = col
                     break
-        # If still not found, attempt partial matches
+            if sensor in found_columns:
+                break
+                
+        # If no exact match, try partial matches
         if sensor not in found_columns:
             for col in df.columns:
-                if any(name.lower() in col.lower() for name in possible_names):
+                col_lower = col.lower()
+                if any(name.strip().lower() in col_lower for name in possible_names):
                     found_columns[sensor] = col
                     break
+                    
     return found_columns
     
+def handle_time_column(df, time_col):
+    if time_col == 'ts(utc)':
+        return pd.to_datetime(df[time_col])
+    elif time_col in ['Relativzeit', 'Datum', 'Uhrzeit']:
+        return pd.to_numeric(df[time_col], errors='coerce')
+    return df[time_col]
 
+def update_plot_parameters(df, revolution_col):
+    rpm_stats = df[revolution_col].describe()
+    x_axis_max = min(rpm_stats['max'] * 1.2, 15)  # Limit x-axis for Dataset 2
+    return x_axis_max
         
 def load_machine_specs(file, file_type):
     """Load and validate machine specifications from XLSX or CSV file."""
@@ -523,6 +611,12 @@ def original_page():
                 df[revolution_col] = pd.to_numeric(df[revolution_col], errors='coerce')
                 df[pressure_col] = pd.to_numeric(df[pressure_col], errors='coerce')
                 df = df.dropna(subset=[revolution_col, pressure_col])
+            
+                # Add time handling here
+                df["Time_unit"] = handle_time_column(df, time_col)
+            
+                # Replace x_axis_max setting
+                x_axis_max = update_plot_parameters(df, revolution_col)
 
                 # RPM Statistics
                 rpm_stats = df[revolution_col].describe()
@@ -1028,6 +1122,10 @@ def advanced_page():
             df = df.dropna(
                 subset=[pressure_col, revolution_col, advance_rate_col, thrust_force_col]
             )
+
+            # Add these two new lines here
+            df["Time_unit"] = handle_time_column(df, time_col)
+            x_axis_max = update_plot_parameters(df, revolution_col)
 
             # Remove rows where revolution is zero to avoid division by zero
             df = df[df[revolution_col] != 0]
