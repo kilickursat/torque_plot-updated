@@ -257,20 +257,14 @@ def find_sensor_columns(df):
 def handle_time_column(df, time_col):
     try:
         if time_col == 'ts(utc)':
-            df['Time_unit'] = pd.to_datetime(df[time_col])
+            return pd.to_datetime(df[time_col]).astype(np.int64) // 10**9
         elif time_col in ['Relativzeit', 'Datum', 'Uhrzeit']:
-            df['Time_unit'] = pd.to_numeric(df[time_col], errors='coerce')
+            return pd.to_numeric(df[time_col], errors='coerce').fillna(0).astype('int64')
         else:
-            df['Time_unit'] = df[time_col]
-        
-        # Ensure Time_unit is numeric if datetime conversion fails
-        if pd.api.types.is_datetime64_any_dtype(df['Time_unit']):
-            df['Time_unit'] = df['Time_unit'].astype(np.int64) // 10**9
-        
-        return df['Time_unit']
+            return pd.Series(range(len(df)), dtype='int64')
     except Exception as e:
         st.error(f"Time column processing error: {str(e)}")
-        return pd.Series(range(len(df)))  # Fallback to index
+        return pd.Series(range(len(df)), dtype='int64')
 
 def update_plot_parameters(df, revolution_col):
     rpm_stats = df[revolution_col].describe()
