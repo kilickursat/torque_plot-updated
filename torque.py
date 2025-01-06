@@ -307,7 +307,7 @@ def get_machine_params(specs_df, machine_type):
     try:
         # Normalize machine type strings for comparison
         specs_df['Normalized_Projekt'] = specs_df['Projekt'].str.replace('-', '').str.lower()
-        normalized_type = machine_type.replace('-', '').str.lower()
+        normalized_type = machine_type.replace('-', '').lower()
         
         st.write("Looking for machine type:", machine_type)
         st.write("Available machine types:", specs_df['Projekt'].unique().tolist())
