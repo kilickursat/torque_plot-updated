@@ -305,21 +305,23 @@ def load_machine_specs(file, file_type):
 def get_machine_params(specs_df, machine_type):
     """Extract and validate machine parameters."""
     try:
-        # Display input validation
+        # Normalize machine type strings for comparison
+        specs_df['Normalized_Projekt'] = specs_df['Projekt'].str.replace('-', '').str.lower()
+        normalized_type = machine_type.replace('-', '').str.lower()
+        
         st.write("Looking for machine type:", machine_type)
         st.write("Available machine types:", specs_df['Projekt'].unique().tolist())
         
-        # Filter for machine type
-        machine_rows = specs_df[specs_df['Projekt'] == machine_type]
+        # Filter for machine type using normalized comparison
+        machine_rows = specs_df[specs_df['Normalized_Projekt'] == normalized_type]
         if machine_rows.empty:
             st.error(f"Machine type '{machine_type}' not found in specifications")
             return None
             
-        # Extract first matching row
+        # Rest of your original code remains the same
         machine_data = machine_rows.iloc[0]
         st.write("Found machine data:", machine_data.to_dict())
         
-        # Define parameter mappings
         param_mappings = {
             'n1': ['n1[1/min]', 'n1 (1/min)', 'n1[rpm]', 'Max RPM'],
             'n2': ['n2[1/min]', 'n2 (1/min)', 'n2[rpm]', 'Min RPM'],
@@ -328,7 +330,7 @@ def get_machine_params(specs_df, machine_type):
             'torque_constant': ['Drehmomentumrechnung[kNm/bar]', 'Drehmomentumrechnung [kNm/bar]', 'Torque Constant']
         }
         
-        # Find parameters
+        # Rest of the function remains identical
         params = {}
         missing_params = []
         for param, possible_names in param_mappings.items():
@@ -342,12 +344,10 @@ def get_machine_params(specs_df, machine_type):
             if not found:
                 missing_params.append(f"{param} (tried: {', '.join(possible_names)})")
         
-        # Validate parameters
         if missing_params:
             st.error(f"Missing parameters for '{machine_type}': {', '.join(missing_params)}")
             return None
             
-        # Check for invalid values
         for param, value in params.items():
             if pd.isna(value):
                 st.error(f"Invalid value for {param}: {value}")
