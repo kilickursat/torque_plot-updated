@@ -12,32 +12,30 @@ st.set_page_config(layout="wide")
 
 def preprocess_tbm_data(df):
     """Specific preprocessing for TBM datasets"""
-    # Handle known column formats from Dataset 1 (BN G 20 600.csv)
+    # Clean column names - remove whitespace and special characters
+    df.columns = df.columns.str.strip().str.replace('\r\n', '')
+    
+    # Handle known column formats from Dataset 1
     if 'Gesteinsart' in df.columns:
-        # Convert known numeric columns with European format
         numeric_cols = [col for col in df.columns if any(x in col for x in 
                       ['Dr', 'Drehz', 'Vol', 'Pos', 'Kraft', 'Weg', 'geschw'])]
         for col in numeric_cols:
             if df[col].dtype == 'object':
-                df[col] = df[col].str.replace(',', '.').astype(float)
+                df[col] = pd.to_numeric(df[col].str.replace(',', '.'), errors='coerce')
     
-    # Handle known column formats from Dataset 2 (data 21.csv)
+    # Handle known column formats from Dataset 2
     if 'ts(utc)' in df.columns:
-        df['ts(utc)'] = pd.to_datetime(df['ts(utc)'])
+        df['ts(utc)'] = pd.to_datetime(df['ts(utc)'], errors='coerce')
         numeric_cols = [col for col in df.columns if col != 'ts(utc)']
         for col in numeric_cols:
             if df[col].dtype == 'object':
-                df[col] = df[col].str.replace(',', '.').astype(float)
+                df[col] = pd.to_numeric(df[col].str.replace(',', '.'), errors='coerce')
     
-    # Handle machine specifications (MMBaureuhenliste.xlsx)
-    if 'Baureihe' in df.columns:
-        diameter_col = 'DA[mm]\r\n'
-        torque_cols = ['M(dauer)[kNm]\r\n', 'M(max)[kNm]\r\n']
-        pressure_cols = ['p(dauer)[bar]\r\n', 'p(max)[bar]\r\n']
-        
-        for col in [diameter_col] + torque_cols + pressure_cols:
-            if col in df.columns and df[col].dtype == 'object':
-                df[col] = df[col].str.replace(',', '.').astype(float)
+    # Handle machine specifications
+    spec_cols = ['DA[mm]', 'M(dauer)[kNm]', 'M(max)[kNm]', 'p(dauer)[bar]', 'p(max)[bar]']
+    for col in spec_cols:
+        if col in df.columns and df[col].dtype == 'object':
+            df[col] = pd.to_numeric(df[col].str.replace(',', '.'), errors='coerce')
     
     return df
 
@@ -47,39 +45,47 @@ def load_data(uploaded_file):
             file_extension = uploaded_file.name.split('.')[-1].lower()
             
             if file_extension == 'csv':
-                # Try multiple encodings
-                encodings = ['utf-8', 'iso-8859-1', 'cp1252']
-                for encoding in encodings:
+                # Try reading with different settings
+                try:
+                    df = pd.read_csv(uploaded_file, encoding='utf-8', on_bad_lines='skip')
+                except UnicodeDecodeError:
                     try:
-                        df = pd.read_csv(uploaded_file, encoding=encoding)
-                        break
-                    except UnicodeDecodeError:
-                        continue
+                        df = pd.read_csv(uploaded_file, encoding='iso-8859-1', on_bad_lines='skip')
+                    except:
+                        df = pd.read_csv(uploaded_file, encoding='cp1252', on_bad_lines='skip')
             elif file_extension in ['xlsx', 'xls']:
                 df = pd.read_excel(uploaded_file)
             
             return preprocess_tbm_data(df)
         except Exception as e:
             st.error(f"Error loading file: {str(e)}")
+            return None
     return None
 
-def analyze_tbm_data(df):
-    """Analyze TBM-specific parameters"""
-    analysis = {}
-    
-    # Dataset 1 specific analysis
-    if 'Gesteinsart' in df.columns:
-        analysis['rock_types'] = df['Gesteinsart'].value_counts().to_dict()
-        analysis['drilling_head_types'] = df['Bohrkopf'].value_counts().to_dict()
-    
-    # Dataset 2 specific analysis
-    if 'V13_SR_ArbDr_Z' in df.columns:
-        analysis['working_pressure'] = {
-            'mean': float(df['V13_SR_ArbDr_Z'].mean()),
-            'max': float(df['V13_SR_ArbDr_Z'].max())
+
+def analyze_machine_specs(df):
+    try:
+        specs = {
+            'Machine Series': df['Baureihe'].dropna().unique().tolist(),
+            'Diameter Range (mm)': {
+                'Min': float(df['DA[mm]'].dropna().min()),
+                'Max': float(df['DA[mm]'].dropna().max())
+            },
+            'Torque Range (kNm)': {
+                'Continuous': {
+                    'Min': float(df['M(dauer)[kNm]'].dropna().min()),
+                    'Max': float(df['M(dauer)[kNm]'].dropna().max())
+                },
+                'Maximum': {
+                    'Min': float(df['M(max)[kNm]'].dropna().min()),
+                    'Max': float(df['M(max)[kNm]'].dropna().max())
+                }
+            }
         }
-    
-    return analysis
+        return specs
+    except Exception as e:
+        st.error(f"Error analyzing machine specs: {str(e)}")
+        return None
 
 def plot_tbm_parameters(df, selected_columns, window_size):
     n_plots = len(selected_columns)
