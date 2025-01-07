@@ -34,6 +34,19 @@ def safe_get_loc(columns, col_name):
 
 
 
+def convert_to_arrow_compatible(df):
+    """
+    Convert all columns in the DataFrame to Arrow-compatible types.
+    """
+    for col in df.columns:
+        if df[col].dtype == 'object':
+            df[col] = df[col].astype(str)
+        try:
+            df[col] = pd.to_numeric(df[col], errors='ignore')
+        except:
+            pass
+    return df
+
 def load_data(file, file_type):
     """
     Load and process CSV or Excel files with comprehensive error handling and data cleaning.
@@ -43,11 +56,11 @@ def load_data(file, file_type):
         raw_content = file.read()
         encoding_info = chardet.detect(raw_content)
         st.write("File encoding:", encoding_info)
-        
+
         if file_type == 'csv':
             # Use detected encoding or fallback
             encoding = encoding_info['encoding'] if encoding_info['confidence'] > 0.7 else 'utf-8'
-            
+
             try:
                 content_str = raw_content.decode(encoding)
             except UnicodeDecodeError:
@@ -59,10 +72,10 @@ def load_data(file, file_type):
                         break
                     except UnicodeDecodeError:
                         continue
-            
+
             # Display first few lines for debugging
             st.write("First few lines:", content_str[:200])
-            
+
             # Clean and process content
             cleaned_lines = []
             for line in content_str.split('\n'):
@@ -70,24 +83,24 @@ def load_data(file, file_type):
                     clean_line = ' '.join(line.replace('\t', ' ').split())
                     parts = [part.strip() for part in clean_line.split(';')]
                     cleaned_lines.append(';'.join(parts))
-            
+
             processed_content = '\n'.join(cleaned_lines)
             string_data = StringIO(processed_content)
-            
+
             # Try reading with different delimiters
             try:
                 df = pd.read_csv(string_data, sep=';', encoding=encoding, skipinitialspace=True)
             except:
                 string_data.seek(0)
                 df = pd.read_csv(string_data, sep=',', encoding=encoding, skipinitialspace=True)
-            
+
             # Display raw data for debugging
             st.write("Raw DataFrame Head:", df.head())
             st.write("Initial Data Types:", df.dtypes)
-            
+
             # Clean column names
             df.columns = df.columns.str.strip()
-            
+
             # Process numeric columns
             for col in df.columns:
                 if df[col].dtype == 'object':
@@ -98,26 +111,25 @@ def load_data(file, file_type):
                         st.info(f"Converted {col} to numeric")
                     except:
                         st.warning(f"Keeping {col} as string")
-            
-            # Convert all object type columns to string to avoid Arrow serialization issues
-            for col in df.select_dtypes(include=['object']).columns:
-                df[col] = df[col].astype(str)
-            
+
+            # Convert all columns to Arrow-compatible types
+            df = convert_to_arrow_compatible(df)
+
             # Clean data
             df = df.dropna(how='all').dropna(axis=1, how='all')
-            
+
             # Validate results
             if df.empty:
                 raise ValueError("DataFrame is empty after processing")
-            
+
             # Add this after loading the CSV
             st.write("Sample of raw data:")
             st.write(df.head())
             st.write("Data types:", df.dtypes)
-            
+
             file.seek(0)  # Reset file pointer
             return df
-            
+
         elif file_type == 'xlsx':
             file.seek(0)  # Reset file pointer
             try:
@@ -126,37 +138,35 @@ def load_data(file, file_type):
                     engine='openpyxl',
                     na_values=['NA', 'N/A', '']
                 )
-                
+
                 if df.empty:
                     raise ValueError("Excel file contains no data")
-                
+
                 df.columns = df.columns.str.strip()
                 df = df.dropna(how='all').dropna(axis=1, how='all')
-                
-                # Convert all object type columns to string to avoid Arrow serialization issues
-                for col in df.select_dtypes(include=['object']).columns:
-                    df[col] = df[col].astype(str)
-                
+
+                # Convert all columns to Arrow-compatible types
+                df = convert_to_arrow_compatible(df)
+
                 # Add this after loading the Excel
                 st.write("Sample of raw data:")
                 st.write(df.head())
                 st.write("Data types:", df.dtypes)
-                
+
                 return df
-                
+
             except Exception as excel_error:
                 st.error(f"Excel processing error: {str(excel_error)}")
                 st.error(traceback.format_exc())
                 return None
-        
+
         else:
             raise ValueError(f"Unsupported file type: {file_type}")
-            
+
     except Exception as e:
         st.error(f"File loading error: {str(e)}")
         st.error(traceback.format_exc())
         return None
-
 sensor_column_map = {
     "pressure": [
         "Working pressure [bar]", 
