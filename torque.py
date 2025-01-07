@@ -83,15 +83,16 @@ def convert_to_arrow_compatible(df):
     
     return converted_df
 
+import warnings
+warnings.filterwarnings("ignore", message="Discarding nonzero nanoseconds in conversion")
+
 def load_data(file, file_type):
     try:
-        # Read file content
         raw_content = file.read()
         encoding_info = chardet.detect(raw_content)
         encoding = encoding_info['encoding'] if encoding_info['confidence'] > 0.7 else 'utf-8'
 
         if file_type == 'csv':
-            # Handle CSV files
             try:
                 content_str = raw_content.decode(encoding)
             except UnicodeDecodeError:
@@ -103,10 +104,8 @@ def load_data(file, file_type):
                     except UnicodeDecodeError:
                         continue
 
-            # Determine delimiter
             delimiter = ';' if ';' in content_str.split('\n')[0] else ','
             
-            # Process and clean content
             cleaned_lines = []
             header_found = False
             for line in content_str.split('\n'):
@@ -120,14 +119,13 @@ def load_data(file, file_type):
                                 if 'ts(utc)' in part:
                                     header_found = True
                             else:
-                                if i == 0:  # timestamp column
+                                if i == 0:
                                     cleaned_parts.append(part.strip())
-                                else:  # numeric columns
+                                else:
                                     cleaned_parts.append(part.replace(',', '.').strip())
                         line = delimiter.join(cleaned_parts)
                     cleaned_lines.append(line)
 
-            # Read CSV with appropriate settings
             df = pd.read_csv(
                 StringIO('\n'.join(cleaned_lines)),
                 sep=delimiter,
@@ -139,17 +137,17 @@ def load_data(file, file_type):
                 skip_blank_lines=True
             )
 
-            # Handle timestamp column
             if 'ts(utc)' in df.columns:
-                # Convert to datetime then to Unix timestamp
+                # Convert to datetime and handle nanoseconds
                 df['ts(utc)'] = pd.to_datetime(
                     df['ts(utc)'],
                     format='%Y-%m-%d %H:%M:%S',
                     errors='coerce'
-                )
-                df['ts(utc)'] = (df['ts(utc)'].astype('int64') // 10**9).astype('int64')
+                ).dt.floor('s')  # Floor to seconds
+                
+                # Convert to Unix timestamp
+                df['ts(utc)'] = df['ts(utc)'].view('int64') // 10**9
 
-            # Convert numeric columns
             numeric_cols = df.columns.difference(['ts(utc)'])
             for col in numeric_cols:
                 try:
@@ -157,12 +155,10 @@ def load_data(file, file_type):
                 except (ValueError, TypeError):
                     continue
 
-            # Clean up
             df.columns = df.columns.str.strip()
             df = df.dropna(how='all')
 
         elif file_type == 'xlsx':
-            # Handle Excel files
             file.seek(0)
             df = pd.read_excel(
                 file,
@@ -171,12 +167,16 @@ def load_data(file, file_type):
                 na_values=['NA', 'N/A', '', 'nan', 'NaN', 'null', 'NULL']
             )
 
-            # Handle timestamp column
             if 'ts(utc)' in df.columns:
-                df['ts(utc)'] = pd.to_datetime(df['ts(utc)'], errors='coerce')
-                df['ts(utc)'] = (df['ts(utc)'].astype('int64') // 10**9).astype('int64')
+                # Convert to datetime and handle nanoseconds
+                df['ts(utc)'] = pd.to_datetime(
+                    df['ts(utc)'],
+                    errors='coerce'
+                ).dt.floor('s')  # Floor to seconds
+                
+                # Convert to Unix timestamp
+                df['ts(utc)'] = df['ts(utc)'].view('int64') // 10**9
 
-            # Convert numeric columns
             numeric_cols = df.columns.difference(['ts(utc)'])
             for col in numeric_cols:
                 try:
@@ -184,14 +184,12 @@ def load_data(file, file_type):
                 except (ValueError, TypeError):
                     continue
 
-            # Clean up
             df.columns = df.columns.str.strip()
             df = df.dropna(how='all')
 
         else:
             raise ValueError(f"Unsupported file type: {file_type}")
 
-        # Final validation
         if df.empty:
             raise ValueError("DataFrame is empty after processing")
             
