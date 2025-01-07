@@ -138,15 +138,12 @@ def load_data(file, file_type):
             )
 
             if 'ts(utc)' in df.columns:
-                # Convert to datetime and handle nanoseconds
                 df['ts(utc)'] = pd.to_datetime(
                     df['ts(utc)'],
                     format='%Y-%m-%d %H:%M:%S',
                     errors='coerce'
-                ).dt.floor('s')  # Floor to seconds
-                
-                # Convert to Unix timestamp
-                df['ts(utc)'] = df['ts(utc)'].view('int64') // 10**9
+                ).dt.floor('s')
+                df['ts(utc)'] = (df['ts(utc)'].astype('int64') // 10**9).astype('int64')
 
             numeric_cols = df.columns.difference(['ts(utc)'])
             for col in numeric_cols:
@@ -168,14 +165,11 @@ def load_data(file, file_type):
             )
 
             if 'ts(utc)' in df.columns:
-                # Convert to datetime and handle nanoseconds
                 df['ts(utc)'] = pd.to_datetime(
                     df['ts(utc)'],
                     errors='coerce'
-                ).dt.floor('s')  # Floor to seconds
-                
-                # Convert to Unix timestamp
-                df['ts(utc)'] = df['ts(utc)'].view('int64') // 10**9
+                ).dt.floor('s')
+                df['ts(utc)'] = (df['ts(utc)'].astype('int64') // 10**9).astype('int64')
 
             numeric_cols = df.columns.difference(['ts(utc)'])
             for col in numeric_cols:
