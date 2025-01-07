@@ -293,29 +293,70 @@ def update_plot_parameters(df, revolution_col):
     return x_axis_max
         
 def load_machine_specs(file, file_type):
-    """Load and validate machine specifications from XLSX or CSV file."""
+    """Load and validate machine specifications with improved error handling."""
     try:
         if file_type == 'xlsx':
-            specs_df = pd.read_excel(file)
-            st.write("Loaded Excel specifications:")
+            # Try different sheets if available
+            try:
+                xl = pd.ExcelFile(file)
+                if len(xl.sheet_names) > 1:
+                    sheet_name = st.selectbox("Select sheet:", xl.sheet_names)
+                else:
+                    sheet_name = xl.sheet_names[0]
+                
+                specs_df = pd.read_excel(file, sheet_name=sheet_name)
+            except Exception as e:
+                st.error(f"Error reading Excel file: {str(e)}")
+                return None
+                
         elif file_type == 'csv':
-            specs_df = pd.read_csv(file)
-            st.write("Loaded CSV specifications:")
+            try:
+                # Try different encodings
+                encodings = ['utf-8', 'iso-8859-1', 'cp1252']
+                for encoding in encodings:
+                    try:
+                        specs_df = pd.read_csv(file, encoding=encoding)
+                        break
+                    except UnicodeDecodeError:
+                        continue
+                else:
+                    st.error("Could not read CSV file with any supported encoding")
+                    return None
+            except Exception as e:
+                st.error(f"Error reading CSV file: {str(e)}")
+                return None
         else:
-            raise ValueError("Unsupported file type")
-            
+            st.error("Unsupported file type")
+            return None
+        
+        # Clean column names
         specs_df.columns = specs_df.columns.str.strip()
         
-        # Display data for validation
-        st.write("Sample of specifications data:")
-        st.write(specs_df.head())
-        st.write("Specification columns:", specs_df.columns.tolist())
-        st.write("Data types:", specs_df.dtypes)
-        
+        # Check for required column
         if 'Projekt' not in specs_df.columns:
-            st.error("Required 'Projekt' column missing in specifications file")
-            return None
+            # Try to find alternative column names
+            possible_names = ['Project', 'Machine', 'Machine Type', 'Type', 'Model']
+            found = False
+            for name in possible_names:
+                if name in specs_df.columns:
+                    specs_df.rename(columns={name: 'Projekt'}, inplace=True)
+                    found = True
+                    st.info(f"Using '{name}' as the machine type column")
+                    break
             
+            if not found:
+                st.error("Required machine type column not found. Available columns:")
+                st.write(specs_df.columns.tolist())
+                return None
+        
+        # Remove any completely empty rows or columns
+        specs_df = specs_df.dropna(how='all').dropna(axis=1, how='all')
+        
+        # Display validation info
+        st.write("Loaded specifications data preview:")
+        st.write(specs_df.head())
+        st.write("Available columns:", specs_df.columns.tolist())
+        
         return specs_df
         
     except Exception as e:
@@ -324,66 +365,108 @@ def load_machine_specs(file, file_type):
         return None
 
 def get_machine_params(specs_df, machine_type):
-    """Extract and validate machine parameters."""
+    """Extract and validate machine parameters with improved error handling and debugging."""
     try:
-        # Normalize machine type strings for comparison
-        specs_df['Normalized_Projekt'] = specs_df['Projekt'].str.replace('-', '').str.lower()
-        normalized_type = machine_type.replace('-', '').lower()
+        # Add debug information
+        st.write("Debug: Available columns in specs_df:", specs_df.columns.tolist())
+        st.write("Debug: First few rows of specs_df:")
+        st.write(specs_df.head())
         
-        st.write("Looking for machine type:", machine_type)
-        st.write("Available machine types:", specs_df['Projekt'].unique().tolist())
+        # Normalize machine type strings for comparison
+        specs_df['Normalized_Projekt'] = specs_df['Projekt'].str.replace('-', '').str.lower().str.strip()
+        normalized_type = machine_type.replace('-', '').lower().strip()
+        
+        st.write("Debug: Looking for normalized machine type:", normalized_type)
+        st.write("Debug: Available normalized machine types:", specs_df['Normalized_Projekt'].unique().tolist())
         
         # Filter for machine type using normalized comparison
         machine_rows = specs_df[specs_df['Normalized_Projekt'] == normalized_type]
-        if machine_rows.empty:
-            st.error(f"Machine type '{machine_type}' not found in specifications")
-            return None
-            
-        # Rest of your original code remains the same
-        machine_data = machine_rows.iloc[0]
-        st.write("Found machine data:", machine_data.to_dict())
         
+        if machine_rows.empty:
+            st.error(f"Machine type '{machine_type}' not found in specifications after normalization")
+            # Try partial matching
+            for idx, row in specs_df.iterrows():
+                if normalized_type in row['Normalized_Projekt'] or row['Normalized_Projekt'] in normalized_type:
+                    st.warning(f"Found partial match: {row['Projekt']}")
+                    machine_rows = specs_df.iloc[[idx]]
+                    break
+            
+            if machine_rows.empty:
+                return None
+        
+        # Get the first matching row
+        machine_data = machine_rows.iloc[0]
+        st.write("Debug: Found machine data:", machine_data.to_dict())
+        
+        # Define parameter mappings with additional variations
         param_mappings = {
-            'n1': ['n1[1/min]', 'n1 (1/min)', 'n1[rpm]', 'Max RPM'],
-            'n2': ['n2[1/min]', 'n2 (1/min)', 'n2[rpm]', 'Min RPM'],
-            'M_cont_value': ['M(dauer) [kNm]', 'M(dauer)[kNm]', 'M (dauer)', 'Continuous Torque'],
-            'M_max_Vg1': ['M(max)', 'M max', 'M (max)', 'M_max[kNm]', 'M(max)[kNm]', 'Max Torque'],
-            'torque_constant': ['Drehmomentumrechnung[kNm/bar]', 'Drehmomentumrechnung [kNm/bar]', 'Torque Constant']
+            'n1': ['n1[1/min]', 'n1 (1/min)', 'n1[rpm]', 'Max RPM', 'n1', 'N1'],
+            'n2': ['n2[1/min]', 'n2 (1/min)', 'n2[rpm]', 'Min RPM', 'n2', 'N2'],
+            'M_cont_value': ['M(dauer) [kNm]', 'M(dauer)[kNm]', 'M (dauer)', 'Continuous Torque',
+                            'M dauer', 'Mdauer', 'M_cont'],
+            'M_max_Vg1': ['M(max)', 'M max', 'M (max)', 'M_max[kNm]', 'M(max)[kNm]', 'Max Torque',
+                         'Mmax', 'M_max'],
+            'torque_constant': ['Drehmomentumrechnung[kNm/bar]', 'Drehmomentumrechnung [kNm/bar]',
+                              'Torque Constant', 'Torque_Constant', 'TorqueConstant']
         }
         
-        # Rest of the function remains identical
-        params = {}
+        # Initialize parameters dictionary with default values
+        default_params = {
+            'n1': 20.0,  # Default maximum RPM
+            'n2': 5.0,   # Default minimum RPM
+            'M_cont_value': 100.0,  # Default continuous torque
+            'M_max_Vg1': 150.0,     # Default maximum torque
+            'torque_constant': 0.5   # Default torque constant
+        }
+        
+        params = default_params.copy()
+        found_params = []
         missing_params = []
+        
+        # Try to find each parameter
         for param, possible_names in param_mappings.items():
             found = False
             for name in possible_names:
                 if name in machine_data.index:
-                    params[param] = machine_data[name]
-                    st.info(f"Found {param}: {params[param]} from column {name}")
-                    found = True
-                    break
+                    try:
+                        value = machine_data[name]
+                        # Handle different number formats
+                        if isinstance(value, str):
+                            # Remove any units in brackets and convert commas to dots
+                            value = value.split('[')[0].replace(',', '.').strip()
+                        
+                        params[param] = float(value)
+                        found = True
+                        found_params.append(f"{param}: {params[param]} (from {name})")
+                        break
+                    except (ValueError, TypeError) as e:
+                        st.warning(f"Could not convert {name} value '{value}' to float: {str(e)}")
+                        continue
+            
             if not found:
                 missing_params.append(f"{param} (tried: {', '.join(possible_names)})")
         
+        # Log found and missing parameters
+        if found_params:
+            st.info("Found parameters:\n" + "\n".join(found_params))
         if missing_params:
-            st.error(f"Missing parameters for '{machine_type}': {', '.join(missing_params)}")
-            return None
-            
-        for param, value in params.items():
-            if pd.isna(value):
-                st.error(f"Invalid value for {param}: {value}")
-            elif not isinstance(value, (int, float)):
-                try:
-                    params[param] = float(str(value).replace(',', '.'))
-                    st.warning(f"Converted {param} to numeric: {params[param]}")
-                except:
-                    st.error(f"Could not convert {param} to numeric: {value}")
-                    return None
-                    
-        return params
+            st.warning("Using default values for:\n" + "\n".join(missing_params))
         
+        # Validate final parameters
+        for param, value in params.items():
+            if not isinstance(value, (int, float)):
+                st.error(f"Invalid value for {param}: {value}")
+                params[param] = default_params[param]
+                st.info(f"Using default value for {param}: {default_params[param]}")
+            elif value <= 0:
+                st.error(f"Invalid negative or zero value for {param}: {value}")
+                params[param] = default_params[param]
+                st.info(f"Using default value for {param}: {default_params[param]}")
+        
+        return params
+    
     except Exception as e:
-        st.error(f"Error getting machine parameters: {str(e)}")
+        st.error(f"Error in get_machine_params: {str(e)}")
         st.error(f"Detailed error: {traceback.format_exc()}")
         return None
         
