@@ -642,18 +642,19 @@ def original_page():
                 df = df[(df[revolution_col] >= machine_params['n2']) & (df[revolution_col] <= machine_params['n1'])]
 
                 # Calculate torque
-                def calculate_torque_wrapper(row):
+                def calculate_torque_wrapper(row, machine_params):
                     working_pressure = row[pressure_col]
                     current_speed = row[revolution_col]
-
+                
+                    # General formula for torque calculation
                     if current_speed < machine_params['n1']:
                         torque = working_pressure * machine_params['torque_constant']
                     else:
                         torque = (machine_params['n1'] / current_speed) * machine_params['torque_constant'] * working_pressure
-
+                
                     return round(torque, 2)
-
-                df['Calculated torque [kNm]'] = df.apply(calculate_torque_wrapper, axis=1)
+                
+                df['Calculated torque [kNm]'] = df.apply(lambda row: calculate_torque_wrapper(row, machine_params), axis=1)
 
                 # Calculate whiskers and outliers for torque
                 torque_lower_whisker, torque_upper_whisker, torque_outliers = calculate_whisker_and_outliers(df['Calculated torque [kNm]'])
