@@ -85,18 +85,16 @@ def convert_to_arrow_compatible(df):
 
 def load_data(file, file_type):
     """
-    Load and process CSV or Excel files with comprehensive Arrow compatibility handling.
+    Load and process CSV or Excel files with comprehensive data type handling
+    and Arrow compatibility.
     """
     try:
-        # Initial file read for debugging
+        # Initial file read
         raw_content = file.read()
         encoding_info = chardet.detect(raw_content)
-        st.write("File encoding:", encoding_info)
+        encoding = encoding_info['encoding'] if encoding_info['confidence'] > 0.7 else 'utf-8'
 
         if file_type == 'csv':
-            # Use detected encoding or fallback
-            encoding = encoding_info['encoding'] if encoding_info['confidence'] > 0.7 else 'utf-8'
-            
             try:
                 content_str = raw_content.decode(encoding)
             except UnicodeDecodeError:
@@ -104,87 +102,115 @@ def load_data(file, file_type):
                     try:
                         content_str = raw_content.decode(enc)
                         encoding = enc
-                        st.info(f"Successfully decoded with {enc}")
                         break
                     except UnicodeDecodeError:
                         continue
 
             # Detect delimiter
-            sniffer = csv.Sniffer()
-            dialect = sniffer.sniff(content_str[:1024])
-            delimiter = dialect.delimiter
-            st.write(f"Detected delimiter: '{delimiter}'")
+            delimiter = ';' if ';' in content_str.split('\n')[0] else ','
+            
+            # Clean and process content
+            cleaned_lines = []
+            for line in content_str.split('\n'):
+                if line.strip():
+                    if delimiter == ';':
+                        parts = line.split(delimiter)
+                        cleaned_parts = []
+                        for i, part in enumerate(parts):
+                            if i == 0 and 'ts(utc)' in line:
+                                cleaned_parts.append(part)
+                            else:
+                                cleaned_part = part.replace(',', '.')
+                                cleaned_parts.append(cleaned_part)
+                        line = delimiter.join(cleaned_parts)
+                    cleaned_lines.append(line)
 
-            # Initialize StringIO with the content
-            string_data = StringIO(content_str)
-
-            # First pass: detect data types
-            df = pd.read_csv(string_data, sep=delimiter, nrows=5)
-            dtypes = {}
-            date_cols = []
-
-            for col in df.columns:
-                # Check for date/time columns
-                if any(date_indicator in col.lower() for date_indicator in ['date', 'time', 'ts']):
-                    date_cols.append(col)
-                    continue
-                
-                # Try to infer appropriate data type
-                sample_values = df[col].dropna()
-                if len(sample_values) > 0:
+            processed_content = '\n'.join(cleaned_lines)
+            
+            # Define date parser function
+            def date_parser(x):
+                try:
+                    return pd.to_datetime(x, format='%Y-%m-%d %H:%M:%S')
+                except:
                     try:
-                        pd.to_numeric(sample_values)
-                        dtypes[col] = np.float64  # Default to float64 for numeric columns
+                        return pd.to_datetime(x)
                     except:
-                        dtypes[col] = str  # Default to string for non-numeric columns
+                        return pd.NaT
 
-            # Reset StringIO for second pass
-            string_data.seek(0)
-
-            # Second pass: read with detected types
+            # Read CSV with proper configuration
             df = pd.read_csv(
-                string_data,
+                StringIO(processed_content),
                 sep=delimiter,
                 encoding=encoding,
-                dtype=dtypes,
-                parse_dates=date_cols if date_cols else False,
-                decimal=',' if delimiter == ';' else '.',  # Handle European number format
-                thousands='.' if delimiter == ';' else ',',  # Handle European number format
-                na_values=['', 'NA', 'N/A', 'null', 'NULL', 'nan', 'NaN', 'NaT'],
+                parse_dates=['ts(utc)'],
+                date_parser=date_parser,
+                decimal='.' if delimiter == ';' else '.',
+                thousands=None,
+                na_values=['NA', 'N/A', '', 'nan', 'NaN', 'null'],
                 skipinitialspace=True
             )
 
+            # Convert datetime to int64 timestamp
+            if 'ts(utc)' in df.columns:
+                df['ts(utc)'] = df['ts(utc)'].astype(np.int64) // 10**9
+
+            # Process numeric columns
+            numeric_columns = df.columns.difference(['ts(utc)'])
+            for col in numeric_columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+
+            # Clean column names
+            df.columns = df.columns.str.strip()
+
+            # Drop rows with all NaN values
+            df = df.dropna(how='all')
+
+            # Validate results
+            if df.empty:
+                raise ValueError("DataFrame is empty after processing")
+
+            file.seek(0)
+            return df
+
         elif file_type == 'xlsx':
             file.seek(0)
-            df = pd.read_excel(
-                file,
-                engine='openpyxl',
-                na_values=['', 'NA', 'N/A', 'null', 'NULL', 'nan', 'NaN', 'NaT']
-            )
+            try:
+                df = pd.read_excel(
+                    file,
+                    engine='openpyxl',
+                    na_values=['NA', 'N/A', ''],
+                    parse_dates=['ts(utc)'] if 'ts(utc)' in pd.read_excel(file, nrows=0).columns else None
+                )
+
+                if df.empty:
+                    raise ValueError("Excel file contains no data")
+
+                # Convert datetime to int64 timestamp if present
+                if 'ts(utc)' in df.columns:
+                    df['ts(utc)'] = df['ts(utc)'].astype(np.int64) // 10**9
+
+                # Process numeric columns
+                numeric_columns = df.columns.difference(['ts(utc)'])
+                for col in numeric_columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+
+                # Clean column names
+                df.columns = df.columns.str.strip()
+
+                # Drop rows with all NaN values
+                df = df.dropna(how='all')
+
+                return df
+
+            except Exception as excel_error:
+                st.error(f"Excel processing error: {str(excel_error)}")
+                return None
+
         else:
             raise ValueError(f"Unsupported file type: {file_type}")
 
-        # Display pre-conversion info
-        st.write("Pre-conversion DataFrame Info:")
-        st.write(df.dtypes)
-
-        # Convert to Arrow-compatible format
-        df = convert_to_arrow_compatible(df)
-
-        # Display post-conversion info
-        st.write("Post-conversion DataFrame Info:")
-        st.write(df.dtypes)
-        st.write("\nSample data:")
-        st.write(df.head())
-
-        if df.empty:
-            raise ValueError("DataFrame is empty after processing")
-
-        return df
-
     except Exception as e:
-        st.error(f"Error loading data: {str(e)}")
-        st.error(traceback.format_exc())
+        st.error(f"File loading error: {str(e)}")
         return None
         
 sensor_column_map = {
