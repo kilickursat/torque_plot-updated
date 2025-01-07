@@ -51,7 +51,8 @@ def convert_to_arrow_compatible(df):
 
 def load_data(file, file_type):
     """
-    Load and process CSV or Excel files with comprehensive error handling and data cleaning.
+    Load and process CSV or Excel files with enhanced handling for European number formats
+    and various CSV dialects.
     """
     try:
         # Initial file read for debugging
@@ -62,7 +63,7 @@ def load_data(file, file_type):
         if file_type == 'csv':
             # Use detected encoding or fallback
             encoding = encoding_info['encoding'] if encoding_info['confidence'] > 0.7 else 'utf-8'
-
+            
             try:
                 content_str = raw_content.decode(encoding)
             except UnicodeDecodeError:
@@ -75,59 +76,71 @@ def load_data(file, file_type):
                     except UnicodeDecodeError:
                         continue
 
-            # Display first few lines for debugging
-            st.write("First few lines:", content_str[:200])
-
+            # Detect the delimiter
+            first_line = content_str.split('\n')[0]
+            if ';' in first_line:
+                delimiter = ';'
+            else:
+                delimiter = ','
+            
+            st.write(f"Using delimiter: '{delimiter}'")
+            
             # Clean and process content
             cleaned_lines = []
             for line in content_str.split('\n'):
                 if line.strip():
-                    clean_line = ' '.join(line.replace('\t', ' ').split())
-                    parts = [part.strip() for part in clean_line.split(';')]
-                    cleaned_lines.append(';'.join(parts))
+                    # Replace commas with dots in numeric values, but only if semicolon is the delimiter
+                    if delimiter == ';':
+                        parts = line.split(delimiter)
+                        cleaned_parts = []
+                        for part in parts:
+                            # Skip timestamp column (first column)
+                            if 'ts(utc)' in line and part == parts[0]:
+                                cleaned_parts.append(part)
+                            else:
+                                # Replace comma with dot for numeric values
+                                cleaned_part = part.replace(',', '.')
+                                cleaned_parts.append(cleaned_part)
+                        line = delimiter.join(cleaned_parts)
+                    cleaned_lines.append(line)
 
             processed_content = '\n'.join(cleaned_lines)
             string_data = StringIO(processed_content)
 
-            # Try reading with different delimiters
-            try:
-                df = pd.read_csv(string_data, sep=';', encoding=encoding, skipinitialspace=True)
-            except:
-                string_data.seek(0)
-                df = pd.read_csv(string_data, sep=',', encoding=encoding, skipinitialspace=True)
+            # Read the CSV with the appropriate delimiter
+            df = pd.read_csv(string_data, 
+                           sep=delimiter,
+                           encoding=encoding,
+                           skipinitialspace=True,
+                           parse_dates=['ts(utc)'] if 'ts(utc)' in processed_content else None)
 
-            # Display raw data for debugging
-            st.write("Raw DataFrame Head:", df.head())
-            st.write("Initial Data Types:", df.dtypes)
+            # Display initial data info for debugging
+            st.write("Initial DataFrame Info:")
+            st.write(df.dtypes)
+            st.write("\nSample data:")
+            st.write(df.head())
 
             # Clean column names
             df.columns = df.columns.str.strip()
 
-            # Process numeric columns
-            for col in df.columns:
-                if df[col].dtype == 'object':
-                    df[col] = df[col].str.strip()
-                    try:
-                        cleaned_values = df[col].str.replace(',', '.').str.strip()
-                        df[col] = pd.to_numeric(cleaned_values)
-                        st.info(f"Converted {col} to numeric")
-                    except:
-                        st.warning(f"Keeping {col} as string")
-
-            # Convert all columns to Arrow-compatible types
-            df = convert_to_arrow_compatible(df)
-
-            # Clean data
-            df = df.dropna(how='all').dropna(axis=1, how='all')
+            # Convert numeric columns
+            numeric_columns = df.columns.drop('ts(utc)' if 'ts(utc)' in df.columns else [])
+            for col in numeric_columns:
+                try:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+                    st.info(f"Successfully converted {col} to numeric")
+                except Exception as e:
+                    st.warning(f"Could not convert {col} to numeric: {str(e)}")
 
             # Validate results
             if df.empty:
                 raise ValueError("DataFrame is empty after processing")
 
-            # Add this after loading the CSV
-            st.write("Sample of raw data:")
+            # Display final data info
+            st.write("\nFinal DataFrame Info:")
+            st.write(df.dtypes)
+            st.write("\nFinal sample data:")
             st.write(df.head())
-            st.write("Data types:", df.dtypes)
 
             file.seek(0)  # Reset file pointer
             return df
@@ -147,13 +160,14 @@ def load_data(file, file_type):
                 df.columns = df.columns.str.strip()
                 df = df.dropna(how='all').dropna(axis=1, how='all')
 
-                # Convert all columns to Arrow-compatible types
-                df = convert_to_arrow_compatible(df)
-
-                # Add this after loading the Excel
-                st.write("Sample of raw data:")
-                st.write(df.head())
-                st.write("Data types:", df.dtypes)
+                # Convert numeric columns
+                numeric_columns = df.columns.drop('ts(utc)' if 'ts(utc)' in df.columns else [])
+                for col in numeric_columns:
+                    try:
+                        df[col] = pd.to_numeric(df[col], errors='coerce')
+                        st.info(f"Successfully converted {col} to numeric")
+                    except Exception as e:
+                        st.warning(f"Could not convert {col} to numeric: {str(e)}")
 
                 return df
 
