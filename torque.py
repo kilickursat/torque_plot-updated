@@ -99,6 +99,10 @@ def load_data(file, file_type):
                     except:
                         st.warning(f"Keeping {col} as string")
             
+            # Convert all object type columns to string to avoid Arrow serialization issues
+            for col in df.select_dtypes(include=['object']).columns:
+                df[col] = df[col].astype(str)
+            
             # Clean data
             df = df.dropna(how='all').dropna(axis=1, how='all')
             
@@ -128,6 +132,10 @@ def load_data(file, file_type):
                 
                 df.columns = df.columns.str.strip()
                 df = df.dropna(how='all').dropna(axis=1, how='all')
+                
+                # Convert all object type columns to string to avoid Arrow serialization issues
+                for col in df.select_dtypes(include=['object']).columns:
+                    df[col] = df[col].astype(str)
                 
                 # Add this after loading the Excel
                 st.write("Sample of raw data:")
