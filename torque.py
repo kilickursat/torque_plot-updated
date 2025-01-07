@@ -386,7 +386,7 @@ def load_machine_specs(file, file_type):
         return None
 
 def get_machine_params(specs_df, machine_type):
-    """Extract and validate machine parameters with improved error handling and debugging."""
+    """Extract and validate machine parameters."""
     try:
         # Add debug information
         st.write("Debug: Available columns in specs_df:", specs_df.columns.tolist())
@@ -421,26 +421,17 @@ def get_machine_params(specs_df, machine_type):
         
         # Define parameter mappings with additional variations
         param_mappings = {
-            'n1': ['n1[1/min]', 'n1 (1/min)', 'n1[rpm]', 'Max RPM', 'n1', 'N1'],
-            'n2': ['n2[1/min]', 'n2 (1/min)', 'n2[rpm]', 'Min RPM', 'n2', 'N2'],
+            'n1': ['n1[1/min]', 'n1 (1/min)', 'n1[rpm]', 'Max RPM', 'n1', 'N1', 'n1', 'N1[rpm]', 'N1 [rpm]'],
+            'n2': ['n2[1/min]', 'n2 (1/min)', 'n2[rpm]', 'Min RPM', 'n2', 'N2', 'n2', 'N2[rpm]', 'N2 [rpm]'],
             'M_cont_value': ['M(dauer) [kNm]', 'M(dauer)[kNm]', 'M (dauer)', 'Continuous Torque',
-                            'M dauer', 'Mdauer', 'M_cont'],
+                            'M dauer', 'Mdauer', 'M_cont', 'M(cont)', 'M_cont[kNm]', 'M_cont [kNm]'],
             'M_max_Vg1': ['M(max)', 'M max', 'M (max)', 'M_max[kNm]', 'M(max)[kNm]', 'Max Torque',
-                         'Mmax', 'M_max'],
+                         'Mmax', 'M_max', 'M max[kNm]', 'M_max [kNm]'],
             'torque_constant': ['Drehmomentumrechnung[kNm/bar]', 'Drehmomentumrechnung [kNm/bar]',
-                              'Torque Constant', 'Torque_Constant', 'TorqueConstant']
+                              'Torque Constant', 'Torque_Constant', 'TorqueConstant', 'TC[kNm/bar]', 'TC [kNm/bar]']
         }
         
-        # Initialize parameters dictionary with default values
-        default_params = {
-            'n1': 20.0,  # Default maximum RPM
-            'n2': 5.0,   # Default minimum RPM
-            'M_cont_value': 100.0,  # Default continuous torque
-            'M_max_Vg1': 150.0,     # Default maximum torque
-            'torque_constant': 0.5   # Default torque constant
-        }
-        
-        params = default_params.copy()
+        params = {}
         found_params = []
         missing_params = []
         
@@ -471,20 +462,21 @@ def get_machine_params(specs_df, machine_type):
         if found_params:
             st.info("Found parameters:\n" + "\n".join(found_params))
         if missing_params:
-            st.warning("Using default values for:\n" + "\n".join(missing_params))
+            st.error("Missing required parameters:\n" + "\n".join(missing_params))
+            return None
         
         # Validate final parameters
         for param, value in params.items():
             if not isinstance(value, (int, float)):
                 st.error(f"Invalid value for {param}: {value}")
-                params[param] = default_params[param]
-                st.info(f"Using default value for {param}: {default_params[param]}")
-            elif value <= 0:
-                st.error(f"Invalid negative or zero value for {param}: {value}")
-                params[param] = default_params[param]
-                st.info(f"Using default value for {param}: {default_params[param]}")
+                return None
         
         return params
+        
+    except Exception as e:
+        st.error(f"Error in get_machine_params: {str(e)}")
+        st.error(traceback.format_exc())
+        return None
     
     except Exception as e:
         st.error(f"Error in get_machine_params: {str(e)}")
