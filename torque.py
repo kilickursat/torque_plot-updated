@@ -36,23 +36,56 @@ def safe_get_loc(columns, col_name):
 
 def convert_to_arrow_compatible(df):
     """
-    Convert all columns in the DataFrame to Arrow-compatible types.
+    Convert DataFrame to be fully Arrow-compatible by explicitly handling each data type.
     """
-    for col in df.columns:
-        if df[col].dtype == 'object':
-            df[col] = df[col].astype(str)
-        elif df[col].dtype == 'bool':
-            df[col] = df[col].astype(int)  # Convert boolean to int
+    converted_df = df.copy()
+    
+    for col in converted_df.columns:
+        # Get the current dtype
+        current_dtype = converted_df[col].dtype
+        
         try:
-            df[col] = pd.to_numeric(df[col], errors='ignore')
-        except:
-            pass
-    return df
+            if pd.api.types.is_datetime64_any_dtype(current_dtype):
+                # Convert datetime to int64 timestamp (nanoseconds since epoch)
+                converted_df[col] = converted_df[col].astype(np.int64)
+                
+            elif current_dtype == 'object':
+                # Try numeric conversion first
+                try:
+                    converted_df[col] = pd.to_numeric(converted_df[col], errors='raise')
+                except (ValueError, TypeError):
+                    # If numeric conversion fails, try datetime
+                    try:
+                        converted_df[col] = pd.to_datetime(converted_df[col], errors='raise')
+                        # Convert datetime to int64 timestamp
+                        converted_df[col] = converted_df[col].astype(np.int64)
+                    except (ValueError, TypeError):
+                        # If all else fails, convert to string
+                        converted_df[col] = converted_df[col].astype(str)
+                        
+            elif current_dtype == 'bool':
+                converted_df[col] = converted_df[col].astype(int)
+                
+            elif current_dtype == 'category':
+                converted_df[col] = converted_df[col].astype(str)
+                
+            # Handle any remaining numeric types
+            elif pd.api.types.is_numeric_dtype(current_dtype):
+                # Ensure all numeric types are either int64 or float64
+                if pd.api.types.is_integer_dtype(current_dtype):
+                    converted_df[col] = converted_df[col].astype(np.int64)
+                else:
+                    converted_df[col] = converted_df[col].astype(np.float64)
+                    
+        except Exception as e:
+            st.warning(f"Could not convert column '{col}' automatically. Converting to string. Error: {str(e)}")
+            converted_df[col] = converted_df[col].astype(str)
+    
+    return converted_df
 
 def load_data(file, file_type):
     """
-    Load and process CSV or Excel files with enhanced handling for European number formats
-    and various CSV dialects.
+    Load and process CSV or Excel files with comprehensive Arrow compatibility handling.
     """
     try:
         # Initial file read for debugging
@@ -76,111 +109,81 @@ def load_data(file, file_type):
                     except UnicodeDecodeError:
                         continue
 
-            # Detect the delimiter
-            first_line = content_str.split('\n')[0]
-            if ';' in first_line:
-                delimiter = ';'
-            else:
-                delimiter = ','
-            
-            st.write(f"Using delimiter: '{delimiter}'")
-            
-            # Clean and process content
-            cleaned_lines = []
-            for line in content_str.split('\n'):
-                if line.strip():
-                    # Replace commas with dots in numeric values, but only if semicolon is the delimiter
-                    if delimiter == ';':
-                        parts = line.split(delimiter)
-                        cleaned_parts = []
-                        for part in parts:
-                            # Skip timestamp column (first column)
-                            if 'ts(utc)' in line and part == parts[0]:
-                                cleaned_parts.append(part)
-                            else:
-                                # Replace comma with dot for numeric values
-                                cleaned_part = part.replace(',', '.')
-                                cleaned_parts.append(cleaned_part)
-                        line = delimiter.join(cleaned_parts)
-                    cleaned_lines.append(line)
+            # Detect delimiter
+            sniffer = csv.Sniffer()
+            dialect = sniffer.sniff(content_str[:1024])
+            delimiter = dialect.delimiter
+            st.write(f"Detected delimiter: '{delimiter}'")
 
-            processed_content = '\n'.join(cleaned_lines)
-            string_data = StringIO(processed_content)
+            # Initialize StringIO with the content
+            string_data = StringIO(content_str)
 
-            # Read the CSV with the appropriate delimiter
-            df = pd.read_csv(string_data, 
-                           sep=delimiter,
-                           encoding=encoding,
-                           skipinitialspace=True,
-                           parse_dates=['ts(utc)'] if 'ts(utc)' in processed_content else None)
+            # First pass: detect data types
+            df = pd.read_csv(string_data, sep=delimiter, nrows=5)
+            dtypes = {}
+            date_cols = []
 
-            # Display initial data info for debugging
-            st.write("Initial DataFrame Info:")
-            st.write(df.dtypes)
-            st.write("\nSample data:")
-            st.write(df.head())
+            for col in df.columns:
+                # Check for date/time columns
+                if any(date_indicator in col.lower() for date_indicator in ['date', 'time', 'ts']):
+                    date_cols.append(col)
+                    continue
+                
+                # Try to infer appropriate data type
+                sample_values = df[col].dropna()
+                if len(sample_values) > 0:
+                    try:
+                        pd.to_numeric(sample_values)
+                        dtypes[col] = np.float64  # Default to float64 for numeric columns
+                    except:
+                        dtypes[col] = str  # Default to string for non-numeric columns
 
-            # Clean column names
-            df.columns = df.columns.str.strip()
+            # Reset StringIO for second pass
+            string_data.seek(0)
 
-            # Convert numeric columns
-            numeric_columns = df.columns.drop('ts(utc)' if 'ts(utc)' in df.columns else [])
-            for col in numeric_columns:
-                try:
-                    df[col] = pd.to_numeric(df[col], errors='coerce')
-                    st.info(f"Successfully converted {col} to numeric")
-                except Exception as e:
-                    st.warning(f"Could not convert {col} to numeric: {str(e)}")
-
-            # Validate results
-            if df.empty:
-                raise ValueError("DataFrame is empty after processing")
-
-            # Display final data info
-            st.write("\nFinal DataFrame Info:")
-            st.write(df.dtypes)
-            st.write("\nFinal sample data:")
-            st.write(df.head())
-
-            file.seek(0)  # Reset file pointer
-            return df
+            # Second pass: read with detected types
+            df = pd.read_csv(
+                string_data,
+                sep=delimiter,
+                encoding=encoding,
+                dtype=dtypes,
+                parse_dates=date_cols if date_cols else False,
+                decimal=',' if delimiter == ';' else '.',  # Handle European number format
+                thousands='.' if delimiter == ';' else ',',  # Handle European number format
+                na_values=['', 'NA', 'N/A', 'null', 'NULL', 'nan', 'NaN', 'NaT'],
+                skipinitialspace=True
+            )
 
         elif file_type == 'xlsx':
-            file.seek(0)  # Reset file pointer
-            try:
-                df = pd.read_excel(
-                    file,
-                    engine='openpyxl',
-                    na_values=['NA', 'N/A', '']
-                )
-
-                if df.empty:
-                    raise ValueError("Excel file contains no data")
-
-                df.columns = df.columns.str.strip()
-                df = df.dropna(how='all').dropna(axis=1, how='all')
-
-                # Convert numeric columns
-                numeric_columns = df.columns.drop('ts(utc)' if 'ts(utc)' in df.columns else [])
-                for col in numeric_columns:
-                    try:
-                        df[col] = pd.to_numeric(df[col], errors='coerce')
-                        st.info(f"Successfully converted {col} to numeric")
-                    except Exception as e:
-                        st.warning(f"Could not convert {col} to numeric: {str(e)}")
-
-                return df
-
-            except Exception as excel_error:
-                st.error(f"Excel processing error: {str(excel_error)}")
-                st.error(traceback.format_exc())
-                return None
-
+            file.seek(0)
+            df = pd.read_excel(
+                file,
+                engine='openpyxl',
+                na_values=['', 'NA', 'N/A', 'null', 'NULL', 'nan', 'NaN', 'NaT']
+            )
         else:
             raise ValueError(f"Unsupported file type: {file_type}")
 
+        # Display pre-conversion info
+        st.write("Pre-conversion DataFrame Info:")
+        st.write(df.dtypes)
+
+        # Convert to Arrow-compatible format
+        df = convert_to_arrow_compatible(df)
+
+        # Display post-conversion info
+        st.write("Post-conversion DataFrame Info:")
+        st.write(df.dtypes)
+        st.write("\nSample data:")
+        st.write(df.head())
+
+        if df.empty:
+            raise ValueError("DataFrame is empty after processing")
+
+        return df
+
     except Exception as e:
-        st.error(f"File loading error: {str(e)}")
+        st.error(f"Error loading data: {str(e)}")
         st.error(traceback.format_exc())
         return None
         
