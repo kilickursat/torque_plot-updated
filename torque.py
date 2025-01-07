@@ -41,6 +41,8 @@ def convert_to_arrow_compatible(df):
     for col in df.columns:
         if df[col].dtype == 'object':
             df[col] = df[col].astype(str)
+        elif df[col].dtype == 'bool':
+            df[col] = df[col].astype(int)  # Convert boolean to int
         try:
             df[col] = pd.to_numeric(df[col], errors='ignore')
         except:
@@ -167,6 +169,7 @@ def load_data(file, file_type):
         st.error(f"File loading error: {str(e)}")
         st.error(traceback.format_exc())
         return None
+        
 sensor_column_map = {
     "pressure": [
         "Working pressure [bar]", 
