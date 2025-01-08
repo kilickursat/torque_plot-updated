@@ -28,22 +28,24 @@ def load_data(file, na_option, dtype_dict, encoding='utf-8', sep=';', on_bad_lin
        return None
 
 def map_machine_parameters(machine_params_series, param_mappings):
-   params = {}
-   for param, aliases in param_mappings.items():
-       for alias in aliases:
-           if alias in machine_params_series.index:
-               params[param] = machine_params_series[alias]
-               break
-   return params
+    params = {}
+    for param, aliases in param_mappings.items():
+        for alias in aliases:
+            # Handle exact column name or case-insensitive match
+            matching_cols = [col for col in machine_params_series.index if col.strip().lower() == alias.strip().lower()]
+            if matching_cols:
+                params[param] = machine_params_series[matching_cols[0]]
+                break
+    return params
 
 param_mappings = {
-   'n1': ['n1[1/min]', 'n1 (1/min)', 'n1[rpm]', 'n1', 'N1', 'N1[rpm]'],
-   'n2': ['n2[1/min]', 'n2 (1/min)', 'n2[rpm]', 'n2', 'N2', 'N2[rpm]'],
-   'M_cont_value': ['M(dauer)[kNm]', 'M(dauer) [kNm]', 'M_cont[kNm]'],
-   'M_max_value': ['M(max)[kNm]', 'M_max[kNm]', 'M max[kNm]'],
-   'torque_constant': ['Drehmomentumrechnung [kNm/bar]', 'TC[kNm/bar]'],
-   'Pressure': ['V13_SR_ArbDr_Z'],
-   'RPM': ['V13_SR_Drehz_nach_Abgl_Z']
+    'n1': ['n1[1/min]', 'n1 (1/min)', 'n1[rpm]', 'Max RPM', 'n1', 'N1', 'N1[rpm]', 'N1 [rpm]'],
+    'n2': ['n2[1/min]', 'n2 (1/min)', 'n2[rpm]', 'Min RPM', 'n2', 'N2', 'N2[rpm]', 'N2 [rpm]'],
+    'M_cont_value': ['M(dauer) [kNm]', 'M(dauer)[kNm]', 'M (dauer)', 'Continuous Torque', 'M dauer', 'Mdauer', 'M_cont', 'M(cont)', 'M_cont[kNm]', 'M_cont [kNm]'],
+    'M_max_value': ['M(max)', 'M max', 'M (max)', 'M_max[kNm]', 'M(max)[kNm]', 'Max Torque', 'Mmax', 'M_max', 'M max[kNm]', 'M_max [kNm]'],
+    'torque_constant': ['Drehmomentumrechnung[kNm/bar]', 'Drehmomentumrechnung [kNm/bar]', 'Torque Constant', 'Torque_Constant', 'TorqueConstant', 'TC[kNm/bar]', 'TC [kNm/bar]'],
+    'Pressure': ['V13_SR_ArbDr_Z'],
+    'RPM': ['V13_SR_Drehz_nach_Abgl_Z']
 }
 
 dtype_dict_main = {
@@ -95,6 +97,9 @@ if uploaded_main_data is not None and uploaded_machine_list is not None:
            selected_machine = st.selectbox('Select Machine', machines)
            machine_params_series = machine_df[machine_df['Projekt'] == selected_machine].iloc[0]
            machine_params_mapped = map_machine_parameters(machine_params_series, param_mappings)
+           st.write("Available columns in machine data:", machine_params_series.index.tolist())
+           st.write("Mapped parameters:", machine_params_mapped)
+          
            
            required_params = ['n1', 'torque_constant', 'M_cont_value', 'M_max_value']
            missing_params = [param for param in required_params if param not in machine_params_mapped]
