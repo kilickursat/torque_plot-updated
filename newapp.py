@@ -45,10 +45,18 @@ if parameters:
             go.Scatter(x=df['Timestamp'], y=df[param], mode='lines', name=param),
             row=i, col=1
         )
-        fig.update_yaxes(title_text=param, row=i, col=1)
+        # Calculate min and max for the parameter
+        y_min = df[param].min()
+        y_max = df[param].max()
+        padding = (y_max - y_min) * 0.1  # 10% padding
+        fig.update_yaxes(
+            title_text=param,
+            row=i, col=1,
+            range=[y_min - padding, y_max + padding]
+        )
     
     fig.update_layout(
-        height=200*len(parameters),
+        height=400 * len(parameters),  # Increased height for better visualization
         title='Sensor Data Over Time',
         showlegend=False
     )
