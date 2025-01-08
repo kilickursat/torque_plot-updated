@@ -37,8 +37,30 @@ def find_column(df, mappings):
 
 # Parameter mappings
 param_mappings = {
-    'Pressure': ['Pressure', 'pressure', 'p(bar)', 'p [bar]'],
-    'RPM': ['RPM', 'rpm', 'n[1/min]', 'n (1/min)']
+    'Pressure': ["Working pressure [bar]", 
+        "AzV.V13_SR_ArbDr_Z | DB 60.DBD 26",
+        "V13_SR_ArbDr_Z",
+        "Pressure",
+        "Pressure [bar]", 
+        "Working Pressure",
+        "cutting wheel.MPU1WPr",
+        "MPU1WPr",
+        "AzV.V13_SR_ArbDr_Z",
+        "Pression [bar]", 
+        "Presión [bar]"
+    ],
+    'RPM': ["Revolution [rpm]",
+        "AzV.V13_SR_Drehz_nach_Abgl_Z | DB 60.DBD 30",
+        "V13_SR_Drehz_nach_Abgl_Z",
+        "Vitesse [rpm]",
+        "Revoluciones [rpm]",
+        "RPM",
+        "Speed",
+        "Rotation Speed",
+        "cutting wheel.CWSpeed",
+        "CWSpeed",
+        "cutting wheel",
+        "AzV.V13_SR_Drehz_nach_Abgl_Z"]
 }
 
 # File uploaders
