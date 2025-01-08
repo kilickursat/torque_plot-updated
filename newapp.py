@@ -6,9 +6,9 @@ from io import BytesIO
 
 # Function to load the data with specified data types and parse dates
 @st.cache_data
-def load_data(file, na_option, dtype_dict, encoding='utf-8'):
+def load_data(file, na_option, dtype_dict, encoding='utf-8', sep=',', on_bad_lines='error'):
     try:
-        df = pd.read_csv(file, sep=';', parse_dates=['ts(utc)'], dtype=dtype_dict, encoding=encoding)
+        df = pd.read_csv(file, sep=sep, parse_dates=['ts(utc)'], dtype=dtype_dict, encoding=encoding, on_bad_lines=on_bad_lines)
         df.rename(columns={'ts(utc)': 'Timestamp'}, inplace=True)
         
         if na_option == 'Fill with Zero':
@@ -48,7 +48,7 @@ if uploaded_main_data is not None and uploaded_machine_list is not None:
     }
     
     # Load main data with UTF-8 encoding
-    main_df = load_data(uploaded_main_data, na_option='Fill with Zero', dtype_dict=dtype_dict_main, encoding='utf-8')
+    main_df = load_data(uploaded_main_data, na_option='Fill with Zero', dtype_dict=dtype_dict_main, encoding='utf-8', sep=';', on_bad_lines='skip')
     
     if main_df is not None:
         # Define data type dictionary for machine list
@@ -61,11 +61,11 @@ if uploaded_main_data is not None and uploaded_machine_list is not None:
             # Add other columns with appropriate data types
         }
         
-        # Load machine list with 'latin1' encoding
+        # Load machine list with 'latin1' encoding and specified separator
         try:
-            machine_df = pd.read_csv(uploaded_machine_list, dtype=dtype_dict_machine, encoding='latin1')
-        except UnicodeDecodeError:
-            st.error("Error decoding machine list file. Please check the file encoding.")
+            machine_df = pd.read_csv(uploaded_machine_list, sep=';', dtype=dtype_dict_machine, encoding='latin1', on_bad_lines='skip')
+        except Exception as e:
+            st.error(f"Error loading machine list: {e}")
             st.stop()
         
         # Select machine
