@@ -7,7 +7,7 @@ from io import BytesIO
 # Function to load the data with specified data types
 @st.cache_data
 def load_data(file, na_option, dtype_dict):
-    df = pd.read_csv(file, sep=';', parse_dates=['Timestamp'], dtype=dtype_dict)
+    df = pd.read_csv(file, sep=';', parse_dates=['ts(utc)'], dtype=dtype_dict)
     
     if na_option == 'Fill with Zero':
         df.fillna(0, inplace=True)
@@ -32,7 +32,7 @@ if uploaded_main_data is not None and uploaded_machine_list is not None:
     try:
         # Define data type dictionary for main data
         dtype_dict_main = {
-            'Timestamp': 'datetime64[ns]',
+            'ts(utc)': 'datetime64[ns]',
             'Pressure': 'float32',
             'RPM': 'float32',
             # Specify data types for other columns as needed
@@ -101,8 +101,8 @@ if uploaded_main_data is not None and uploaded_machine_list is not None:
         
         # Visualization
         fig = make_subplots(rows=1, cols=1)
-        fig.add_trace(go.Scatter(x=main_df['Timestamp'], y=main_df['Calculated Torque [kNm]'], mode='lines', name='Torque'))
-        fig.update_layout(title=f'Torque Analysis for {selected_machine}', xaxis_title='Timestamp', yaxis_title='Torque [kNm]')
+        fig.add_trace(go.Scatter(x=main_df['ts(utc)'], y=main_df['Calculated Torque [kNm]'], mode='lines', name='Torque'))
+        fig.update_layout(title=f'Torque Analysis for {selected_machine}', xaxis_title='ts(utc)', yaxis_title='Torque [kNm]')
         st.plotly_chart(fig, use_container_width=True)
         
     except MemoryError:
