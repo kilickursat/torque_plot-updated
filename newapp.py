@@ -167,16 +167,17 @@ if uploaded_main_data is not None and uploaded_machine_list is not None:
            fig.add_trace(go.Scatter(x=[machine_params_mapped['n1'], machine_params_mapped['n1']], y=[0, y_max_vg2[2]],
                                   mode='lines', line=dict(color='black', width=1, dash='dash'), showlegend=False))
 
+           # Modify the data point plotting section to show points above M_max_Vg1:
            normal_data = plot_df[~plot_df['Is_Anomaly']]
            anomaly_data = plot_df[plot_df['Is_Anomaly']]
-           torque_outlier_data = plot_df[plot_df['Calculated Torque [kNm]'].isin(torque_outliers)]
-           rpm_outlier_data = plot_df[plot_df['V13_SR_Drehz_nach_Abgl_Z'].isin(rpm_outliers)]
-
-           fig.add_trace(go.Scatter(x=normal_data['V13_SR_Drehz_nach_Abgl_Z'], 
-                                  y=normal_data['Calculated Torque [kNm]'],
-                                  mode='markers', name='Normal Data',
-                                  marker=dict(color=normal_data['Calculated Torque [kNm]'], 
-                                            colorscale='Viridis', size=8)))
+           above_max_data = plot_df[plot_df['Calculated Torque [kNm]'] > machine_params_mapped['M_max_Vg1']]
+         
+           # Add trace for points above M_max_Vg1
+           fig.add_trace(go.Scatter(x=above_max_data['V13_SR_Drehz_nach_Abgl_Z'],
+                                     y=above_max_data['Calculated Torque [kNm]'],
+                                mode='markers',
+                                name='Above M_max_Vg1',
+                                marker=dict(color='orange', symbol='diamond', size=10)))
 
            fig.add_trace(go.Scatter(x=anomaly_data['V13_SR_Drehz_nach_Abgl_Z'], 
                                   y=anomaly_data['Calculated Torque [kNm]'],
