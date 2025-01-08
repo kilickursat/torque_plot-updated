@@ -26,7 +26,7 @@ def find_column(df, mappings):
 
 # File uploaders
 uploaded_main_data = st.file_uploader("Upload main data CSV", type=["csv"])
-uploaded_machine_list = st.file_uploader("Upload machine list CSV", type=["csv"])
+uploaded_machine_list = st.file_uploader("Upload machine list CSV", type=["csv", "xlsx"])
 
 if uploaded_main_data is not None and uploaded_machine_list is not None:
     try:
