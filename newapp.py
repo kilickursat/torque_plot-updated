@@ -59,7 +59,7 @@ if uploaded_main_data is not None and uploaded_machine_list is not None:
     if main_df is not None:
         # Define data type dictionary for machine list
         dtype_dict_machine = {
-            'MachineID': 'string',
+            'Projekt': 'string',
             'n1': 'float32',
             'M_cont_value': 'float32',
             'torque_constant': 'float32',
@@ -81,11 +81,11 @@ if uploaded_main_data is not None and uploaded_machine_list is not None:
             st.stop()
         
         # Select machine
-        machines = machine_df['MachineID'].unique()
+        machines = machine_df['Projekt'].unique()
         selected_machine = st.selectbox('Select Machine', machines)
         
         # Retrieve machine parameters
-        machine_params = machine_df[machine_df['MachineID'] == selected_machine].iloc[0]
+        machine_params = machine_df[machine_df['Projekt'] == selected_machine].iloc[0]
         
         # Find correct column names in the main data
         pressure_col = find_column(main_df, param_mappings['Pressure'])
