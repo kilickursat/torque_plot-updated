@@ -12,3 +12,4 @@ fpdf
 pillow
 chardet
 tornado
+kaleido
