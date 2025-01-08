@@ -4,11 +4,10 @@ from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 from io import BytesIO
 
-# Function to load the data
+# Function to load the data with specified data types
 @st.cache_data
-def load_data(file, na_option):
-    df = pd.read_csv(file, sep=';', parse_dates=['ts(utc)'])
-    df.rename(columns={'ts(utc)': 'Timestamp'}, inplace=True)
+def load_data(file, na_option, dtype_dict):
+    df = pd.read_csv(file, sep=';', parse_dates=['Timestamp'], dtype=dtype_dict)
     
     if na_option == 'Fill with Zero':
         df.fillna(0, inplace=True)
@@ -18,112 +17,97 @@ def load_data(file, na_option):
     
     return df
 
-# File upload
-uploaded_file = st.file_uploader("Upload your CSV file", type=["csv"])
+# Function to find the column names based on parameter mappings
+def find_column(df, mappings):
+    for col in df.columns:
+        if col in mappings:
+            return col
+    return None
 
-if uploaded_file is not None:
-    # Handle missing values
-    na_options = ['Fill with Zero', 'Drop rows', 'Keep NaN']
-    na_option = st.selectbox('Handle NaN values:', na_options)
-    
+# File uploaders
+uploaded_main_data = st.file_uploader("Upload main data CSV", type=["csv"])
+uploaded_machine_list = st.file_uploader("Upload machine list CSV", type=["csv"])
+
+if uploaded_main_data is not None and uploaded_machine_list is not None:
     try:
-        # Load data with progress bar
-        with st.spinner('Loading data...'):
-            df = load_data(uploaded_file, na_option)
-        st.success("Data loaded successfully.")
-    except Exception as e:
-        st.error(f"Error loading data: {e}")
-        st.stop()
-else:
-    st.warning("Please upload a CSV file.")
-    st.stop()
-
-# Parameter selection
-parameters = st.multiselect(
-    'Choose machine parameters to analyze and visualize:',
-    options=df.columns[1:],
-    default=df.columns[1]
-)
-
-# Descriptive statistics
-if parameters:
-    st.subheader('Descriptive Statistics')
-    stats = df[parameters].describe()
-    st.write(stats)
-    
-    # Export statistics as CSV
-    stats_csv = stats.to_csv(index=True).encode()
-    st.download_button(
-        label="Download Statistics as CSV",
-        data=stats_csv,
-        file_name='statistics.csv',
-        mime='text/csv'
-    )
-else:
-    st.warning('Please select at least one parameter.')
-
-# Plot customization
-plot_types = ['Line', 'Scatter']
-plot_type = st.selectbox('Choose plot type:', plot_types)
-
-title = st.text_input('Plot Title', 'Sensor Data Over Time')
-x_label = st.text_input('X-axis Label', 'Timestamp')
-y_label = st.text_input('Y-axis Label', 'Value')
-
-scale_options = ['Linear', 'Log']
-y_scale = st.radio('Y-axis Scale:', scale_options)
-
-# Date range filter
-min_date = df['Timestamp'].min()
-max_date = df['Timestamp'].max()
-selected_dates = st.date_input(
-    'Select date range:',
-    [min_date, max_date]
-)
-if len(selected_dates) == 2:
-    start_date, end_date = selected_dates
-    df = df[(df['Timestamp'] >= pd.to_datetime(start_date)) & (df['Timestamp'] <= pd.to_datetime(end_date))]
-
-# Data visualization with subplots
-if parameters:
-    # Create subplots
-    fig = make_subplots(rows=len(parameters), cols=1, shared_xaxes=True)
-    
-    for i, param in enumerate(parameters, start=1):
-        if plot_type == 'Line':
-            trace = go.Scatter(x=df['Timestamp'], y=df[param], mode='lines', name=param)
-        else:
-            trace = go.Scatter(x=df['Timestamp'], y=df[param], mode='markers', name=param)
+        # Define data type dictionary for main data
+        dtype_dict_main = {
+            'Timestamp': 'datetime64[ns]',
+            'Pressure': 'float32',
+            'RPM': 'float32',
+            # Specify data types for other columns as needed
+        }
         
-        fig.add_trace(trace, row=i, col=1)
-        fig.update_yaxes(title_text=y_label, row=i, col=1, type='log' if y_scale == 'Log' else 'linear')
-    
-    fig.update_layout(
-        height=400 * len(parameters),
-        title=title,
-        showlegend=False
-    )
-    
-    st.plotly_chart(fig)
-    
-    # Export plot as PNG
-    buf = BytesIO()
-    fig.write_image(buf, format='png')
-    st.download_button(
-        label='Download Plot as PNG',
-        data=buf.getvalue(),
-        file_name='plot.png',
-        mime='image/png'
-    )
+        # Load main data with specified data types
+        main_df = load_data(uploaded_main_data, na_option='Fill with Zero', dtype_dict=dtype_dict_main)
+        
+        # Define data type dictionary for machine list
+        dtype_dict_machine = {
+            'MachineID': 'string',
+            'n1': 'float32',
+            'M_cont_value': 'float32',
+            'torque_constant': 'float32',
+            'power': 'float32',
+            # Specify data types for other columns as needed
+        }
+        
+        # Load machine list with specified data types
+        machine_df = pd.read_csv(uploaded_machine_list, dtype=dtype_dict_machine)
+        
+        # Select machine
+        machines = machine_df['MachineID'].unique()
+        selected_machine = st.selectbox('Select Machine', machines)
+        
+        # Retrieve machine parameters
+        machine_params = machine_df[machine_df['MachineID'] == selected_machine].iloc[0]
+        
+        # Parameter mappings
+        param_mappings = {
+            'n1': ['n1[1/min]', 'n1 (1/min)', 'n1[rpm]', 'Max RPM', 'n1', 'N1', 'n1', 'N1[rpm]', 'N1 [rpm]'],
+            'M_cont_value': ['M(dauer) [kNm]', 'M(dauer)[kNm]', 'M (dauer)', 'Continuous Torque',
+                             'M dauer', 'Mdauer', 'M_cont', 'M(cont)', 'M_cont[kNm]', 'M_cont [kNm]'],
+            'torque_constant': ['Drehmomentumrechnung[kNm/bar]', 'Drehmomentumrechnung [kNm/bar]',
+                                'Torque Constant', 'Torque_Constant', 'TorqueConstant', 'TC[kNm/bar]', 'TC [kNm/bar]'],
+            'power': ['Power [kW]', 'kW', 'Power', 'Power_kw', 'KW'],
+            'Pressure': ['Pressure', 'pressure', 'p(bar)', 'p [bar]'],
+            'RPM': ['RPM', 'rpm', 'n[1/min]', 'n (1/min)']
+        }
+        
+        # Find the correct column names in the main data
+        pressure_col = find_column(main_df, param_mappings['Pressure'])
+        rpm_col = find_column(main_df, param_mappings['RPM'])
+        
+        if pressure_col is None or rpm_col is None:
+            st.error("Required columns not found in the main data.")
+            st.stop()
+        
+        # Torque calculation function
+        def calculate_torque(row):
+            working_pressure = row[pressure_col]
+            current_speed = row[rpm_col]
+            if current_speed < machine_params['n1']:
+                torque = working_pressure * machine_params['torque_constant']
+            else:
+                torque = (machine_params['n1'] / current_speed) * machine_params['torque_constant'] * working_pressure
+            return round(torque, 2)
+        
+        # Calculate torque
+        main_df['Calculated Torque [kNm]'] = main_df.apply(calculate_torque, axis=1)
+        
+        # Optional data sampling
+        sample_fraction = st.slider("Select data sample fraction for visualization:", 0.1, 1.0, 1.0)
+        if sample_fraction < 1.0:
+            main_df = main_df.sample(frac=sample_fraction)
+        
+        # Visualization
+        fig = make_subplots(rows=1, cols=1)
+        fig.add_trace(go.Scatter(x=main_df['Timestamp'], y=main_df['Calculated Torque [kNm]'], mode='lines', name='Torque'))
+        fig.update_layout(title=f'Torque Analysis for {selected_machine}', xaxis_title='Timestamp', yaxis_title='Torque [kNm]')
+        st.plotly_chart(fig, use_container_width=True)
+        
+    except MemoryError:
+        st.error("Memory error occurred. Please try reducing the data size or sample fraction.")
+    except Exception as e:
+        st.error(f"Error processing data: {e}")
 else:
-    st.warning('Please select at least one parameter to plot.')
-
-# User instructions
-st.write("### Instructions")
-st.write("1. Upload your CSV file using the uploader.")
-st.write("2. Select how to handle NaN values.")
-st.write("3. Choose the parameters you want to analyze and visualize.")
-st.write("4. Customize the plots and filters as desired.")
-st.write("5. Download the statistics and plots if needed.")
-
-# Deployment guidance and documentation would be added in a README file
+    st.warning("Please upload both main data and machine list CSV files.")
