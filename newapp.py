@@ -8,10 +8,10 @@ import csv
 @st.cache_data
 def load_data(file, na_option, dtype_dict, encoding='utf-8', sep=';', on_bad_lines='skip'):
     try:
-        if file.type.endswith('csv'):
+        if file.type == 'text/csv':
             df = pd.read_csv(file, sep=sep, parse_dates=['ts(utc)'], dtype=dtype_dict, encoding=encoding, on_bad_lines=on_bad_lines, skipinitialspace=True, quoting=csv.QUOTE_ALL)
-        elif file.type.endswith('xlsx') or file.type.endswith('xls'):
-            df = pd.read_excel(file, parse_dates=['ts(utc)'], dtype=dtype_dict)
+        elif file.type in ['application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']:
+            df = pd.read_excel(file, parse_dates=['ts(utc)'], dtype=dtype_dict, engine='openpyxl')
         else:
             st.error("Unsupported file type. Please upload a CSV or Excel file.")
             return None
@@ -42,7 +42,7 @@ param_mappings = {
 }
 
 # File uploaders
-uploaded_main_data = st.file_uploader("Upload main data CSV", type=["csv"])
+uploaded_main_data = st.file_uploader("Upload main data CSV", type=["csv", "xlsx"])
 uploaded_machine_list = st.file_uploader("Upload machine list CSV", type=["csv", "xlsx"])
 
 if uploaded_main_data is not None and uploaded_machine_list is not None:
@@ -53,7 +53,7 @@ if uploaded_main_data is not None and uploaded_machine_list is not None:
         # Add other columns with appropriate data types
     }
     
-    # Load main data with UTF-8 encoding
+    # Load main data
     main_df = load_data(uploaded_main_data, na_option='Fill with Zero', dtype_dict=dtype_dict_main, encoding='utf-8', sep=';', on_bad_lines='skip')
     
     if main_df is not None:
@@ -67,12 +67,12 @@ if uploaded_main_data is not None and uploaded_machine_list is not None:
             # Add other columns with appropriate data types
         }
         
-        # Load machine list with specified parameters
+        # Load machine list
         try:
-            if uploaded_machine_list.type.endswith('csv'):
+            if uploaded_machine_list.type == 'text/csv':
                 machine_df = pd.read_csv(uploaded_machine_list, sep=';', dtype=dtype_dict_machine, encoding='latin1', on_bad_lines='skip', skipinitialspace=True, quoting=csv.QUOTE_ALL)
-            elif uploaded_machine_list.type.endswith('xlsx') or uploaded_machine_list.type.endswith('xls'):
-                machine_df = pd.read_excel(uploaded_machine_list, dtype=dtype_dict_machine)
+            elif uploaded_machine_list.type in ['application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']:
+                machine_df = pd.read_excel(uploaded_machine_list, dtype=dtype_dict_machine, engine='openpyxl')
             else:
                 st.error("Unsupported file type for machine list. Please upload a CSV or Excel file.")
                 st.stop()
