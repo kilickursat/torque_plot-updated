@@ -2,13 +2,19 @@ import streamlit as st
 import pandas as pd
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
-from io import BytesIO
+import csv
 
 # Function to load the data with specified data types and parse dates
 @st.cache_data
-def load_data(file, na_option, dtype_dict, encoding='utf-8', sep=',', on_bad_lines='error'):
+def load_data(file, na_option, dtype_dict, encoding='utf-8', sep=';', on_bad_lines='skip'):
     try:
-        df = pd.read_csv(file, sep=sep, parse_dates=['ts(utc)'], dtype=dtype_dict, encoding=encoding, on_bad_lines=on_bad_lines)
+        if file.type.endswith('csv'):
+            df = pd.read_csv(file, sep=sep, parse_dates=['ts(utc)'], dtype=dtype_dict, encoding=encoding, on_bad_lines=on_bad_lines, skipinitialspace=True, quoting=csv.QUOTE_ALL)
+        elif file.type.endswith('xlsx') or file.type.endswith('xls'):
+            df = pd.read_excel(file, parse_dates=['ts(utc)'], dtype=dtype_dict)
+        else:
+            st.error("Unsupported file type. Please upload a CSV or Excel file.")
+            return None
         df.rename(columns={'ts(utc)': 'Timestamp'}, inplace=True)
         
         if na_option == 'Fill with Zero':
@@ -37,7 +43,7 @@ param_mappings = {
 
 # File uploaders
 uploaded_main_data = st.file_uploader("Upload main data CSV", type=["csv"])
-uploaded_machine_list = st.file_uploader("Upload machine list CSV", type=["csv","xlsx"])
+uploaded_machine_list = st.file_uploader("Upload machine list CSV", type=["csv", "xlsx"])
 
 if uploaded_main_data is not None and uploaded_machine_list is not None:
     # Define data type dictionary for main data, excluding 'Timestamp'
@@ -61,9 +67,15 @@ if uploaded_main_data is not None and uploaded_machine_list is not None:
             # Add other columns with appropriate data types
         }
         
-        # Load machine list with 'latin1' encoding and specified separator
+        # Load machine list with specified parameters
         try:
-            machine_df = pd.read_csv(uploaded_machine_list, sep=';', dtype=dtype_dict_machine, encoding='latin1', on_bad_lines='skip')
+            if uploaded_machine_list.type.endswith('csv'):
+                machine_df = pd.read_csv(uploaded_machine_list, sep=';', dtype=dtype_dict_machine, encoding='latin1', on_bad_lines='skip', skipinitialspace=True, quoting=csv.QUOTE_ALL)
+            elif uploaded_machine_list.type.endswith('xlsx') or uploaded_machine_list.type.endswith('xls'):
+                machine_df = pd.read_excel(uploaded_machine_list, dtype=dtype_dict_machine)
+            else:
+                st.error("Unsupported file type for machine list. Please upload a CSV or Excel file.")
+                st.stop()
         except Exception as e:
             st.error(f"Error loading machine list: {e}")
             st.stop()
@@ -107,4 +119,4 @@ if uploaded_main_data is not None and uploaded_machine_list is not None:
         fig.update_layout(title=f'Torque Analysis for {selected_machine}', xaxis_title='Timestamp', yaxis_title='Torque [kNm]')
         st.plotly_chart(fig, use_container_width=True)
 else:
-    st.warning("Please upload both main data and machine list CSV files.")
+    st.warning("Please upload both main data and machine list files.")
