@@ -28,39 +28,26 @@ def load_data(file, na_option, dtype_dict, encoding='utf-8', sep=';', on_bad_lin
         st.error(f"Error loading data: {e}")
         return None
 
-# Function to find the correct column name based on parameter mappings
-def find_column(df, mappings):
-    for col in df.columns:
-        if col in mappings:
-            return col
-    return None
+# Function to map machine parameters based on possible column names
+def map_machine_parameters(machine_params_series, param_mappings):
+    params = {}
+    for param, aliases in param_mappings.items():
+        for alias in aliases:
+            if alias in machine_params_series.index:
+                params[param] = machine_params_series[alias]
+                break
+    return params
 
 # Parameter mappings
 param_mappings = {
-    'Pressure': ["Working pressure [bar]", 
-        "AzV.V13_SR_ArbDr_Z | DB 60.DBD 26",
-        "V13_SR_ArbDr_Z",
-        "Pressure",
-        "Pressure [bar]", 
-        "Working Pressure",
-        "cutting wheel.MPU1WPr",
-        "MPU1WPr",
-        "AzV.V13_SR_ArbDr_Z",
-        "Pression [bar]", 
-        "Presión [bar]"
-    ],
-    'RPM': ["Revolution [rpm]",
-        "AzV.V13_SR_Drehz_nach_Abgl_Z | DB 60.DBD 30",
-        "V13_SR_Drehz_nach_Abgl_Z",
-        "Vitesse [rpm]",
-        "Revoluciones [rpm]",
-        "RPM",
-        "Speed",
-        "Rotation Speed",
-        "cutting wheel.CWSpeed",
-        "CWSpeed",
-        "cutting wheel",
-        "AzV.V13_SR_Drehz_nach_Abgl_Z"]
+    'n1': ['n1[1/min]', 'n1 (1/min)', 'n1[rpm]', 'Max RPM', 'n1', 'N1', 'N1[rpm]', 'N2 [rpm]'],
+    'n2': ['n2[1/min]', 'n2 (1/min)', 'n2[rpm]', 'Min RPM', 'n2', 'N2', 'N2[rpm]', 'N2 [rpm]'],
+    'M_cont_value': ['M(dauer) [kNm]', 'M(dauer)[kNm]', 'M (dauer)', 'Continuous Torque',
+                     'M dauer', 'Mdauer', 'M_cont', 'M(cont)', 'M_cont[kNm]', 'M_cont [kNm]'],
+    'M_max_Vg1': ['M(max)', 'M max', 'M (max)', 'M_max[kNm]', 'M(max)[kNm]', 'Max Torque',
+                  'Mmax', 'M_max', 'M max[kNm]', 'M_max [kNm]'],
+    'torque_constant': ['Drehmomentumrechnung[kNm/bar]', 'Drehmomentumrechnung [kNm/bar]',
+                       'Torque Constant', 'Torque_Constant', 'TorqueConstant', 'TC[kNm/bar]', 'TC [kNm/bar]']
 }
 
 # File uploaders
@@ -107,12 +94,26 @@ if uploaded_main_data is not None and uploaded_machine_list is not None:
         selected_machine = st.selectbox('Select Machine', machines)
         
         # Retrieve machine parameters
-        machine_params = machine_df[machine_df['Projekt'] == selected_machine].iloc[0]
+        machine_params_series = machine_df[machine_df['Projekt'] == selected_machine].iloc[0]
+        
+        # Map the parameters using the mappings
+        machine_params_mapped = map_machine_parameters(machine_params_series, param_mappings)
+        
+        # Check for required parameters
+        required_params = ['n1', 'torque_constant', 'M_cont_value', 'power']
+        for param in required_params:
+            if param not in machine_params_mapped:
+                st.error(f"Missing parameter '{param}' for the selected machine.")
+                st.stop()
         
         # Find correct column names in the main data
-        pressure_col = find_column(main_df, param_mappings['Pressure'])
-        rpm_col = find_column(main_df, param_mappings['RPM'])
-        
+        pressure_col = None
+        rpm_col = None
+        for col in main_df.columns:
+            if col in param_mappings['Pressure']:
+                pressure_col = col
+            elif col in param_mappings['RPM']:
+                rpm_col = col
         if pressure_col is None or rpm_col is None:
             st.error("Required columns not found in the main data.")
             st.stop()
@@ -121,10 +122,10 @@ if uploaded_main_data is not None and uploaded_machine_list is not None:
         def calculate_torque(row):
             working_pressure = row[pressure_col]
             current_speed = row[rpm_col]
-            if current_speed < machine_params['n1']:
-                torque = working_pressure * machine_params['torque_constant']
+            if current_speed < machine_params_mapped['n1']:
+                torque = working_pressure * machine_params_mapped['torque_constant']
             else:
-                torque = (machine_params['n1'] / current_speed) * machine_params['torque_constant'] * working_pressure
+                torque = (machine_params_mapped['n1'] / current_speed) * machine_params_mapped['torque_constant'] * working_pressure
             return round(torque, 2)
         
         # Calculate torque
