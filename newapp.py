@@ -6,11 +6,9 @@ import plotly.graph_objects as go
 import csv
 
 def calculate_whisker_and_outliers(series):
-   Q1 = series.quantile(0.25)
-   Q3 = series.quantile(0.75)
+   Q1, Q3 = series.quantile(0.25), series.quantile(0.75)
    IQR = Q3 - Q1
-   lower_whisker = Q1 - 1.5 * IQR
-   upper_whisker = Q3 + 1.5 * IQR
+   lower_whisker, upper_whisker = Q1 - 1.5 * IQR, Q3 + 1.5 * IQR
    outliers = series[(series < lower_whisker) | (series > upper_whisker)]
    return lower_whisker, upper_whisker, outliers
 
@@ -18,7 +16,8 @@ def calculate_whisker_and_outliers(series):
 def load_data(file, na_option, dtype_dict, encoding='utf-8', sep=';', on_bad_lines='skip'):
    try:
        if file.type == 'text/csv':
-           df = pd.read_csv(file, sep=sep, parse_dates=['ts(utc)'], dtype=dtype_dict, encoding=encoding, on_bad_lines=on_bad_lines, skipinitialspace=True, quoting=csv.QUOTE_ALL)
+           df = pd.read_csv(file, sep=sep, parse_dates=['ts(utc)'], dtype=dtype_dict, encoding=encoding, 
+                          on_bad_lines=on_bad_lines, skipinitialspace=True, quoting=csv.QUOTE_ALL)
        elif file.type in ['application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']:
            df = pd.read_excel(file, parse_dates=['ts(utc)'], dtype=dtype_dict, engine='openpyxl')
        else:
@@ -81,7 +80,6 @@ param_mappings = {
 
 st.title('Machine Torque Analysis')
 
-# UI Controls
 col1, col2 = st.columns(2)
 with col1:
    na_option = st.selectbox('Handle Missing Values:', ['Fill with Zero', 'Drop rows', 'Keep NaN'])
@@ -115,24 +113,27 @@ if uploaded_main_data is not None and uploaded_machine_list is not None:
                working_pressure = row['V13_SR_ArbDr_Z']
                current_speed = row['V13_SR_Drehz_nach_Abgl_Z']
                
-               if current_speed <= 0 or pd.isna(current_speed):
+               if pd.isna(current_speed) or current_speed < 0:
                    return 0
-               elif current_speed < machine_params_mapped['n1']:
-                   torque = working_pressure * machine_params_mapped['torque_constant']
+                   
+               n2 = machine_params_mapped.get('n2', 0)
+               has_adjustment_motor = n2 != 0
+               
+               if has_adjustment_motor:
+                   if current_speed <= machine_params_mapped['n1']:
+                       torque = working_pressure * machine_params_mapped['torque_constant']
+                   else:
+                       torque = (machine_params_mapped['n1'] / current_speed) * machine_params_mapped['torque_constant'] * working_pressure
                else:
-                   torque = (machine_params_mapped['n1'] / current_speed) * machine_params_mapped['torque_constant'] * working_pressure
+                   torque = working_pressure * machine_params_mapped['torque_constant']
+               
                return round(torque, 2)
 
            main_df['Calculated Torque [kNm]'] = main_df.apply(calculate_torque, axis=1)
            
-           # Sample data for plotting
            plot_df = main_df.sample(frac=sample_ratio)
-           
-           # Calculate whiskers and outliers on sampled data
            torque_lower_whisker, torque_upper_whisker, torque_outliers = calculate_whisker_and_outliers(plot_df['Calculated Torque [kNm]'])
            rpm_lower_whisker, rpm_upper_whisker, rpm_outliers = calculate_whisker_and_outliers(plot_df['V13_SR_Drehz_nach_Abgl_Z'])
-           
-           # Anomaly detection on sampled data
            plot_df['Is_Anomaly'] = plot_df['V13_SR_ArbDr_Z'] >= anomaly_threshold
 
            def M_max_Vg2(rpm):
@@ -157,8 +158,8 @@ if uploaded_main_data is not None and uploaded_machine_list is not None:
                                   y=M_max_Vg2(rpm_curve[rpm_curve <= machine_params_mapped['n1']]),
                                   mode='lines', name='M max Vg2 [kNm]', line=dict(color='red', width=2, dash='dash')))
 
-           # Calculate and add vertical lines
            y_max_vg2 = M_max_Vg2(np.array([elbow_rpm_max, elbow_rpm_cont, machine_params_mapped['n1']]))
+           
            fig.add_trace(go.Scatter(x=[elbow_rpm_max, elbow_rpm_max], y=[0, y_max_vg2[0]],
                                   mode='lines', line=dict(color='purple', width=1, dash='dot'), showlegend=False))
            fig.add_trace(go.Scatter(x=[elbow_rpm_cont, elbow_rpm_cont], y=[0, y_max_vg2[1]],
@@ -166,19 +167,21 @@ if uploaded_main_data is not None and uploaded_machine_list is not None:
            fig.add_trace(go.Scatter(x=[machine_params_mapped['n1'], machine_params_mapped['n1']], y=[0, y_max_vg2[2]],
                                   mode='lines', line=dict(color='black', width=1, dash='dash'), showlegend=False))
 
-           # Plot data points from sampled data
            normal_data = plot_df[~plot_df['Is_Anomaly']]
            anomaly_data = plot_df[plot_df['Is_Anomaly']]
-           
            torque_outlier_data = plot_df[plot_df['Calculated Torque [kNm]'].isin(torque_outliers)]
            rpm_outlier_data = plot_df[plot_df['V13_SR_Drehz_nach_Abgl_Z'].isin(rpm_outliers)]
 
-           fig.add_trace(go.Scatter(x=normal_data['V13_SR_Drehz_nach_Abgl_Z'], y=normal_data['Calculated Torque [kNm]'],
+           fig.add_trace(go.Scatter(x=normal_data['V13_SR_Drehz_nach_Abgl_Z'], 
+                                  y=normal_data['Calculated Torque [kNm]'],
                                   mode='markers', name='Normal Data',
-                                  marker=dict(color=normal_data['Calculated Torque [kNm]'], colorscale='Viridis', size=8)))
+                                  marker=dict(color=normal_data['Calculated Torque [kNm]'], 
+                                            colorscale='Viridis', size=8)))
 
-           fig.add_trace(go.Scatter(x=anomaly_data['V13_SR_Drehz_nach_Abgl_Z'], y=anomaly_data['Calculated Torque [kNm]'],
-                                  mode='markers', name=f'Anomaly (Pressure ≥ {anomaly_threshold} bar)',
+           fig.add_trace(go.Scatter(x=anomaly_data['V13_SR_Drehz_nach_Abgl_Z'], 
+                                  y=anomaly_data['Calculated Torque [kNm]'],
+                                  mode='markers', 
+                                  name=f'Anomaly (Pressure ≥ {anomaly_threshold} bar)',
                                   marker=dict(color='red', symbol='x', size=10)))
 
            fig.add_trace(go.Scatter(x=torque_outlier_data['V13_SR_Drehz_nach_Abgl_Z'],
@@ -191,9 +194,10 @@ if uploaded_main_data is not None and uploaded_machine_list is not None:
                                   mode='markers', name='RPM Outliers',
                                   marker=dict(color='purple', symbol='square', size=10)))
 
-           # Add whisker lines
-           fig.add_hline(y=torque_upper_whisker, line_dash="dash", line_color="gray", annotation_text="Torque Upper Whisker")
-           fig.add_hline(y=torque_lower_whisker, line_dash="dot", line_color="gray", annotation_text="Torque Lower Whisker")
+           fig.add_hline(y=torque_upper_whisker, line_dash="dash", line_color="gray", 
+                        annotation_text="Torque Upper Whisker")
+           fig.add_hline(y=torque_lower_whisker, line_dash="dot", line_color="gray", 
+                        annotation_text="Torque Lower Whisker")
 
            fig.update_layout(
                title=f'{selected_machine} - Torque Analysis (Showing {sample_ratio*100:.1f}% of data)',
