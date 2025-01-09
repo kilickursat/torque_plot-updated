@@ -1054,25 +1054,24 @@ def advanced_page():
                         # For Asia/Kolkata timezone
                         df["Time_unit"] = pd.to_datetime(df[time_col].str.replace('(Asia/Kolkata)', '').str.strip(), 
                                                        format='%Y-%m-%d %H:%M:%S')
+                        time_column_type = 'datetime'
                     elif '(UTC)' in time_col:
                         # For UTC timezone
                         df["Time_unit"] = pd.to_datetime(df[time_col].str.replace('(UTC)', '').str.strip(), 
                                                        format='%Y-%m-%d %H:%M:%S')
+                        time_column_type = 'datetime'
                     else:
                         # Standard datetime parsing
                         df["Time_unit"] = pd.to_datetime(df[time_col], format='%Y-%m-%d %H:%M:%S')
+                        time_column_type = 'datetime'
                     
                     if df["Time_unit"].isnull().all():
-                        raise ValueError("Could not parse datetime values")
-                    time_column_type = 'datetime'
-                except Exception as e:
-                    # Try one more time without format specification
-                    try:
-                        df["Time_unit"] = pd.to_datetime(df[time_col])
-                        time_column_type = 'datetime'
-                    except:
                         st.error(f"Could not process time column '{time_col}'. Please check the format.")
                         return
+                    
+                except Exception as e:
+                    st.error(f"Could not process time column '{time_col}'. Please check the format.")
+                    return
 
                 if not success:
                     # Fall back to numeric if datetime conversion fails
