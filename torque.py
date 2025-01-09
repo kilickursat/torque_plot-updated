@@ -1061,39 +1061,28 @@ def advanced_page():
             else:
                 time_column_type = 'datetime'
                 try:
-                    # Clean and convert timestamp
+                    # Special handling for 'ts(utc)' column
                     df[time_col] = df[time_col].astype(str).fillna('').str.strip()
                     
-                    # Try multiple common datetime formats
-                    datetime_formats = [
-                        '%Y-%m-%d %H:%M:%S',
-                        '%Y-%m-%d_%H:%M:%S',
-                        '%d.%m.%Y %H:%M:%S',
-                        '%Y/%m/%d %H:%M:%S'
-                    ]
+                    # First convert to datetime
+                    temp_time = pd.to_datetime(df[time_col], format='%Y-%m-%d %H:%M:%S', errors='coerce')
                     
-                    for fmt in datetime_formats:
-                        try:
-                            df["Time_unit"] = pd.to_datetime(df[time_col], format=fmt)
-                            if not df["Time_unit"].isnull().all():
-                                break
-                        except:
-                            continue
-                            
-                    if df["Time_unit"].isnull().all():
-                        # Try without specific format as last resort
-                        df["Time_unit"] = pd.to_datetime(df[time_col], errors='coerce')
-                        
-                    if df["Time_unit"].isnull().all():
-                        st.error(f"Could not process time column '{time_col}'. Invalid timestamp format.")
+                    # Only assign to Time_unit if conversion was successful
+                    if not temp_time.isnull().all():
+                        df["Time_unit"] = temp_time
+                    else:
+                        st.error(f"Could not parse datetime from column '{time_col}'")
+                        st.write("Example timestamp:", df[time_col].iloc[0])
                         return
                         
                 except Exception as e:
                     st.error(f"Could not process time column '{time_col}'. Error: {str(e)}")
+                    st.write("First few timestamps:", df[time_col].head().tolist())
                     return
             
             # Sort and create range slider
             df = df.sort_values("Time_unit")
+            
             if time_column_type == 'numeric':
                 min_time_unit = df["Time_unit"].min()
                 max_time_unit = df["Time_unit"].max()
