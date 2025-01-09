@@ -1050,19 +1050,22 @@ def advanced_page():
                 try:
                     # Handle timezone columns with specified format
                     if '(Asia/Kolkata)' in time_col or '(UTC)' in time_col or '(utc)' in time_col:
-                        # Convert to string and split to remove timezone
                         df[time_col] = df[time_col].astype(str)
-                        timestamps = df[time_col].str.split('(').str[0].str.strip()
-                        df["Time_unit"] = pd.to_datetime(timestamps, format='%Y-%m-%d %H:%M:%S')
+                        # First handle any missing values
+                        df[time_col] = df[time_col].fillna('')
+                        # Extract timestamp and remove timezone
+                        df["Time_unit"] = df[time_col].apply(
+                            lambda x: pd.to_datetime(x.split('(')[0].strip()) if x else pd.NaT
+                        )
                     else:
-                        df["Time_unit"] = pd.to_datetime(df[time_col], format='%Y-%m-%d %H:%M:%S')
+                        df["Time_unit"] = pd.to_datetime(df[time_col])
                         
                     if df["Time_unit"].isnull().all():
-                        st.error(f"Could not process time column '{time_col}'. Timestamp format should be 'YYYY-MM-DD HH:MM:SS'")
+                        st.error(f"Could not process time column '{time_col}'. Invalid timestamp format.")
                         return
                         
                 except Exception as e:
-                    st.error(f"Could not process time column '{time_col}'. Timestamp format should be 'YYYY-MM-DD HH:MM:SS'")
+                    st.error(f"Could not process time column '{time_col}'. Error: {str(e)}")
                     return
 
                 if not success:
