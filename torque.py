@@ -1174,7 +1174,7 @@ def advanced_page():
                            annotation_text="Torque Upper Whisker")
                fig.add_hline(y=torque_lower_whisker, line_dash="dot", line_color="gray", annotation_text="Torque Lower Whisker")
 
-               fig.update_layout(
+                fig.update_layout(
                     title=f'{selected_machine} - Torque Analysis',
                     xaxis_title='Revolution [1/min]',
                     yaxis_title='Torque [kNm]',
