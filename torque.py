@@ -111,13 +111,13 @@ def load_data(file, file_type):
                             parts = line.split(delimiter)
                             if len(parts) > 1:
                                 # Keep timestamp as is, convert other values
-                                cleaned_parts = [parts[0]] + [p.replace(',', '.') for p in parts[1:]]
+                                cleaned_parts = [parts[0].strip()] + [p.replace(',', '.') for p in parts[1:]]
                                 cleaned_lines.append(delimiter.join(cleaned_parts))
                 
                 df = pd.read_csv(
                     StringIO('\n'.join(cleaned_lines)),
                     sep=delimiter,
-                    dtype={'ts(utc)': str},
+                    dtype={'ts(utc)': str},  # Force string type for timestamp column
                     decimal='.',
                     thousands=None,
                     na_values=['NA', 'N/A', '', 'nan', 'NaN', 'null', 'NULL'],
@@ -126,8 +126,12 @@ def load_data(file, file_type):
                 
                 # Convert UTC timestamp
                 if 'ts(utc)' in df.columns:
-                    df['ts(utc)'] = pd.to_datetime(df['ts(utc)']).dt.floor('s')
-                    df['ts(utc)'] = (df['ts(utc)'].astype('int64') // 10**9).astype('int64')
+                    df['ts(utc)'] = df['ts(utc)'].astype(str).str.strip()
+                    try:
+                        df['ts(utc)'] = pd.to_datetime(df['ts(utc)'], format='%Y-%m-%d %H:%M:%S')
+                    except Exception as e:
+                        st.error(f"Error converting timestamp: {str(e)}")
+                        return None
             
             else:
                 # Original format handling
@@ -152,9 +156,12 @@ def load_data(file, file_type):
             numeric_cols = df.columns.difference(['ts(utc)', 'Datum', 'Uhrzeit', 'timestamp'])
             for col in numeric_cols:
                 try:
-                    df[col] = pd.to_numeric(df[col], errors='coerce')
-                except (ValueError, TypeError):
-                    continue
+                    df[col] = pd.to_numeric(df[col].str.replace(',', '.'), errors='coerce')
+                except (ValueError, TypeError, AttributeError):
+                    try:
+                        df[col] = pd.to_numeric(df[col], errors='coerce')
+                    except:
+                        continue
             
             df.columns = df.columns.str.strip()
             df = df.dropna(how='all')
@@ -168,8 +175,12 @@ def load_data(file, file_type):
             )
 
             if 'ts(utc)' in df.columns:
-                df['ts(utc)'] = pd.to_datetime(df['ts(utc)']).dt.floor('s')
-                df['ts(utc)'] = (df['ts(utc)'].astype('int64') // 10**9).astype('int64')
+                df['ts(utc)'] = df['ts(utc)'].astype(str).str.strip()
+                try:
+                    df['ts(utc)'] = pd.to_datetime(df['ts(utc)'], format='%Y-%m-%d %H:%M:%S')
+                except Exception as e:
+                    st.error(f"Error converting timestamp in Excel: {str(e)}")
+                    return None
 
             numeric_cols = df.columns.difference(['ts(utc)'])
             for col in numeric_cols:
@@ -189,6 +200,8 @@ def load_data(file, file_type):
 
     except Exception as e:
         st.error(f"Error loading file: {str(e)}")
+        st.write("Detailed error information:")
+        st.write(traceback.format_exc())
         return None
         
 sensor_column_map = {
@@ -1048,16 +1061,29 @@ def advanced_page():
             else:
                 time_column_type = 'datetime'
                 try:
-                    # Convert to string first and handle timezone columns
-                    df[time_col] = df[time_col].astype(str).fillna('')
-                    df[time_col] = df[time_col].str.strip()  # Remove any extra spaces
+                    # Clean and convert timestamp
+                    df[time_col] = df[time_col].astype(str).fillna('').str.strip()
                     
-                    df["Time_unit"] = pd.to_datetime(df[time_col], format='%Y-%m-%d %H:%M:%S', errors='coerce')
+                    # Try multiple common datetime formats
+                    datetime_formats = [
+                        '%Y-%m-%d %H:%M:%S',
+                        '%Y-%m-%d_%H:%M:%S',
+                        '%d.%m.%Y %H:%M:%S',
+                        '%Y/%m/%d %H:%M:%S'
+                    ]
                     
+                    for fmt in datetime_formats:
+                        try:
+                            df["Time_unit"] = pd.to_datetime(df[time_col], format=fmt)
+                            if not df["Time_unit"].isnull().all():
+                                break
+                        except:
+                            continue
+                            
                     if df["Time_unit"].isnull().all():
-                        st.error(f"Could not process time column '{time_col}'. Invalid timestamp format.")
-                        return
-                    
+                        # Try without specific format as last resort
+                        df["Time_unit"] = pd.to_datetime(df[time_col], errors='coerce')
+                        
                     if df["Time_unit"].isnull().all():
                         st.error(f"Could not process time column '{time_col}'. Invalid timestamp format.")
                         return
@@ -1065,16 +1091,7 @@ def advanced_page():
                 except Exception as e:
                     st.error(f"Could not process time column '{time_col}'. Error: {str(e)}")
                     return
-
-                if not success:
-                    # Fall back to numeric if datetime conversion fails
-                    df[time_col] = pd.to_numeric(df[time_col], errors='coerce')
-                    if df[time_col].isnull().all():
-                        st.error(f"Could not process time column '{time_col}'. Please check the format.")
-                        return
-                    time_column_type = 'numeric'
-                    df["Time_unit"] = df[time_col]
-
+            
             # Sort and create range slider
             df = df.sort_values("Time_unit")
             if time_column_type == 'numeric':
@@ -1097,7 +1114,8 @@ def advanced_page():
                                      value=(min_time_unit, max_time_unit), 
                                      format="YYYY-MM-DD HH:mm:ss", 
                                      step=time_step)
-
+            
+            # Filter data based on selected time range
             df = df[(df["Time_unit"] >= time_range[0]) & (df["Time_unit"] <= time_range[1])]
 
             # Calculate derived parameters
