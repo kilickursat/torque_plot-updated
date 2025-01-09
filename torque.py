@@ -709,12 +709,11 @@ def original_page():
         # Load data
         file_type = raw_data_file.name.split(".")[-1].lower()
         df = load_data(raw_data_file, file_type)
-
+    
         if df is not None:
             # Find sensor columns
             sensor_columns = find_sensor_columns(df)
-
-            # Allow user to select columns
+    
             # Allow user to select columns
             pressure_col = st.selectbox(
                 "Select Pressure Column",
@@ -726,14 +725,13 @@ def original_page():
                 options=df.columns,
                 index=safe_get_loc(df.columns, sensor_columns.get('revolution', df.columns[0]))
             )
-
-
+    
             if pressure_col and revolution_col:
                 # Proceed with data processing and visualization
                 df[revolution_col] = pd.to_numeric(df[revolution_col], errors='coerce')
                 df[pressure_col] = pd.to_numeric(df[pressure_col], errors='coerce')
-                df = df.dropna(subset=[revolution_col, pressure_col])
-
+                df = df.dropna(subset=[pressure_col, revolution_col])
+    
                 # Time Column selection
                 time_col = st.selectbox(
                     "Select Time Column",
@@ -746,73 +744,72 @@ def original_page():
             
                 # Replace x_axis_max setting
                 x_axis_max = update_plot_parameters(df, revolution_col)
-
+    
+                # Get n1 from machine params
+                n1 = machine_params.get("n1", df[revolution_col].max())
+    
+                # Apply the RPM filter with safety checks
+                df = df[
+                    (df[revolution_col] > 0.1)  # Prevent division by zero/near-zero
+                    & (df[revolution_col] <= n1)  # Keep upper limit
+                ]
+    
                 # RPM Statistics
                 rpm_stats = df[revolution_col].describe()
                 rpm_max_value = rpm_stats['max']
                 st.sidebar.write(f"Recommended value for x-axis based on the Max RPM in Data: {rpm_max_value:.2f}")
-
+    
                 # Allow user to set x_axis_max
-                x_axis_max = st.sidebar.number_input("X-axis maximum", value=float(rpm_max_value), min_value=1.0, max_value=float(rpm_max_value * 1.2))
-
-                # Filter data points between n2 and n1 rpm
-                # This is more flexible and safety-focused
-                df = df[
-                    (df[revolution_col] > 0.1)  # Only filters out near-zero values
-                    & (df[revolution_col] <= n1)  # Keeps machine's max RPM limit
-                ]
-
-                # Calculate torque
-            # Filter data points between n2 and n1 rpm
-            n2 = machine_params.get("n2", df[revolution_col].min())
-            n1 = machine_params.get("n1", df[revolution_col].max())
-            df = df[
-                (df[revolution_col] > 0.1)  # Only filters out near-zero values
-                & (df[revolution_col] <= n1)  # Keeps machine's max RPM limit
-            ]
-
-            # Calculate torque
-            def calculate_torque_wrapper(row):
-                working_pressure = row[pressure_col]
-                current_speed = row[revolution_col]
-                
-                # Safety check for minimum RPM
-                if current_speed < 0.1:  # Minimum threshold
-                    return 0.0
+                x_axis_max = st.sidebar.number_input(
+                    "X-axis maximum",
+                    value=float(rpm_max_value),
+                    min_value=1.0,
+                    max_value=float(rpm_max_value * 1.2)
+                )
+    
+                # Calculate torque with safety checks
+                def calculate_torque_wrapper(row):
+                    working_pressure = row[pressure_col]
+                    current_speed = row[revolution_col]
                     
-                # Safety check for maximum torque
-                max_allowed_torque = machine_params["M_max_Vg1"]
-                
-                if current_speed < machine_params["n1"]:
-                    torque = working_pressure * machine_params["torque_constant"]
-                else:
-                    torque = (
-                        (machine_params["n1"] / current_speed)
-                        * machine_params["torque_constant"]
-                        * working_pressure
-                    )
-                
-                # Limit the torque to the maximum allowed value
-                torque = min(torque, max_allowed_torque)
-                
-                return round(torque, 2)
-                
-                df['Calculated torque [kNm]'] = df.apply(lambda row: calculate_torque_wrapper(row, machine_params), axis=1)
-
+                    # Safety check for minimum RPM
+                    if current_speed < 0.1:
+                        return 0.0
+                        
+                    # Safety check for maximum torque
+                    max_allowed_torque = machine_params["M_max_Vg1"]
+                    
+                    if current_speed < machine_params["n1"]:
+                        torque = working_pressure * machine_params["torque_constant"]
+                    else:
+                        torque = (
+                            (machine_params["n1"] / current_speed)
+                            * machine_params["torque_constant"]
+                            * working_pressure
+                        )
+                    
+                    # Limit the torque to the maximum allowed value
+                    torque = min(torque, max_allowed_torque)
+                    
+                    return round(torque, 2)
+    
+                df['Calculated torque [kNm]'] = df.apply(lambda row: calculate_torque_wrapper(row), axis=1)
+    
                 # Calculate whiskers and outliers for torque
                 torque_lower_whisker, torque_upper_whisker, torque_outliers = calculate_whisker_and_outliers(df['Calculated torque [kNm]'])
                 rpm_lower_whisker, rpm_upper_whisker, rpm_outliers = calculate_whisker_and_outliers(df[revolution_col])
-
+    
                 # Anomaly detection based on working pressure
                 df['Is_Anomaly'] = df[pressure_col] >= anomaly_threshold
-
+    
                 # Function to calculate M max Vg2
                 def M_max_Vg2(rpm):
                     return np.minimum(machine_params['M_max_Vg1'], (P_max * 60 * nu) / (2 * np.pi * rpm))
-
+    
                 # Calculate the elbow points for the max and continuous torque
                 elbow_rpm_max = (P_max * 60 * nu) / (2 * np.pi * machine_params['M_max_Vg1'])
                 elbow_rpm_cont = (P_max * 60 * nu) / (2 * np.pi * machine_params['M_cont_value'])
+
 
                 # Generate RPM values for the torque curve
                 rpm_curve = np.linspace(0.1, machine_params['n1'], 1000)  # Avoid division by zero
