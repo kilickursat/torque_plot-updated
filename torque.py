@@ -1046,23 +1046,23 @@ def advanced_page():
                 time_column_type = 'numeric'
                 df["Time_unit"] = df[time_col]
             else:
-                # Extract datetime from timezone columns
-                if '(Asia/Kolkata)' in time_col or '(UTC)' in time_col:
-                    # Remove timezone identifier and parse datetime
-                    clean_time = df[time_col].str.replace(r'\([^)]*\)', '').str.strip()
-                    df["Time_unit"] = pd.to_datetime(clean_time, format='%Y-%m-%d %H:%M:%S', errors='coerce')
-                    if not df["Time_unit"].isnull().all():
-                        time_column_type = 'datetime'
-                        success = True
-                else:
-                    # Try standard formats
-                    try:
+                try:
+                    # Handle timezone columns
+                    if isinstance(df[time_col].iloc[0], str) and ('(Asia/Kolkata)' in time_col or '(UTC)' in time_col):
+                        # Convert to datetime directly from the string format
+                        df["Time_unit"] = pd.to_datetime(df[time_col].apply(lambda x: x.split('(')[0].strip()), 
+                                                       format='%Y-%m-%d %H:%M:%S', 
+                                                       errors='coerce')
+                    else:
+                        # Standard datetime parsing
                         df["Time_unit"] = pd.to_datetime(df[time_col], format='%Y-%m-%d %H:%M:%S', errors='coerce')
-                        if not df["Time_unit"].isnull().all():
-                            time_column_type = 'datetime'
-                            success = True
-                    except:
-                        success = False
+                    
+                    if df["Time_unit"].isnull().all():
+                        raise ValueError("All values in the time column are NaT after parsing.")
+                    time_column_type = 'datetime'
+                except Exception as e:
+                    st.error(f"Could not process time column '{time_col}'. Please check the format. {str(e)}")
+                    return
 
                 if not success:
                     # Fall back to numeric if datetime conversion fails
@@ -1374,7 +1374,6 @@ def advanced_page():
 
         else:
             st.info("Please upload a Raw Data file to begin the analysis.")
-
 
 
 if __name__ == "__main__":
