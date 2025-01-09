@@ -1048,8 +1048,9 @@ def advanced_page():
             else:
                 time_column_type = 'datetime'
                 try:
-                    # Handle timezone columns
+                    # Handle timezone columns and clean data
                     df[time_col] = df[time_col].fillna('')
+                    df[time_col] = df[time_col].str.strip()  # Remove any extra spaces
                     
                     def safe_parse_datetime(x):
                         try:
@@ -1057,7 +1058,12 @@ def advanced_page():
                         except:
                             return pd.NaT
 
-                    df["Time_unit"] = pd.to_datetime(df[time_col], format='%Y-%m-%d %H:%M:%S', errors='coerce')
+                    # Try parsing with multiple formats
+                    formats = ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d-%H:%M:%S', '%Y-%m-%d_%H:%M:%S']
+                    for fmt in formats:
+                        df["Time_unit"] = pd.to_datetime(df[time_col], format=fmt, errors='coerce')
+                        if not df["Time_unit"].isnull().all():
+                            break
                     
                     if df["Time_unit"].isnull().all():
                         st.error(f"Could not process time column '{time_col}'. Invalid timestamp format.")
