@@ -1053,15 +1053,11 @@ def advanced_page():
                     
                     def safe_parse_datetime(x):
                         try:
-                            if pd.isna(x) or str(x).strip() == '':
-                                return pd.NaT
-                            # Clean the timestamp string
-                            ts_str = str(x).split('(')[0].strip()
-                            return pd.to_datetime(ts_str)
+                            return pd.to_datetime(x, errors='coerce')
                         except:
                             return pd.NaT
 
-                    df["Time_unit"] = df[time_col].apply(safe_parse_datetime)
+                    df["Time_unit"] = pd.to_datetime(df[time_col], format='%Y-%m-%d %H:%M:%S', errors='coerce')
                     
                     if df["Time_unit"].isnull().all():
                         st.error(f"Could not process time column '{time_col}'. Invalid timestamp format.")
