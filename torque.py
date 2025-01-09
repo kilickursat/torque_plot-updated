@@ -1046,26 +1046,23 @@ def advanced_page():
                 time_column_type = 'numeric'
                 df["Time_unit"] = df[time_col]
             else:
-                # Try different datetime formats and timezone handling
-                tried_formats = [
-                    lambda x: pd.to_datetime(x, format='%Y-%m-%d %H:%M:%S%z', errors='coerce'),
-                    lambda x: pd.to_datetime(x, format='%Y-%m-%d %H:%M:%S', errors='coerce'),
-                    lambda x: pd.to_datetime(x, errors='coerce').tz_localize(None),
-                    lambda x: pd.to_datetime(x.str.split('(').str[0], errors='coerce'),
-                    lambda x: pd.to_datetime(x, utc=True, errors='coerce')
-                ]
-
-                success = False
-                for format_func in tried_formats:
+                # Extract datetime from timezone columns
+                if '(Asia/Kolkata)' in time_col or '(UTC)' in time_col:
+                    # Remove timezone identifier and parse datetime
+                    clean_time = df[time_col].str.replace(r'\([^)]*\)', '').str.strip()
+                    df["Time_unit"] = pd.to_datetime(clean_time, format='%Y-%m-%d %H:%M:%S', errors='coerce')
+                    if not df["Time_unit"].isnull().all():
+                        time_column_type = 'datetime'
+                        success = True
+                else:
+                    # Try standard formats
                     try:
-                        temp_series = format_func(df[time_col])
-                        if not temp_series.isnull().all():
-                            df["Time_unit"] = temp_series
+                        df["Time_unit"] = pd.to_datetime(df[time_col], format='%Y-%m-%d %H:%M:%S', errors='coerce')
+                        if not df["Time_unit"].isnull().all():
                             time_column_type = 'datetime'
                             success = True
-                            break
                     except:
-                        continue
+                        success = False
 
                 if not success:
                     # Fall back to numeric if datetime conversion fails
