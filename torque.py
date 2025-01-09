@@ -761,7 +761,7 @@ def original_page():
                 # This is more flexible and safety-focused
                 df = df[
                     (df[revolution_col] > 0.1)  # Only filters out near-zero values
-                    & (df[revolution_col] <= machine_params['n1'])  # Keeps machine's max RPM limit
+                    & (df[revolution_col] <= n1)  # Keeps machine's max RPM limit
                 ]
 
                 # Calculate torque
