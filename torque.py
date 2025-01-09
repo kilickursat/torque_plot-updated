@@ -1174,20 +1174,19 @@ def advanced_page():
                            annotation_text="Torque Upper Whisker")
                fig.add_hline(y=torque_lower_whisker, line_dash="dot", line_color="gray", annotation_text="Torque Lower Whisker")
 
-                fig.update_layout(
-                    title=f'{selected_machine} - Torque Analysis',
-                    xaxis_title='Revolution [1/min]',
-                    yaxis_title='Torque [kNm]',
-                    xaxis=dict(range=[0, x_axis_max]),
-                    yaxis=dict(range=[0, max(60, df['Calculated torque [kNm]'].max() * 1.1)]),
-                    legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5),
-                    width=1000,
-                    height=800,
-                    margin=dict(l=50, r=50, t=100, b=100)
-                )
-
-                st.plotly_chart(fig, use_container_width=True)
-                display_statistics(df, revolution_col, pressure_col, thrust_force_col)
+               fig.update_layout(
+                   title=f'{selected_machine} - Torque Analysis',
+                   xaxis_title='Revolution [1/min]',
+                   yaxis_title='Torque [kNm]',
+                   xaxis=dict(range=[0, x_axis_max]),
+                   yaxis=dict(range=[0, max(60, df['Calculated torque [kNm]'].max() * 1.1)]),
+                   legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5),
+                   width=1000,
+                   height=800,
+                   margin=dict(l=50, r=50, t=100, b=100)
+               )
+               st.plotly_chart(fig, use_container_width=True)
+               display_statistics(df, revolution_col, pressure_col, thrust_force_col)
 
 
             # Features visualization
