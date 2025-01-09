@@ -756,19 +756,34 @@ def original_page():
                 x_axis_max = st.sidebar.number_input("X-axis maximum", value=float(rpm_max_value), min_value=1.0, max_value=float(rpm_max_value * 1.2))
 
                 # Filter data points between n2 and n1 rpm
-                #df = df[(df[revolution_col] >= machine_params['n2']) & (df[revolution_col] <= machine_params['n1'])]
+                # This is more flexible and safety-focused
+                df = df[
+                    (df[revolution_col] > 0.1)  # Only filters out near-zero values
+                    & (df[revolution_col] <= n1)  # Keeps machine's max RPM limit
+                ]
 
                 # Calculate torque
-                def calculate_torque_wrapper(row, machine_params):
+                def calculate_torque_wrapper(row):
                     working_pressure = row[pressure_col]
                     current_speed = row[revolution_col]
-                
-                    # General formula for torque calculation
-                    if current_speed < machine_params['n1']:
-                        torque = working_pressure * machine_params['torque_constant']
+                    
+                    # Safety check for minimum RPM without filtering data
+                    if current_speed < 0.1:
+                        return 0.0
+                    
+                    # Calculate torque based on speed ranges
+                    if current_speed < machine_params["n1"]:
+                        torque = working_pressure * machine_params["torque_constant"]
                     else:
-                        torque = (machine_params['n1'] / current_speed) * machine_params['torque_constant'] * working_pressure
-                
+                        torque = (
+                            (machine_params["n1"] / current_speed)
+                            * machine_params["torque_constant"]
+                            * working_pressure
+                        )
+                    
+                    # Limit to machine's maximum torque capability
+                    torque = min(torque, machine_params["M_max_Vg1"])
+                    
                     return round(torque, 2)
                 
                 df['Calculated torque [kNm]'] = df.apply(lambda row: calculate_torque_wrapper(row, machine_params), axis=1)
@@ -1288,15 +1303,22 @@ def advanced_page():
             n2 = machine_params.get("n2", df[revolution_col].min())
             n1 = machine_params.get("n1", df[revolution_col].max())
             df = df[
-                (df[revolution_col] >= n2)
-                & (df[revolution_col] <= n1)
+                (df[revolution_col] > 0.1)  # Only filters out near-zero values
+                & (df[revolution_col] <= n1)  # Keeps machine's max RPM limit
             ]
 
             # Calculate torque
             def calculate_torque_wrapper(row):
                 working_pressure = row[pressure_col]
                 current_speed = row[revolution_col]
-
+                
+                # Safety check for minimum RPM
+                if current_speed < 0.1:  # Minimum threshold
+                    return 0.0
+                    
+                # Safety check for maximum torque
+                max_allowed_torque = machine_params["M_max_Vg1"]
+                
                 if current_speed < machine_params["n1"]:
                     torque = working_pressure * machine_params["torque_constant"]
                 else:
@@ -1305,7 +1327,10 @@ def advanced_page():
                         * machine_params["torque_constant"]
                         * working_pressure
                     )
-
+                
+                # Limit the torque to the maximum allowed value
+                torque = min(torque, max_allowed_torque)
+                
                 return round(torque, 2)
 
             df["Calculated torque [kNm]"] = df.apply(
