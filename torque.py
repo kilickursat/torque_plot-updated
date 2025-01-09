@@ -1038,6 +1038,8 @@ def advanced_page():
             df = df.dropna(subset=[pressure_col, revolution_col, advance_rate_col, thrust_force_col, distance_col])
 
             # Time handling
+            df[time_col] = df[time_col].fillna('')
+            
             if time_column_type_user == "Numeric":
                 df[time_col] = pd.to_numeric(df[time_col], errors='coerce')
                 if df[time_col].isnull().all():
@@ -1047,24 +1049,18 @@ def advanced_page():
                 df["Time_unit"] = df[time_col]
             else:
                 try:
-                    # Convert to string and handle any NaN values
-                    df[time_col] = df[time_col].fillna('')
-                    
                     def extract_timestamp(x):
                         try:
                             if pd.isna(x) or x == '':
                                 return None
-                            # Extract the timestamp part before the timezone
                             timestamp_str = x.split('(')[0].strip()
                             return pd.to_datetime(timestamp_str)
                         except:
                             return None
 
-                    # Apply the conversion function
                     df["Time_unit"] = df[time_col].apply(extract_timestamp)
                     
                     if df["Time_unit"].isnull().all():
-                        # If all conversions failed, try direct parsing
                         df["Time_unit"] = pd.to_datetime(df[time_col], errors='coerce')
                         if df["Time_unit"].isnull().all():
                             st.error(f"Could not process time column '{time_col}'. Please check the format.")
