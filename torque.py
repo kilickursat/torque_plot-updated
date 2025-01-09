@@ -1048,21 +1048,21 @@ def advanced_page():
             else:
                 time_column_type = 'datetime'
                 try:
-                    # Convert all values to string first
-                    df[time_col] = df[time_col].astype(str)
-                    
-                    # Extract timestamp from timezone format
-                    if '(Asia/Kolkata)' in time_col or '(UTC)' in time_col:
-                        df["Time_unit"] = df[time_col].apply(lambda x: pd.to_datetime(x.split('(')[0].strip()))
+                    # Handle timezone columns with specified format
+                    if '(Asia/Kolkata)' in time_col or '(UTC)' in time_col or '(utc)' in time_col:
+                        # Convert to string and split to remove timezone
+                        df[time_col] = df[time_col].astype(str)
+                        timestamps = df[time_col].str.split('(').str[0].str.strip()
+                        df["Time_unit"] = pd.to_datetime(timestamps, format='%Y-%m-%d %H:%M:%S')
                     else:
-                        df["Time_unit"] = pd.to_datetime(df[time_col])
+                        df["Time_unit"] = pd.to_datetime(df[time_col], format='%Y-%m-%d %H:%M:%S')
                         
                     if df["Time_unit"].isnull().all():
-                        st.error(f"Could not process time column '{time_col}'. Please check the format.")
+                        st.error(f"Could not process time column '{time_col}'. Timestamp format should be 'YYYY-MM-DD HH:MM:SS'")
                         return
                         
                 except Exception as e:
-                    st.error(f"Could not process time column '{time_col}'. Please check the format.")
+                    st.error(f"Could not process time column '{time_col}'. Timestamp format should be 'YYYY-MM-DD HH:MM:SS'")
                     return
 
                 if not success:
@@ -1375,6 +1375,6 @@ def advanced_page():
 
         else:
             st.info("Please upload a Raw Data file to begin the analysis.")
-
+            
 if __name__ == "__main__":
     main()
