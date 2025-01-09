@@ -756,7 +756,7 @@ def original_page():
                 x_axis_max = st.sidebar.number_input("X-axis maximum", value=float(rpm_max_value), min_value=1.0, max_value=float(rpm_max_value * 1.2))
 
                 # Filter data points between n2 and n1 rpm
-                df = df[(df[revolution_col] >= machine_params['n2']) & (df[revolution_col] <= machine_params['n1'])]
+                #df = df[(df[revolution_col] >= machine_params['n2']) & (df[revolution_col] <= machine_params['n1'])]
 
                 # Calculate torque
                 def calculate_torque_wrapper(row, machine_params):
