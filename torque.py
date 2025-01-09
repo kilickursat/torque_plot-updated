@@ -1307,19 +1307,26 @@ def advanced_page():
                 max_value=float(rpm_max_value * 1.2),
             )
 
-            # Filter data points between n2 and n1 rpm
-            n2 = machine_params.get("n2", df[revolution_col].min())
+            # Get n1 from machine params
             n1 = machine_params.get("n1", df[revolution_col].max())
-            df = df[
-                (df[revolution_col] >= n2)
-                & (df[revolution_col] <= n1)
-            ]
 
-            # Calculate torque
+            # Apply the RPM filter with safety checks
+            df = df[
+                (df[revolution_col] > 0.1)  # Prevent division by zero/near-zero
+                & (df[revolution_col] <= n1)  # Keep upper limit
+            ]
+            
             def calculate_torque_wrapper(row):
                 working_pressure = row[pressure_col]
                 current_speed = row[revolution_col]
-
+                
+                # Safety check for minimum RPM
+                if current_speed < 0.1:
+                    return 0.0
+                    
+                # Safety check for maximum torque
+                max_allowed_torque = machine_params["M_max_Vg1"]
+                
                 if current_speed < machine_params["n1"]:
                     torque = working_pressure * machine_params["torque_constant"]
                 else:
@@ -1328,12 +1335,13 @@ def advanced_page():
                         * machine_params["torque_constant"]
                         * working_pressure
                     )
-
+                
+                # Limit the torque to the maximum allowed value
+                torque = min(torque, max_allowed_torque)
+                
                 return round(torque, 2)
 
-            df["Calculated torque [kNm]"] = df.apply(
-                calculate_torque_wrapper, axis=1
-            )
+            df["Calculated torque [kNm]"] = df.apply(lambda row: calculate_torque_wrapper(row), axis=1)
 
             # Calculate whiskers and outliers using 10th and 90th percentiles
             (
