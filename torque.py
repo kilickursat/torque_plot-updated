@@ -1048,14 +1048,16 @@ def advanced_page():
             else:
                 try:
                     # Handle timezone columns
-                    if isinstance(df[time_col].iloc[0], str) and ('(Asia/Kolkata)' in time_col or '(UTC)' in time_col):
-                        # Convert to datetime directly from the string format
-                        df["Time_unit"] = pd.to_datetime(df[time_col].apply(lambda x: x.split('(')[0].strip()), 
-                                                       format='%Y-%m-%d %H:%M:%S', 
-                                                       errors='coerce')
+                    if '(Asia/Kolkata)' in time_col or '(UTC)' in time_col:
+                        # Convert column to string type first
+                        df[time_col] = df[time_col].astype(str)
+                        # Extract datetime part before timezone
+                        df["Time_unit"] = df[time_col].apply(lambda x: x.split('(')[0].strip())
+                        # Convert to datetime
+                        df["Time_unit"] = pd.to_datetime(df["Time_unit"], errors='coerce')
                     else:
                         # Standard datetime parsing
-                        df["Time_unit"] = pd.to_datetime(df[time_col], format='%Y-%m-%d %H:%M:%S', errors='coerce')
+                        df["Time_unit"] = pd.to_datetime(df[time_col], errors='coerce')
                     
                     if df["Time_unit"].isnull().all():
                         raise ValueError("All values in the time column are NaT after parsing.")
