@@ -1047,30 +1047,33 @@ def advanced_page():
                 df["Time_unit"] = df[time_col]
             else:
                 try:
-                    # Handle timezone columns
-                    df[time_col] = df[time_col].astype(str)
+                    # Convert to string and handle any NaN values
+                    df[time_col] = df[time_col].fillna('')
                     
-                    if '(Asia/Kolkata)' in time_col:
-                        # For Asia/Kolkata timezone
-                        df["Time_unit"] = pd.to_datetime(df[time_col].str.replace('(Asia/Kolkata)', '').str.strip(), 
-                                                       format='%Y-%m-%d %H:%M:%S')
-                        time_column_type = 'datetime'
-                    elif '(UTC)' in time_col:
-                        # For UTC timezone
-                        df["Time_unit"] = pd.to_datetime(df[time_col].str.replace('(UTC)', '').str.strip(), 
-                                                       format='%Y-%m-%d %H:%M:%S')
-                        time_column_type = 'datetime'
-                    else:
-                        # Standard datetime parsing
-                        df["Time_unit"] = pd.to_datetime(df[time_col], format='%Y-%m-%d %H:%M:%S')
-                        time_column_type = 'datetime'
+                    def extract_timestamp(x):
+                        try:
+                            if pd.isna(x) or x == '':
+                                return None
+                            # Extract the timestamp part before the timezone
+                            timestamp_str = x.split('(')[0].strip()
+                            return pd.to_datetime(timestamp_str)
+                        except:
+                            return None
+
+                    # Apply the conversion function
+                    df["Time_unit"] = df[time_col].apply(extract_timestamp)
                     
                     if df["Time_unit"].isnull().all():
-                        st.error(f"Could not process time column '{time_col}'. Please check the format.")
-                        return
+                        # If all conversions failed, try direct parsing
+                        df["Time_unit"] = pd.to_datetime(df[time_col], errors='coerce')
+                        if df["Time_unit"].isnull().all():
+                            st.error(f"Could not process time column '{time_col}'. Please check the format.")
+                            return
+                    
+                    time_column_type = 'datetime'
                     
                 except Exception as e:
-                    st.error(f"Could not process time column '{time_col}'. Please check the format.")
+                    st.error(f"Could not process time column '{time_col}'. Error: {str(e)}")
                     return
 
                 if not success:
