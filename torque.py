@@ -1038,8 +1038,6 @@ def advanced_page():
             df = df.dropna(subset=[pressure_col, revolution_col, advance_rate_col, thrust_force_col, distance_col])
 
             # Time handling
-            df[time_col] = df[time_col].fillna('')
-            
             if time_column_type_user == "Numeric":
                 df[time_col] = pd.to_numeric(df[time_col], errors='coerce')
                 if df[time_col].isnull().all():
@@ -1048,28 +1046,23 @@ def advanced_page():
                 time_column_type = 'numeric'
                 df["Time_unit"] = df[time_col]
             else:
+                time_column_type = 'datetime'
                 try:
-                    def extract_timestamp(x):
-                        try:
-                            if pd.isna(x) or x == '':
-                                return None
-                            timestamp_str = x.split('(')[0].strip()
-                            return pd.to_datetime(timestamp_str)
-                        except:
-                            return None
-
-                    df["Time_unit"] = df[time_col].apply(extract_timestamp)
+                    # Convert all values to string first
+                    df[time_col] = df[time_col].astype(str)
                     
+                    # Extract timestamp from timezone format
+                    if '(Asia/Kolkata)' in time_col or '(UTC)' in time_col:
+                        df["Time_unit"] = df[time_col].apply(lambda x: pd.to_datetime(x.split('(')[0].strip()))
+                    else:
+                        df["Time_unit"] = pd.to_datetime(df[time_col])
+                        
                     if df["Time_unit"].isnull().all():
-                        df["Time_unit"] = pd.to_datetime(df[time_col], errors='coerce')
-                        if df["Time_unit"].isnull().all():
-                            st.error(f"Could not process time column '{time_col}'. Please check the format.")
-                            return
-                    
-                    time_column_type = 'datetime'
-                    
+                        st.error(f"Could not process time column '{time_col}'. Please check the format.")
+                        return
+                        
                 except Exception as e:
-                    st.error(f"Could not process time column '{time_col}'. Error: {str(e)}")
+                    st.error(f"Could not process time column '{time_col}'. Please check the format.")
                     return
 
                 if not success:
@@ -1382,7 +1375,6 @@ def advanced_page():
 
         else:
             st.info("Please upload a Raw Data file to begin the analysis.")
-
 
 if __name__ == "__main__":
     main()
