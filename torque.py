@@ -1067,7 +1067,7 @@ def advanced_page():
     if raw_data_file is not None:
         # Load data
         file_type = raw_data_file.name.split(".")[-1].lower()
-        df = load_data(raw_data_file, file_type)
+        df = load_data(file, na_option, dtype_dict, encoding='utf-8', sep=';', on_bad_lines='skip')
 
         if df is not None:
             # Find sensor columns
