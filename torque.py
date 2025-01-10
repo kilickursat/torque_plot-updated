@@ -1078,11 +1078,19 @@ def advanced_page():
             time_unit, time_display = handle_time_column(df, time_col, time_column_type)
             df["Time_unit"] = time_unit
             df["Time_display"] = time_display
-            
-            # Sort by time unit
             df = df.sort_values("Time_unit")
 
-            # Set time label based on type
+            # Define features first
+            features = [
+                {"column": advance_rate_col, "display_name": "Advance Rate", "color": "blue"},
+                {"column": "Calculated Penetration Rate", "display_name": "Penetration Rate", "color": "green"},
+                {"column": thrust_force_col, "display_name": "Thrust Force", "color": "red"},
+                {"column": "Thrust Force per Cutting Ring", "display_name": "Thrust Force per Cutting Ring", "color": "orange"},
+                {"column": revolution_col, "display_name": "Revolution", "color": "purple"},
+                {"column": pressure_col, "display_name": "Working Pressure", "color": "cyan"},
+                {"column": "Calculated torque [kNm]", "display_name": "Calculated Torque", "color": "magenta"}
+            ]
+
             if time_column_type == 'datetime':
                 time_unit_label = "Time"
             else:
