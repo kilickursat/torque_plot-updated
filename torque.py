@@ -190,8 +190,7 @@ def load_data(file, file_type):
     except Exception as e:
         st.error(f"Error loading file: {str(e)}")
         return None
-
-
+        
 sensor_column_map = {
     "pressure": [
         "Working pressure [bar]", 
@@ -1045,7 +1044,7 @@ def advanced_page():
     if raw_data_file is not None:
         # Load data
         file_type = raw_data_file.name.split(".")[-1].lower()
-        df = load_data(file, file_type)
+        df = load_data(raw_data_file, file_type)
 
         if df is not None:
             # Find sensor columns
