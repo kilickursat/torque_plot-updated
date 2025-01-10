@@ -1112,7 +1112,10 @@ def advanced_page():
             df["Time_unit"] = time_unit
             df["Time_display"] = time_display
             df = df.sort_values("Time_unit")
-
+            
+            # Calculate derived metrics
+            df["Calculated Penetration Rate"] = df[advance_rate_col] / df[revolution_col]
+            df["Thrust Force per Cutting Ring"] = df[thrust_force_col] / num_cutting_rings
             # Then define features
             features = [
                 {"column": advance_rate_col, "display_name": "Advance Rate", "color": "blue"},
