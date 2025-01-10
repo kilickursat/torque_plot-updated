@@ -946,14 +946,15 @@ def format_timedelta(td):
 def advanced_page():
     st.title("Advanced Analysis")
 
-    # File uploaders for batch data
+    # File uploaders
     raw_data_file = st.file_uploader("Upload Raw Data (CSV or XLSX)", type=["csv", "xlsx"])
     machine_specs_file = st.file_uploader(
         "Upload Machine Specifications: XLSX (MM-Baureihenliste) or CSV format accepted",
         type=["xlsx", "csv"],
     )
 
-    # Load machine specs if available
+    # Load machine specs
+    # Load machine specs
     if machine_specs_file is not None:
         try:
             file_type = machine_specs_file.name.split(".")[-1].lower()
@@ -967,18 +968,14 @@ def advanced_page():
                 st.stop()
 
             machine_types = machine_specs["Projekt"].unique()
-            if len(machine_types) == 0:
-                st.error("No machine types found in the specifications file.")
-                st.stop()
-
             selected_machine = st.sidebar.selectbox("Select Machine Type", machine_types)
-
             machine_params = get_machine_params(machine_specs, selected_machine)
+            
             if not machine_params:
                 st.error("Machine parameters could not be retrieved.")
                 st.stop()
 
-            # Display machine parameters
+            # Display machine parameters table
             params_df = pd.DataFrame([machine_params])
             styled_table = params_df.style.set_table_styles([
                 {"selector": "th", "props": [("border", "2px solid black"), ("padding", "5px")]},
@@ -1032,18 +1029,18 @@ def advanced_page():
 
     # Sidebar for user inputs
 # Sidebar for user inputs
+    # Parameter inputs
+    # Sidebar for user inputs
     st.sidebar.header("Parameter Settings")
-    P_max = st.sidebar.number_input(
-        "Maximum power (kW)", value=132.0, min_value=1.0, max_value=500.0
-    )
-    nu = st.sidebar.number_input(
-        "Efficiency coefficient", value=0.7, min_value=0.1, max_value=1.0
-    )
-    anomaly_threshold = st.sidebar.number_input(
-        "Anomaly threshold (bar)", value=250, min_value=100, max_value=500
-    )
-    num_cutting_rings = st.sidebar.number_input(
-        "Number of Cutting Rings", value=1, min_value=1, max_value=100
+    P_max = st.sidebar.number_input("Maximum power (kW)", value=132.0, min_value=1.0, max_value=500.0)
+    nu = st.sidebar.number_input("Efficiency coefficient", value=0.7, min_value=0.1, max_value=1.0)
+    anomaly_threshold = st.sidebar.number_input("Anomaly threshold (bar)", value=250, min_value=100, max_value=500)
+    num_cutting_rings = st.sidebar.number_input("Number of Cutting Rings", value=1, min_value=1, max_value=100)
+    
+    window_size = st.sidebar.slider("Select Rolling Window Size", min_value=10, max_value=1000, value=100, step=10)
+    window_size_distance = st.sidebar.slider(
+        "Select Rolling Window Size for Mean Calculation (Distance)",
+        min_value=10, max_value=1000, value=100, step=10
     )
 
     if raw_data_file is not None:
@@ -1052,71 +1049,59 @@ def advanced_page():
         df = load_data(raw_data_file, file_type)
 
         if df is not None:
-            # Find sensor columns
             sensor_columns = find_sensor_columns(df)
 
-            # Allow user to select columns
-            st.subheader("Select Sensor Columns")
+            # Column selections
+            time_col = st.selectbox("Select Time Column", options=df.columns,
+                                  index=safe_get_loc(df.columns, sensor_columns.get('time', df.columns[0])))
             
-            # Time Column selection
-            time_col = st.selectbox(
-                "Select Time Column",
-                options=df.columns,
-                index=safe_get_loc(df.columns, sensor_columns.get('time', df.columns[0]))
-            )
+            time_column_type = st.selectbox("Select Time Column Type", options=['numeric', 'datetime'],
+                                          index=0, help="Choose how to interpret the time column")
             
-            time_column_type = st.selectbox(
-                "Select Time Column Type",
-                options=['numeric', 'datetime'],
-                index=0,
-                help="Choose how to interpret the time column"
-            )
-
-            pressure_col = st.selectbox(
-                "Select Pressure Column",
-                options=df.columns,
-                index=safe_get_loc(df.columns, sensor_columns.get('pressure', df.columns[0]))
-            )
+            pressure_col = st.selectbox("Select Pressure Column", options=df.columns,
+                                      index=safe_get_loc(df.columns, sensor_columns.get('pressure', df.columns[0])))
             
-            revolution_col = st.selectbox(
-                "Select Revolution Column",
-                options=df.columns,
-                index=safe_get_loc(df.columns, sensor_columns.get('revolution', df.columns[0]))
-            )
+            revolution_col = st.selectbox("Select Revolution Column", options=df.columns,
+                                        index=safe_get_loc(df.columns, sensor_columns.get('revolution', df.columns[0])))
+            
+            advance_rate_col = st.selectbox("Select Advance Rate Column", options=df.columns,
+                                          index=safe_get_loc(df.columns, sensor_columns.get('advance_rate', df.columns[0])))
+            
+            thrust_force_col = st.selectbox("Select Thrust Force Column", options=df.columns,
+                                          index=safe_get_loc(df.columns, sensor_columns.get('thrust_force', df.columns[0])))
+            
+            distance_col = st.selectbox("Select Distance/Chainage Column", options=df.columns,
+                                      index=safe_get_loc(df.columns, sensor_columns.get('distance', df.columns[0])))
 
-            advance_rate_col = st.selectbox(
-                "Select Advance Rate Column",
-                options=df.columns,
-                index=safe_get_loc(df.columns, sensor_columns.get('advance_rate', df.columns[0]))
-            )
+            # Convert columns to numeric
+            for col in [pressure_col, revolution_col, advance_rate_col, thrust_force_col, distance_col]:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
 
-            thrust_force_col = st.selectbox(
-                "Select Thrust Force Column",
-                options=df.columns,
-                index=safe_get_loc(df.columns, sensor_columns.get('thrust_force', df.columns[0]))
-            )
+            # Drop rows with NaNs in essential columns
+            df = df.dropna(subset=[pressure_col, revolution_col, advance_rate_col, thrust_force_col, distance_col])
 
-            # Mean
-            window_size = st.sidebar.slider(
-                "Select Rolling Window Size",
-                min_value=10,
-                max_value=1000,
-                value=100,
-                step=10
-            )
+            # Calculate derived metrics
+            df["Calculated Penetration Rate"] = df[advance_rate_col] / df[revolution_col]
+            df["Thrust Force per Cutting Ring"] = df[thrust_force_col] / num_cutting_rings
 
-            show_means = st.checkbox("Show Rolling Mean Values", value=True)
+            # Filter RPM
+            n2 = machine_params.get("n2", df[revolution_col].min())
+            n1 = machine_params.get("n1", df[revolution_col].max())
+            df = df[(df[revolution_col] > 0.1) & (df[revolution_col] <= n1)]
+
+            # Calculate torque
+            df["Calculated torque [kNm]"] = df.apply(lambda row: calculate_torque_wrapper(row), axis=1)
 
             # Time handling
             time_unit, time_display = handle_time_column(df, time_col, time_column_type)
             df["Time_unit"] = time_unit
             df["Time_display"] = time_display
             df = df.sort_values("Time_unit")
-            
-            # Calculate derived metrics
-            df["Calculated Penetration Rate"] = df[advance_rate_col] / df[revolution_col]
-            df["Thrust Force per Cutting Ring"] = df[thrust_force_col] / num_cutting_rings
-            # Then define features
+
+            show_means = st.checkbox("Show Rolling Mean Values", value=True)
+            show_means_distance = st.checkbox("Show Rolling Mean Values (Distance)", value=True)
+
+            # Define features for visualization after all calculations
             features = [
                 {"column": advance_rate_col, "display_name": "Advance Rate", "color": "blue"},
                 {"column": "Calculated Penetration Rate", "display_name": "Penetration Rate", "color": "green"},
@@ -1126,7 +1111,7 @@ def advanced_page():
                 {"column": pressure_col, "display_name": "Working Pressure", "color": "cyan"},
                 {"column": "Calculated torque [kNm]", "display_name": "Calculated Torque", "color": "magenta"}
             ]
-
+            
             if time_column_type == 'datetime':
                 time_unit_label = "Time"
             else:
@@ -1194,44 +1179,7 @@ def advanced_page():
                 margin=dict(l=100, r=50, t=100, b=50)
             )
 
-            # Sensor column selections
-            pressure_col = st.selectbox(
-                "Select Pressure Column",
-                options=df.columns,
-                index=safe_get_loc(df.columns, sensor_columns.get('pressure', df.columns[0]))
-            )
-            
-            revolution_col = st.selectbox(
-                "Select Revolution Column",
-                options=df.columns,
-                index=safe_get_loc(df.columns, sensor_columns.get('revolution', df.columns[0]))
-            )
-
-            advance_rate_col = st.selectbox(
-                "Select Advance Rate Column",
-                options=df.columns,
-                index=safe_get_loc(df.columns, sensor_columns.get('advance_rate', df.columns[0]))
-            )
-
-            thrust_force_col = st.selectbox(
-                "Select Thrust Force Column",
-                options=df.columns,
-                index=safe_get_loc(df.columns, sensor_columns.get('thrust_force', df.columns[0]))
-            )
-
-            distance_col = st.selectbox(
-                "Select Distance/Chainage Column",
-                options=df.columns,
-                index=safe_get_loc(df.columns, sensor_columns.get('distance', df.columns[0]))
-            )
-
-            # Ensure distance column is appropriately parsed
-# Ensure numeric columns are properly converted
-            for col in [pressure_col, revolution_col, advance_rate_col, thrust_force_col, distance_col]:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
-
-            # Handle missing values
-            df = df.dropna(subset=[pressure_col, revolution_col, advance_rate_col, thrust_force_col, distance_col])
+            st.plotly_chart(fig_time, use_container_width=True)
 
             # RPM Statistics and filtering
             rpm_stats = df[revolution_col].describe()
@@ -1244,38 +1192,6 @@ def advanced_page():
                 min_value=1.0,
                 max_value=float(rpm_max_value * 1.2)
             )
-
-            # Filter data points between n2 and n1 rpm
-            n2 = machine_params.get("n2", df[revolution_col].min())
-            n1 = machine_params.get("n1", df[revolution_col].max())
-            df = df[(df[revolution_col] > 0.1) & (df[revolution_col] <= n1)]
-
-            # Calculate derived metrics
-            df["Calculated Penetration Rate"] = df[advance_rate_col] / df[revolution_col]
-            df["Thrust Force per Cutting Ring"] = df[thrust_force_col] / num_cutting_rings
-
-            # Calculate torque
-            def calculate_torque_wrapper(row):
-                working_pressure = row[pressure_col]
-                current_speed = row[revolution_col]
-                
-                if current_speed < 0.1:
-                    return 0.0
-                    
-                max_allowed_torque = machine_params["M_max_Vg1"]
-                
-                if current_speed < machine_params["n1"]:
-                    torque = working_pressure * machine_params["torque_constant"]
-                else:
-                    torque = (machine_params["n1"] / current_speed) * machine_params["torque_constant"] * working_pressure
-                
-                return round(min(torque, max_allowed_torque), 2)
-
-            df["Calculated torque [kNm]"] = df.apply(calculate_torque_wrapper, axis=1)
-
-            # Calculate whiskers and outliers
-            torque_lower_whisker, torque_upper_whisker, torque_outliers = calculate_whisker_and_outliers_advanced(df["Calculated torque [kNm]"])
-            rpm_lower_whisker, rpm_upper_whisker, rpm_outliers = calculate_whisker_and_outliers_advanced(df[revolution_col])
 
             # Anomaly detection
             df["Is_Anomaly"] = df[pressure_col] >= anomaly_threshold
@@ -1292,7 +1208,6 @@ def advanced_page():
             elbow_rpm_cont = (P_max * 60 * nu) / (2 * np.pi * machine_params["M_cont_value"])
 
             # Generate RPM values for the torque curve
-# Generate RPM values for the torque curve
             rpm_curve = np.linspace(0.1, machine_params["n1"], 1000)  # Avoid division by zero
 
             fig = make_subplots(rows=1, cols=1)
@@ -1475,32 +1390,6 @@ def advanced_page():
             # Features visualization section starts here
             st.subheader("Features over Time")
 
-            # Define features for visualization
-            # Define the features with their display names and colors
-# Define features for visualization
-            features = [
-                {"column": advance_rate_col, "display_name": "Advance Rate", "color": "blue"},
-                {"column": "Calculated Penetration Rate", "display_name": "Penetration Rate", "color": "green"},
-                {"column": thrust_force_col, "display_name": "Thrust Force", "color": "red"},
-                {"column": "Thrust Force per Cutting Ring", "display_name": "Thrust Force per Cutting Ring", "color": "orange"},
-                {"column": revolution_col, "display_name": "Revolution", "color": "purple"},
-                {"column": pressure_col, "display_name": "Working Pressure", "color": "cyan"},
-                {"column": "Calculated torque [kNm]", "display_name": "Calculated Torque", "color": "magenta"}
-            ]
-
-            # Window size for rolling means
-            window_size = st.sidebar.slider(
-                "Select Rolling Window Size",
-                min_value=10,
-                max_value=1000,
-                value=100,
-                step=10,
-                help="Adjust the window size for smoothing the data"
-            )
-
-            # Toggle for showing means
-            show_means = st.checkbox("Show Rolling Mean Values", value=True)
-
             # Time-based visualization
             st.subheader("Features over Time")
             # Create time-based plot
@@ -1562,8 +1451,7 @@ def advanced_page():
             # Display the plot
             st.plotly_chart(fig_time, use_container_width=True)
 
-# --------------------- Features over Distance/Chainage Visualization ---------------------
-
+            # Features over Distance/Chainage Visualization
             st.subheader("Features over Distance/Chainage")
 
             # Define the features with their display names and colors
@@ -1576,9 +1464,6 @@ def advanced_page():
                 {"column": pressure_col, "display_name": "Working Pressure", "color": "cyan"},
                 {"column": "Calculated torque [kNm]", "display_name": "Calculated Torque [kNm]", "color": "magenta"},
             ]
-
-            # Define the number of features
-            num_features_distance = len(features_distance)
 
             # Rolling Window Slider for Distance
             window_size_distance = st.sidebar.slider(
@@ -1612,7 +1497,7 @@ def advanced_page():
 
             # Create subplots without titles
             fig_distance = make_subplots(
-                rows=2*num_features_distance,  # Two rows per feature
+                rows=2 * len(features_distance),  # Two rows per feature
                 cols=1,
                 shared_xaxes=True,
                 vertical_spacing=0.02,  # Reduced spacing for a cleaner look
@@ -1631,11 +1516,11 @@ def advanced_page():
                             name=feature["display_name"],
                             line=dict(color=feature["color"]),
                         ),
-                        row=2*i-1,
+                        row=2 * i - 1,
                         col=1,
                     )
                     # Update y-axis for original feature
-                    fig_distance.update_yaxes(title_text=feature["display_name"], row=2*i-1, col=1)
+                    fig_distance.update_yaxes(title_text=feature["display_name"], row=2 * i - 1, col=1)
 
                     # Rolling Mean Plot on even rows
                     if show_means_distance:
@@ -1647,18 +1532,18 @@ def advanced_page():
                                 name=f"{feature['display_name']} Rolling Mean",
                                 line=dict(color=feature["color"], dash="dash"),
                             ),
-                            row=2*i,
+                            row=2 * i,
                             col=1,
                         )
                         # Update y-axis for rolling mean
-                        fig_distance.update_yaxes(title_text=f"{feature['display_name']} Rolling Mean", row=2*i, col=1)
+                        fig_distance.update_yaxes(title_text=f"{feature['display_name']} Rolling Mean", row=2 * i, col=1)
                 else:
                     st.warning(f"Column '{feature['column']}' not found in the dataset.")
 
             # Update overall layout
             fig_distance.update_layout(
                 xaxis_title=f"Distance/Chainage",
-                height=300 * 2 * num_features_distance,  # 300 pixels per subplot row
+                height=300 * 2 * len(features_distance),  # 300 pixels per subplot row
                 showlegend=False,
                 title_text="Features over Distance/Chainage (Original and Rolling Mean)",  # Main plot title
             )
@@ -1701,9 +1586,12 @@ def advanced_page():
                 ),
                 unsafe_allow_html=True,
             )
-
     else:
         st.info("Please upload a Raw Data file to begin the analysis.")
+
+if __name__ == "__main__":
+    main()
+
 
 if __name__ == "__main__":
     main()
