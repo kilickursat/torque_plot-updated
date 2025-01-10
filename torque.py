@@ -1096,6 +1096,17 @@ def advanced_page():
                 index=safe_get_loc(df.columns, sensor_columns.get('thrust_force', df.columns[0]))
             )
 
+            # Mean
+            window_size = st.sidebar.slider(
+                "Select Rolling Window Size",
+                min_value=10,
+                max_value=1000,
+                value=100,
+                step=10
+            )
+
+            show_means = st.checkbox("Show Rolling Mean Values", value=True)
+
             # Time handling
             time_unit, time_display = handle_time_column(df, time_col, time_column_type)
             df["Time_unit"] = time_unit
