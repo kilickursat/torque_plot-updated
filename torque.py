@@ -1074,6 +1074,7 @@ def advanced_page():
 
             # Process time column
             # Time handling
+# Time handling
             time_unit, time_display = handle_time_column(df, time_col, time_column_type)
             df["Time_unit"] = time_unit
             df["Time_display"] = time_display
@@ -1081,16 +1082,73 @@ def advanced_page():
             # Sort by time unit
             df = df.sort_values("Time_unit")
 
-            # Update figure to use appropriate time display
+            # Set time label based on type
+            if time_column_type == 'datetime':
+                time_unit_label = "Time"
+            else:
+                time_unit_label = "Relative Time"
+
+            # Create the figure
+            fig_time = make_subplots(
+                rows=len(features),
+                cols=1,
+                shared_xaxes=True,
+                vertical_spacing=0.08,
+                subplot_titles=[f['display_name'] for f in features]
+            )
+
+            # Plot features
+            for i, feature in enumerate(features, 1):
+                fig_time.add_trace(
+                    go.Scatter(
+                        x=df["Time_display"],
+                        y=df[feature["column"]],
+                        mode="lines",
+                        name=feature["display_name"],
+                        line=dict(color=feature["color"]),
+                        showlegend=False
+                    ),
+                    row=i,
+                    col=1
+                )
+
+                if show_means:
+                    rolling_mean = df[feature["column"]].rolling(window=window_size, min_periods=1).mean()
+                    fig_time.add_trace(
+                        go.Scatter(
+                            x=df["Time_display"],
+                            y=rolling_mean,
+                            mode="lines",
+                            line=dict(color=feature["color"], dash="dash"),
+                            showlegend=False
+                        ),
+                        row=i,
+                        col=1
+                    )
+
+                fig_time.update_yaxes(
+                    title_text=feature["display_name"],
+                    title_standoff=25,
+                    row=i,
+                    col=1
+                )
+
+            # Update layout with time formatting
             if time_column_type == 'datetime':
                 fig_time.update_xaxes(
                     type='date',
                     tickformat='%Y-%m-%d %H:%M:%S',
                     tickangle=45
                 )
-                time_unit_label = "Time"
-            else:
-                time_unit_label = "Relative Time"
+
+            fig_time.update_layout(
+                height=350 * len(features),
+                showlegend=False,
+                title_text="Features over Time Analysis",
+                title_x=0.5,
+                xaxis_title=time_unit_label,
+                margin=dict(l=100, r=50, t=100, b=50)
+            )
 
             # Sensor column selections
             pressure_col = st.selectbox(
