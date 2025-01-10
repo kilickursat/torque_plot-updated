@@ -966,19 +966,11 @@ def advanced_page():
 
             # Display machine parameters
             params_df = pd.DataFrame([machine_params])
-            styled_table = params_df.style.set_table_styles(
-                [
-                    {
-                        "selector": "th",
-                        "props": [("border", "2px solid black"), ("padding", "5px")],
-                    },
-                    {
-                        "selector": "td",
-                        "props": [("border", "2px solid black"), ("padding", "5px")],
-                    },
-                    {"selector": "", "props": [("border-collapse", "collapse")]},
-                ]
-            ).to_html()
+            styled_table = params_df.style.set_table_styles([
+                {"selector": "th", "props": [("border", "2px solid black"), ("padding", "5px")]},
+                {"selector": "td", "props": [("border", "2px solid black"), ("padding", "5px")]},
+                {"selector": "", "props": [("border-collapse", "collapse")]}
+            ]).to_html()
 
             styled_table = styled_table.split("</style>")[-1]
 
@@ -1018,15 +1010,14 @@ def advanced_page():
                 unsafe_allow_html=True,
             )
         except Exception as e:
-            st.error(
-                f"An error occurred while processing the machine specifications: {str(e)}"
-            )
+            st.error(f"An error occurred while processing the machine specifications: {str(e)}")
             st.stop()
     else:
         st.warning("Please upload Machine Specifications file.")
         return
 
     # Sidebar for user inputs
+# Sidebar for user inputs
     st.sidebar.header("Parameter Settings")
     P_max = st.sidebar.number_input(
         "Maximum power (kW)", value=132.0, min_value=1.0, max_value=500.0
@@ -1050,330 +1041,134 @@ def advanced_page():
             # Find sensor columns
             sensor_columns = find_sensor_columns(df)
 
-            # Allow user to select columns if not found or adjust selections
+            # Allow user to select columns
             st.subheader("Select Sensor Columns")
             
-            # **Critical Correction: Ensure 'Time_unit' is assigned before sorting**
-            # Add a selectbox to let the user specify if the time column is numeric or datetime
-            time_column_type_user = st.selectbox(
-                "Select Time Column Type",
-                options=["Numeric", "Datetime"],
-                index=0,
-                help="Choose how to interpret the Time column."
-            )
-
-            # Time Column
-            if "time" in sensor_columns and sensor_columns["time"] in df.columns:
-                default_time_col = sensor_columns["time"]
-            else:
-                st.warning("Time column not found automatically. Please select it manually.")
-                default_time_col = df.columns[0]
+            # Time Column selection
             time_col = st.selectbox(
                 "Select Time Column",
                 options=df.columns,
-                index=safe_get_loc(df.columns, default_time_col)
+                index=safe_get_loc(df.columns, sensor_columns.get('time', df.columns[0]))
+            )
+            
+            time_column_type = st.selectbox(
+                "Select Time Column Type",
+                options=['numeric', 'datetime'],
+                index=0,
+                help="Choose how to interpret the time column"
             )
 
-            # Pressure Column
-            if "pressure" in sensor_columns and sensor_columns["pressure"] in df.columns:
-                default_pressure_col = sensor_columns["pressure"]
+            # Process time column
+            df["Time_unit"] = handle_time_column(df, time_col, time_column_type)
+            df = df.sort_values("Time_unit")
+
+            # Add time display formatting
+            if time_column_type == 'datetime':
+                df["Time_display"] = df["Time_unit"] / 3600
+                time_unit_label = "Time (hours)"
             else:
-                st.warning("Pressure column not found automatically. Please select it manually.")
-                default_pressure_col = df.columns[0]
+                df["Time_display"] = df["Time_unit"]
+                time_unit_label = "Time (normalized)"
+
+            # Sensor column selections
             pressure_col = st.selectbox(
                 "Select Pressure Column",
                 options=df.columns,
-                index=safe_get_loc(df.columns, default_pressure_col)
+                index=safe_get_loc(df.columns, sensor_columns.get('pressure', df.columns[0]))
             )
-
-            # Revolution Column
-            if "revolution" in sensor_columns and sensor_columns["revolution"] in df.columns:
-                default_revolution_col = sensor_columns["revolution"]
-            else:
-                st.warning("Revolution column not found automatically. Please select it manually.")
-                default_revolution_col = df.columns[0]
+            
             revolution_col = st.selectbox(
                 "Select Revolution Column",
                 options=df.columns,
-                index=safe_get_loc(df.columns, default_revolution_col)
+                index=safe_get_loc(df.columns, sensor_columns.get('revolution', df.columns[0]))
             )
 
-
-            # Advance Rate Column
-            if "advance_rate" in sensor_columns and sensor_columns["advance_rate"] in df.columns:
-                default_advance_rate_col = sensor_columns["advance_rate"]
-            else:
-                st.warning("Advance rate column not found automatically. Please select it manually.")
-                default_advance_rate_col = df.columns[0]
             advance_rate_col = st.selectbox(
                 "Select Advance Rate Column",
                 options=df.columns,
-                index=safe_get_loc(df.columns, default_advance_rate_col)
+                index=safe_get_loc(df.columns, sensor_columns.get('advance_rate', df.columns[0]))
             )
 
-            # Thrust Force Column
-            if "thrust_force" in sensor_columns and sensor_columns["thrust_force"] in df.columns:
-                default_thrust_force_col = sensor_columns["thrust_force"]
-            else:
-                st.warning("Thrust force column not found automatically. Please select it manually.")
-                default_thrust_force_col = df.columns[0]
             thrust_force_col = st.selectbox(
                 "Select Thrust Force Column",
                 options=df.columns,
-                index=safe_get_loc(df.columns, default_thrust_force_col)
+                index=safe_get_loc(df.columns, sensor_columns.get('thrust_force', df.columns[0]))
             )
 
-            # Distance/Chainage Column
-            if "distance" in sensor_columns and sensor_columns["distance"] in df.columns:
-                default_distance_col = sensor_columns["distance"]
-            else:
-                # Attempt to guess a distance-related column or default to the last column
-                st.warning("Distance/Chainage column not found automatically. Please select it manually.")
-                default_distance_col = df.columns[0]
             distance_col = st.selectbox(
                 "Select Distance/Chainage Column",
                 options=df.columns,
-                index=safe_get_loc(df.columns, default_distance_col)
+                index=safe_get_loc(df.columns, sensor_columns.get('distance', df.columns[0]))
             )
 
             # Ensure distance column is appropriately parsed
-            df[distance_col] = pd.to_numeric(df[distance_col], errors="coerce")
-            if df[distance_col].isnull().all():
-                st.error(
-                    f"The selected distance/chainage column '{distance_col}' cannot be converted to numeric values."
-                )
-                return
+# Ensure numeric columns are properly converted
+            for col in [pressure_col, revolution_col, advance_rate_col, thrust_force_col, distance_col]:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
 
             # Handle missing values
-            missing_distance = df[distance_col].isnull().sum()
-            if missing_distance > 0:
-                st.warning(f"There are {missing_distance} missing values in the distance/chainage column. These rows will be dropped.")
-                df = df.dropna(subset=[distance_col])
+            df = df.dropna(subset=[pressure_col, revolution_col, advance_rate_col, thrust_force_col, distance_col])
 
-            # Display the maximum value in the distance/chainage column for debugging
-            max_distance_value = df[distance_col].max()
-            st.write(f"**Maximum value in the distance/chainage column (`{distance_col}`):** {max_distance_value}")
-
-            # **Modified Time Column Handling: Always Treat as Numeric or Datetime Based on User Selection**
-            if time_column_type_user == "Numeric":
-                df[time_col] = pd.to_numeric(df[time_col], errors='coerce')
-                if df[time_col].isnull().all():
-                    st.error(
-                        f"The selected time column '{time_col}' cannot be converted to numeric values."
-                    )
-                    return
-                time_column_type = 'numeric'
-
-                # Assign Time_unit for plotting
-                df["Time_unit"] = df[time_col]
-
-                # Sort the dataframe by Time_unit
-                df = df.sort_values("Time_unit")
-
-                # Calculate min and max time
-                min_time_unit = df["Time_unit"].min()
-                max_time_unit = df["Time_unit"].max()
-
-                # Display the time range in numeric format
-                st.write(f"**Data time range:** {min_time_unit:.2f} to {max_time_unit:.2f} units")
-
-                # Create the time range slider
-                time_range = st.slider(
-                    "Select Time Range",
-                    min_value=float(min_time_unit),
-                    max_value=float(max_time_unit),
-                    value=(float(min_time_unit), float(max_time_unit)),
-                    format="%.2f",
-                )
-
-                # Filter data based on the selected time range
-                df = df[(df["Time_unit"] >= time_range[0]) & (df["Time_unit"] <= time_range[1])]
-
-            else:
-                # Treat as datetime
-                try:
-                    df[time_col] = pd.to_datetime(df[time_col], errors='coerce')
-                    if df[time_col].isnull().all():
-                        raise ValueError("All values in the time column are NaT after parsing.")
-                    time_column_type = 'datetime'
-                except Exception as e:
-                    # Try to convert to numeric
-                    df[time_col] = pd.to_numeric(df[time_col], errors="coerce")
-                    if df[time_col].isnull().all():
-                        st.error(
-                            f"The selected time column '{time_col}' cannot be converted to numeric or datetime values."
-                        )
-                        return
-                    else:
-                        time_column_type = 'numeric'
-
-                if time_column_type == 'datetime':
-                    # Assign Time_unit for plotting
-                    df["Time_unit"] = df[time_col]
-
-                    # Sort the dataframe by Time_unit
-                    df = df.sort_values("Time_unit")
-
-                    # Calculate min and max time
-                    min_time_unit = df["Time_unit"].min().to_pydatetime()
-                    max_time_unit = df["Time_unit"].max().to_pydatetime()
-
-                    # Display the time range
-                    st.write(f"**Data time range:** {min_time_unit} to {max_time_unit}")
-
-                    # Define a reasonable step for the slider (e.g., one second)
-                    time_step = timedelta(seconds=1)
-
-                    # Create the time range slider
-                    time_range = st.slider(
-                        "Select Time Range",
-                        min_value=min_time_unit,
-                        max_value=max_time_unit,
-                        value=(min_time_unit, max_time_unit),
-                        format="YYYY-MM-DD HH:mm:ss",
-                        step=time_step,
-                    )
-
-                    # Filter data based on the selected time range
-                    df = df[(df["Time_unit"] >= time_range[0]) & (df["Time_unit"] <= time_range[1])]
-
-                elif time_column_type == 'numeric':
-                    # Assign Time_unit for plotting
-                    df["Time_unit"] = df[time_col]
-
-                    # Sort the dataframe by Time_unit
-                    df = df.sort_values("Time_unit")
-
-                    # Calculate min and max time
-                    min_time_unit = df["Time_unit"].min()
-                    max_time_unit = df["Time_unit"].max()
-
-                    # Display the time range in numeric format
-                    st.write(f"**Data time range:** {min_time_unit:.2f} to {max_time_unit:.2f} units")
-
-                    # Create the time range slider
-                    time_range = st.slider(
-                        "Select Time Range",
-                        min_value=float(min_time_unit),
-                        max_value=float(max_time_unit),
-                        value=(float(min_time_unit), float(max_time_unit)),
-                        format="%.2f",
-                    )
-
-                    # Filter data based on the selected time range
-                    df = df[(df["Time_unit"] >= time_range[0]) & (df["Time_unit"] <= time_range[1])]
-
-            # Ensure numeric columns are numeric
-            for col in [
-                pressure_col,
-                revolution_col,
-                advance_rate_col,
-                thrust_force_col,
-            ]:
-                df[col] = pd.to_numeric(df[col], errors="coerce")
-
-            # Drop rows with NaNs in these columns
-            df = df.dropna(
-                subset=[pressure_col, revolution_col, advance_rate_col, thrust_force_col]
-            )
-
-            # Add these two new lines here
-            df["Time_unit"] = handle_time_column(df, time_col)
-            x_axis_max = update_plot_parameters(df, revolution_col)
-
-            # Remove rows where revolution is zero to avoid division by zero
-            df = df[df[revolution_col] != 0]
-
-            # Calculate Penetration Rate as Advance Rate divided by Revolution
-            df["Calculated Penetration Rate"] = (
-                df[advance_rate_col] / df[revolution_col]
-            )
-
-            # Calculate Thrust Force per Cutting Ring
-            df["Thrust Force per Cutting Ring"] = df[thrust_force_col] / num_cutting_rings
-
-            # RPM Statistics
+            # RPM Statistics and filtering
             rpm_stats = df[revolution_col].describe()
             rpm_max_value = rpm_stats["max"]
-            st.sidebar.write(
-                f"Recommended value for x-axis based on the Max RPM in Data: {rpm_max_value:.2f}"
-            )
+            st.sidebar.write(f"Recommended value for x-axis based on the Max RPM in Data: {rpm_max_value:.2f}")
 
-            # Allow user to set x_axis_max
             x_axis_max = st.sidebar.number_input(
                 "X-axis maximum",
                 value=float(rpm_max_value),
                 min_value=1.0,
-                max_value=float(rpm_max_value * 1.2),
+                max_value=float(rpm_max_value * 1.2)
             )
 
             # Filter data points between n2 and n1 rpm
             n2 = machine_params.get("n2", df[revolution_col].min())
             n1 = machine_params.get("n1", df[revolution_col].max())
-            df = df[
-                (df[revolution_col] > 0.1)  # Only filters out near-zero values
-                & (df[revolution_col] <= n1)  # Keeps machine's max RPM limit
-            ]
+            df = df[(df[revolution_col] > 0.1) & (df[revolution_col] <= n1)]
+
+            # Calculate derived metrics
+            df["Calculated Penetration Rate"] = df[advance_rate_col] / df[revolution_col]
+            df["Thrust Force per Cutting Ring"] = df[thrust_force_col] / num_cutting_rings
 
             # Calculate torque
             def calculate_torque_wrapper(row):
                 working_pressure = row[pressure_col]
                 current_speed = row[revolution_col]
                 
-                # Safety check for minimum RPM
-                if current_speed < 0.1:  # Minimum threshold
+                if current_speed < 0.1:
                     return 0.0
                     
-                # Safety check for maximum torque
                 max_allowed_torque = machine_params["M_max_Vg1"]
                 
                 if current_speed < machine_params["n1"]:
                     torque = working_pressure * machine_params["torque_constant"]
                 else:
-                    torque = (
-                        (machine_params["n1"] / current_speed)
-                        * machine_params["torque_constant"]
-                        * working_pressure
-                    )
+                    torque = (machine_params["n1"] / current_speed) * machine_params["torque_constant"] * working_pressure
                 
-                # Limit the torque to the maximum allowed value
-                torque = min(torque, max_allowed_torque)
-                
-                return round(torque, 2)
+                return round(min(torque, max_allowed_torque), 2)
 
-            df["Calculated torque [kNm]"] = df.apply(
-                calculate_torque_wrapper, axis=1
-            )
+            df["Calculated torque [kNm]"] = df.apply(calculate_torque_wrapper, axis=1)
 
-            # Calculate whiskers and outliers using 10th and 90th percentiles
-            (
-                torque_lower_whisker,
-                torque_upper_whisker,
-                torque_outliers,
-            ) = calculate_whisker_and_outliers_advanced(df["Calculated torque [kNm]"])
-            (
-                rpm_lower_whisker,
-                rpm_upper_whisker,
-                rpm_outliers,
-            ) = calculate_whisker_and_outliers_advanced(df[revolution_col])
+            # Calculate whiskers and outliers
+            torque_lower_whisker, torque_upper_whisker, torque_outliers = calculate_whisker_and_outliers_advanced(df["Calculated torque [kNm]"])
+            rpm_lower_whisker, rpm_upper_whisker, rpm_outliers = calculate_whisker_and_outliers_advanced(df[revolution_col])
 
-            # Anomaly detection based on working pressure
+            # Anomaly detection
             df["Is_Anomaly"] = df[pressure_col] >= anomaly_threshold
 
             # Function to calculate M max Vg2
             def M_max_Vg2(rpm):
                 return np.minimum(
                     machine_params["M_max_Vg1"],
-                    (P_max * 60 * nu) / (2 * np.pi * rpm),
+                    (P_max * 60 * nu) / (2 * np.pi * rpm)
                 )
 
-            # Calculate the elbow points for the max and continuous torque
+            # Calculate elbow points
             elbow_rpm_max = (P_max * 60 * nu) / (2 * np.pi * machine_params["M_max_Vg1"])
-            elbow_rpm_cont = (
-                P_max * 60 * nu
-            ) / (2 * np.pi * machine_params["M_cont_value"])
+            elbow_rpm_cont = (P_max * 60 * nu) / (2 * np.pi * machine_params["M_cont_value"])
 
             # Generate RPM values for the torque curve
+# Generate RPM values for the torque curve
             rpm_curve = np.linspace(0.1, machine_params["n1"], 1000)  # Avoid division by zero
 
             fig = make_subplots(rows=1, cols=1)
@@ -1411,13 +1206,7 @@ def advanced_page():
 
             # Calculate the y-values for the vertical lines
             y_max_vg2 = M_max_Vg2(
-                np.array(
-                    [
-                        elbow_rpm_max,
-                        elbow_rpm_cont,
-                        machine_params["n1"],
-                    ]
-                )
+                np.array([elbow_rpm_max, elbow_rpm_cont, machine_params["n1"]])
             )
 
             # Add truncated vertical lines at elbow points
@@ -1522,12 +1311,7 @@ def advanced_page():
                 xaxis_title="Revolution [1/min]",
                 yaxis_title="Torque [kNm]",
                 xaxis=dict(range=[0, x_axis_max]),
-                yaxis=dict(
-                    range=[
-                        0,
-                        max(60, df["Calculated torque [kNm]"].max() * 1.1),
-                    ]
-                ),
+                yaxis=dict(range=[0, max(60, df["Calculated torque [kNm]"].max() * 1.1)]),
                 legend=dict(
                     orientation="h",
                     yanchor="bottom",
@@ -1564,10 +1348,12 @@ def advanced_page():
             st.write("**Thrust Force per Cutting Ring Statistics:**")
             st.write(df["Thrust Force per Cutting Ring"].describe())
 
-            # Plot features over Time as separate subplots
+            # Features visualization section starts here
             st.subheader("Features over Time")
 
+            # Define features for visualization
             # Define the features with their display names and colors
+# Define features for visualization
             features = [
                 {"column": advance_rate_col, "display_name": "Advance Rate", "color": "blue"},
                 {"column": "Calculated Penetration Rate", "display_name": "Penetration Rate", "color": "green"},
@@ -1575,81 +1361,85 @@ def advanced_page():
                 {"column": "Thrust Force per Cutting Ring", "display_name": "Thrust Force per Cutting Ring", "color": "orange"},
                 {"column": revolution_col, "display_name": "Revolution", "color": "purple"},
                 {"column": pressure_col, "display_name": "Working Pressure", "color": "cyan"},
+                {"column": "Calculated torque [kNm]", "display_name": "Calculated Torque", "color": "magenta"}
             ]
 
-            num_features = len(features)
-
-            # Optional: Allow users to set rolling window size
+            # Window size for rolling means
             window_size = st.sidebar.slider(
-                "Select Rolling Window Size for Mean Calculation",
+                "Select Rolling Window Size",
                 min_value=10,
                 max_value=1000,
                 value=100,
                 step=10,
-                help="Adjust the window size to smooth the data. A larger window provides a smoother mean."
+                help="Adjust the window size for smoothing the data"
             )
 
-            # Optional: Allow users to toggle mean lines
-            show_means = st.checkbox("Show Mean Values", value=True, help="Toggle the visibility of mean lines.")
+            # Toggle for showing means
+            show_means = st.checkbox("Show Rolling Mean Values", value=True)
 
-            # Calculate rolling means for each feature
-            for feature in features:
-                df[f"{feature['column']}_mean"] = df[feature['column']].rolling(window=window_size, min_periods=1).mean()
-
-            # Create subplots with 2 rows per feature: one for original data, one for mean
+            # Time-based visualization
+            st.subheader("Features over Time")
             fig_time = make_subplots(
-                rows=2*num_features,  # Two rows per feature
+                rows=len(features),
                 cols=1,
                 shared_xaxes=True,
-                vertical_spacing=0.02,  # Reduced spacing for a cleaner look
-                subplot_titles=None  # No subplot titles
+                vertical_spacing=0.02,
+                subplot_titles=[f['display_name'] for f in features]
             )
 
-            # Iterate through each feature and add traces
-            for i, feature in enumerate(features, start=1):
-                # Original Feature Plot on odd rows
+            # Plot each feature
+            for i, feature in enumerate(features, 1):
+                # Original data trace
                 fig_time.add_trace(
                     go.Scatter(
-                        x=df["Time_unit"],
+                        x=df["Time_display"],
                         y=df[feature["column"]],
                         mode="lines",
                         name=feature["display_name"],
-                        line=dict(color=feature["color"]),
+                        line=dict(color=feature["color"])
                     ),
-                    row=2*i-1,
-                    col=1,
+                    row=i,
+                    col=1
                 )
-                # Update y-axis for original feature
-                fig_time.update_yaxes(title_text=feature["display_name"], row=2*i-1, col=1)
 
-                # Rolling Mean Plot on even rows
+                # Rolling mean trace
                 if show_means:
+                    rolling_mean = df[feature["column"]].rolling(
+                        window=window_size,
+                        min_periods=1
+                    ).mean()
+                    
                     fig_time.add_trace(
                         go.Scatter(
-                            x=df["Time_unit"],
-                            y=df[f"{feature['column']}_mean"],
+                            x=df["Time_display"],
+                            y=rolling_mean,
                             mode="lines",
                             name=f"{feature['display_name']} Mean",
-                            line=dict(color=feature["color"], dash="dash"),
+                            line=dict(color=feature["color"], dash="dash")
                         ),
-                        row=2*i,
-                        col=1,
+                        row=i,
+                        col=1
                     )
-                    # Update y-axis for rolling mean
-                    fig_time.update_yaxes(title_text=f"{feature['display_name']} - Rolling Mean", row=2*i, col=1)
 
-            # Update overall layout
+                # Update y-axis titles
+                fig_time.update_yaxes(
+                    title_text=feature["display_name"],
+                    row=i,
+                    col=1
+                )
+
+            # Update layout
             fig_time.update_layout(
-                xaxis_title=f"Time",
-                height=300 * 2 * num_features,  # 300 pixels per subplot row
-                showlegend=False,
-                title_text="Features over Time (Original and Rolling Mean)",  # Main plot title
+                height=300 * len(features),
+                showlegend=True,
+                title_text="Features over Time Analysis",
+                xaxis_title=time_unit_label
             )
 
             # Display the plot
             st.plotly_chart(fig_time, use_container_width=True)
 
-            # --------------------- Features over Distance/Chainage Visualization ---------------------
+# --------------------- Features over Distance/Chainage Visualization ---------------------
 
             st.subheader("Features over Distance/Chainage")
 
