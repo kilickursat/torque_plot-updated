@@ -1389,17 +1389,17 @@ def advanced_page():
 
             # Time-based visualization
             st.subheader("Features over Time")
+            # Create time-based plot
             fig_time = make_subplots(
                 rows=len(features),
                 cols=1,
                 shared_xaxes=True,
-                vertical_spacing=0.02,
+                vertical_spacing=0.08,  # Increased spacing between subplots
                 subplot_titles=[f['display_name'] for f in features]
             )
 
-            # Plot each feature
             for i, feature in enumerate(features, 1):
-                # Original data trace
+                # Original data
                 fig_time.add_trace(
                     go.Scatter(
                         x=df["Time_display"],
@@ -1412,13 +1412,9 @@ def advanced_page():
                     col=1
                 )
 
-                # Rolling mean trace
+                # Rolling mean
                 if show_means:
-                    rolling_mean = df[feature["column"]].rolling(
-                        window=window_size,
-                        min_periods=1
-                    ).mean()
-                    
+                    rolling_mean = df[feature["column"]].rolling(window=window_size, min_periods=1).mean()
                     fig_time.add_trace(
                         go.Scatter(
                             x=df["Time_display"],
@@ -1431,19 +1427,28 @@ def advanced_page():
                         col=1
                     )
 
-                # Update y-axis titles
+                # Update y-axis titles with more padding
                 fig_time.update_yaxes(
                     title_text=feature["display_name"],
+                    title_standoff=25,  # Increased standoff for y-axis titles
                     row=i,
                     col=1
                 )
 
-            # Update layout
+            # Update layout with adjusted dimensions and margins
             fig_time.update_layout(
-                height=300 * len(features),
+                height=350 * len(features),  # Increased height per subplot
                 showlegend=True,
                 title_text="Features over Time Analysis",
-                xaxis_title=time_unit_label
+                title_x=0.5,  # Center the title
+                xaxis_title=time_unit_label,
+                margin=dict(l=100, r=50, t=100, b=50),  # Increased left margin for labels
+                legend=dict(
+                    yanchor="top",
+                    y=1.02,
+                    xanchor="right",
+                    x=1
+                )
             )
 
             # Display the plot
