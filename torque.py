@@ -296,16 +296,26 @@ def find_sensor_columns(df):
                     
     return found_columns
     
-def handle_time_column(df, time_col):
+def handle_time_column(df, time_col, time_column_type='numeric'):
     try:
-        if time_col == 'ts(utc)':
-            return pd.to_datetime(df[time_col]).astype(np.int64) // 10**9
-        elif time_col in ['Relativzeit', 'Datum', 'Uhrzeit']:
-            return pd.to_numeric(df[time_col], errors='coerce').fillna(0).astype('int64')
-        else:
-            return pd.Series(range(len(df)), dtype='int64')
+        if time_column_type == 'numeric':
+            time_values = pd.to_numeric(df[time_col], errors='coerce')
+            if time_values.isnull().all():
+                st.error(f"Could not convert {time_col} to numeric values")
+                return pd.Series(range(len(df)), dtype='int64')
+            normalized_time = time_values - time_values.min()
+            return normalized_time
+            
+        elif time_column_type == 'datetime':
+            time_values = pd.to_datetime(df[time_col], errors='coerce')
+            if time_values.isnull().all():
+                st.error(f"Could not convert {time_col} to datetime values")
+                return pd.Series(range(len(df)), dtype='int64')
+            normalized_time = (time_values - time_values.min()).dt.total_seconds()
+            return normalized_time
+            
     except Exception as e:
-        st.error(f"Time column processing error: {str(e)}")
+        st.error(f"Error processing time column: {str(e)}")
         return pd.Series(range(len(df)), dtype='int64')
 
 def update_plot_parameters(df, revolution_col):
