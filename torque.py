@@ -1072,15 +1072,37 @@ def advanced_page():
                 help="Choose how to interpret the time column"
             )
 
-            # Process time column
+            pressure_col = st.selectbox(
+                "Select Pressure Column",
+                options=df.columns,
+                index=safe_get_loc(df.columns, sensor_columns.get('pressure', df.columns[0]))
+            )
+            
+            revolution_col = st.selectbox(
+                "Select Revolution Column",
+                options=df.columns,
+                index=safe_get_loc(df.columns, sensor_columns.get('revolution', df.columns[0]))
+            )
+
+            advance_rate_col = st.selectbox(
+                "Select Advance Rate Column",
+                options=df.columns,
+                index=safe_get_loc(df.columns, sensor_columns.get('advance_rate', df.columns[0]))
+            )
+
+            thrust_force_col = st.selectbox(
+                "Select Thrust Force Column",
+                options=df.columns,
+                index=safe_get_loc(df.columns, sensor_columns.get('thrust_force', df.columns[0]))
+            )
+
             # Time handling
-# Time handling
             time_unit, time_display = handle_time_column(df, time_col, time_column_type)
             df["Time_unit"] = time_unit
             df["Time_display"] = time_display
             df = df.sort_values("Time_unit")
 
-            # Define features first
+            # Then define features
             features = [
                 {"column": advance_rate_col, "display_name": "Advance Rate", "color": "blue"},
                 {"column": "Calculated Penetration Rate", "display_name": "Penetration Rate", "color": "green"},
