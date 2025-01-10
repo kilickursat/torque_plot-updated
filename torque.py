@@ -86,133 +86,111 @@ def convert_to_arrow_compatible(df):
 import warnings
 warnings.filterwarnings("ignore", message="Discarding nonzero nanoseconds in conversion")
 
-# def load_data(file, file_type):
-#     try:
-#         raw_content = file.read()
-#         encoding = chardet.detect(raw_content)['encoding'] or 'utf-8'
-#         content_str = raw_content.decode(encoding)
+def load_data(file, file_type):
+    try:
+        raw_content = file.read()
+        encoding = chardet.detect(raw_content)['encoding'] or 'utf-8'
+        content_str = raw_content.decode(encoding)
         
-#         # Detect if this is data 21 format by checking first line
-#         is_data21_format = 'ts(utc)' in content_str.split('\n')[0]
+        # Detect if this is data 21 format by checking first line
+        is_data21_format = 'ts(utc)' in content_str.split('\n')[0]
         
-#         if file_type == 'csv':
-#             delimiter = ';' if ';' in content_str.split('\n')[0] else ','
+        if file_type == 'csv':
+            delimiter = ';' if ';' in content_str.split('\n')[0] else ','
             
-#             # Special handling for data 21 format
-#             if is_data21_format:
-#                 cleaned_lines = []
-#                 header = True
-#                 for line in content_str.split('\n'):
-#                     if line.strip():
-#                         if header:
-#                             cleaned_lines.append(line)
-#                             header = False
-#                         else:
-#                             parts = line.split(delimiter)
-#                             if len(parts) > 1:
-#                                 # Keep timestamp as is, convert other values
-#                                 cleaned_parts = [parts[0]] + [p.replace(',', '.') for p in parts[1:]]
-#                                 cleaned_lines.append(delimiter.join(cleaned_parts))
+            # Special handling for data 21 format
+            if is_data21_format:
+                cleaned_lines = []
+                header = True
+                for line in content_str.split('\n'):
+                    if line.strip():
+                        if header:
+                            cleaned_lines.append(line)
+                            header = False
+                        else:
+                            parts = line.split(delimiter)
+                            if len(parts) > 1:
+                                # Keep timestamp as is, convert other values
+                                cleaned_parts = [parts[0]] + [p.replace(',', '.') for p in parts[1:]]
+                                cleaned_lines.append(delimiter.join(cleaned_parts))
                 
-#                 df = pd.read_csv(
-#                     StringIO('\n'.join(cleaned_lines)),
-#                     sep=delimiter,
-#                     dtype={'ts(utc)': str},
-#                     decimal='.',
-#                     thousands=None,
-#                     na_values=['NA', 'N/A', '', 'nan', 'NaN', 'null', 'NULL'],
-#                     skipinitialspace=True
-#                 )
+                df = pd.read_csv(
+                    StringIO('\n'.join(cleaned_lines)),
+                    sep=delimiter,
+                    dtype={'ts(utc)': str},
+                    decimal='.',
+                    thousands=None,
+                    na_values=['NA', 'N/A', '', 'nan', 'NaN', 'null', 'NULL'],
+                    skipinitialspace=True
+                )
                 
-#                 # Convert UTC timestamp
-#                 if 'ts(utc)' in df.columns:
-#                     df['ts(utc)'] = pd.to_datetime(df['ts(utc)']).dt.floor('s')
-#                     df['ts(utc)'] = (df['ts(utc)'].astype('int64') // 10**9).astype('int64')
+                # Convert UTC timestamp
+                if 'ts(utc)' in df.columns:
+                    df['ts(utc)'] = pd.to_datetime(df['ts(utc)']).dt.floor('s')
+                    df['ts(utc)'] = (df['ts(utc)'].astype('int64') // 10**9).astype('int64')
             
-#             else:
-#                 # Original format handling
-#                 df = pd.read_csv(
-#                     StringIO(content_str),
-#                     sep=delimiter,
-#                     decimal=',',
-#                     thousands=None,
-#                     na_values=['NA', 'N/A', '', 'nan', 'NaN', 'null', 'NULL'],
-#                     skipinitialspace=True
-#                 )
+            else:
+                # Original format handling
+                df = pd.read_csv(
+                    StringIO(content_str),
+                    sep=delimiter,
+                    decimal=',',
+                    thousands=None,
+                    na_values=['NA', 'N/A', '', 'nan', 'NaN', 'null', 'NULL'],
+                    skipinitialspace=True
+                )
                 
-#                 # Handle date and time if present
-#                 if all(col in df.columns for col in ['Datum', 'Uhrzeit']):
-#                     df['timestamp'] = pd.to_datetime(
-#                         df['Datum'] + ' ' + df['Uhrzeit'],
-#                         format='%d.%m.%Y %H:%M:%S',
-#                         errors='coerce'
-#                     )
+                # Handle date and time if present
+                if all(col in df.columns for col in ['Datum', 'Uhrzeit']):
+                    df['timestamp'] = pd.to_datetime(
+                        df['Datum'] + ' ' + df['Uhrzeit'],
+                        format='%d.%m.%Y %H:%M:%S',
+                        errors='coerce'
+                    )
             
-#             # Convert numeric columns
-#             numeric_cols = df.columns.difference(['ts(utc)', 'Datum', 'Uhrzeit', 'timestamp'])
-#             for col in numeric_cols:
-#                 try:
-#                     df[col] = pd.to_numeric(df[col], errors='coerce')
-#                 except (ValueError, TypeError):
-#                     continue
+            # Convert numeric columns
+            numeric_cols = df.columns.difference(['ts(utc)', 'Datum', 'Uhrzeit', 'timestamp'])
+            for col in numeric_cols:
+                try:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+                except (ValueError, TypeError):
+                    continue
             
-#             df.columns = df.columns.str.strip()
-#             df = df.dropna(how='all')
+            df.columns = df.columns.str.strip()
+            df = df.dropna(how='all')
 
-#         elif file_type == 'xlsx':
-#             file.seek(0)
-#             df = pd.read_excel(
-#                 file,
-#                 engine='openpyxl',
-#                 na_values=['NA', 'N/A', '', 'nan', 'NaN', 'null', 'NULL']
-#             )
+        elif file_type == 'xlsx':
+            file.seek(0)
+            df = pd.read_excel(
+                file,
+                engine='openpyxl',
+                na_values=['NA', 'N/A', '', 'nan', 'NaN', 'null', 'NULL']
+            )
 
-#             if 'ts(utc)' in df.columns:
-#                 df['ts(utc)'] = pd.to_datetime(df['ts(utc)']).dt.floor('s')
-#                 df['ts(utc)'] = (df['ts(utc)'].astype('int64') // 10**9).astype('int64')
+            if 'ts(utc)' in df.columns:
+                df['ts(utc)'] = pd.to_datetime(df['ts(utc)']).dt.floor('s')
+                df['ts(utc)'] = (df['ts(utc)'].astype('int64') // 10**9).astype('int64')
 
-#             numeric_cols = df.columns.difference(['ts(utc)'])
-#             for col in numeric_cols:
-#                 try:
-#                     df[col] = pd.to_numeric(df[col], errors='coerce')
-#                 except (ValueError, TypeError):
-#                     continue
+            numeric_cols = df.columns.difference(['ts(utc)'])
+            for col in numeric_cols:
+                try:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+                except (ValueError, TypeError):
+                    continue
 
-#             df.columns = df.columns.str.strip()
-#             df = df.dropna(how='all')
+            df.columns = df.columns.str.strip()
+            df = df.dropna(how='all')
 
-#         if df.empty:
-#             raise ValueError("DataFrame is empty after processing")
+        if df.empty:
+            raise ValueError("DataFrame is empty after processing")
             
-#         file.seek(0)
-#         return df
+        file.seek(0)
+        return df
 
-#     except Exception as e:
-#         st.error(f"Error loading file: {str(e)}")
-#         return None
+    except Exception as e:
+        st.error(f"Error loading file: {str(e)}")
+        return None
 
-def load_data(file, na_option, dtype_dict, encoding='utf-8', sep=';', on_bad_lines='skip'):
-   try:
-       if file.type == 'text/csv':
-           df = pd.read_csv(file, sep=sep, parse_dates=['ts(utc)'], dtype=dtype_dict, encoding=encoding, 
-                          on_bad_lines=on_bad_lines, skipinitialspace=True, quoting=csv.QUOTE_ALL)
-       elif file.type in ['application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']:
-           df = pd.read_excel(file, parse_dates=['ts(utc)'], dtype=dtype_dict, engine='openpyxl')
-       else:
-           st.error("Unsupported file type. Please upload a CSV or Excel file.")
-           return None
-       
-       df.rename(columns={'ts(utc)': 'Timestamp'}, inplace=True)
-       
-       if na_option == 'Fill with Zero':
-           df.fillna(0, inplace=True)
-       elif na_option == 'Drop rows':
-           df.dropna(inplace=True)
-       
-       return df
-   except Exception as e:
-       st.error(f"Error loading data: {e}")
-       return None
 
 sensor_column_map = {
     "pressure": [
@@ -1067,7 +1045,7 @@ def advanced_page():
     if raw_data_file is not None:
         # Load data
         file_type = raw_data_file.name.split(".")[-1].lower()
-        df = load_data(file)
+        df = load_data(file, file_type)
 
         if df is not None:
             # Find sensor columns
