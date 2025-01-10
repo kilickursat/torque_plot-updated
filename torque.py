@@ -297,22 +297,26 @@ def find_sensor_columns(df):
     return found_columns
     
 def handle_time_column(df, time_col, time_column_type='numeric'):
+    """
+    Returns tuple of (time_unit, time_display) where:
+    time_unit: used for sorting and calculations
+    time_display: used for plot visualization
+    """
     try:
         if time_column_type == 'numeric':
             time_values = pd.to_numeric(df[time_col], errors='coerce')
             if time_values.isnull().all():
                 st.error(f"Could not convert {time_col} to numeric values")
                 return pd.Series(range(len(df)), dtype='int64')
-            normalized_time = time_values - time_values.min()
-            return normalized_time
+            return time_values, time_values  # Both unit and display are numeric
             
         elif time_column_type == 'datetime':
             time_values = pd.to_datetime(df[time_col], errors='coerce')
             if time_values.isnull().all():
                 st.error(f"Could not convert {time_col} to datetime values")
                 return pd.Series(range(len(df)), dtype='int64')
-            normalized_time = (time_values - time_values.min()).dt.total_seconds()
-            return normalized_time
+            time_unit = (time_values - time_values.min()).dt.total_seconds()
+            return time_unit, time_values  # Unit is seconds, display is datetime
             
     except Exception as e:
         st.error(f"Error processing time column: {str(e)}")
@@ -1069,16 +1073,24 @@ def advanced_page():
             )
 
             # Process time column
-            df["Time_unit"] = handle_time_column(df, time_col, time_column_type)
+            # Time handling
+            time_unit, time_display = handle_time_column(df, time_col, time_column_type)
+            df["Time_unit"] = time_unit
+            df["Time_display"] = time_display
+            
+            # Sort by time unit
             df = df.sort_values("Time_unit")
 
-            # Add time display formatting
+            # Update figure to use appropriate time display
             if time_column_type == 'datetime':
-                df["Time_display"] = df["Time_unit"] / 3600
-                time_unit_label = "Time (hours)"
+                fig_time.update_xaxes(
+                    type='date',
+                    tickformat='%Y-%m-%d %H:%M:%S',
+                    tickangle=45
+                )
+                time_unit_label = "Time"
             else:
-                df["Time_display"] = df["Time_unit"]
-                time_unit_label = "Time (normalized)"
+                time_unit_label = "Relative Time"
 
             # Sensor column selections
             pressure_col = st.selectbox(
@@ -1590,9 +1602,6 @@ def advanced_page():
 
     else:
         st.info("Please upload a Raw Data file to begin the analysis.")
-
-
-
 
 if __name__ == "__main__":
     main()
