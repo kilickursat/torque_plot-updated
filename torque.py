@@ -1394,7 +1394,7 @@ def advanced_page():
                 rows=len(features),
                 cols=1,
                 shared_xaxes=True,
-                vertical_spacing=0.08,  # Increased spacing between subplots
+                vertical_spacing=0.08,
                 subplot_titles=[f['display_name'] for f in features]
             )
 
@@ -1406,7 +1406,8 @@ def advanced_page():
                         y=df[feature["column"]],
                         mode="lines",
                         name=feature["display_name"],
-                        line=dict(color=feature["color"])
+                        line=dict(color=feature["color"]),
+                        showlegend=False  # Remove legend entries
                     ),
                     row=i,
                     col=1
@@ -1421,34 +1422,27 @@ def advanced_page():
                             y=rolling_mean,
                             mode="lines",
                             name=f"{feature['display_name']} Mean",
-                            line=dict(color=feature["color"], dash="dash")
+                            line=dict(color=feature["color"], dash="dash"),
+                            showlegend=False  # Remove legend entries
                         ),
                         row=i,
                         col=1
                     )
 
-                # Update y-axis titles with more padding
                 fig_time.update_yaxes(
                     title_text=feature["display_name"],
-                    title_standoff=25,  # Increased standoff for y-axis titles
+                    title_standoff=25,
                     row=i,
                     col=1
                 )
 
-            # Update layout with adjusted dimensions and margins
             fig_time.update_layout(
-                height=350 * len(features),  # Increased height per subplot
-                showlegend=True,
+                height=350 * len(features),
+                showlegend=False,  # Remove legend completely
                 title_text="Features over Time Analysis",
-                title_x=0.5,  # Center the title
+                title_x=0.5,
                 xaxis_title=time_unit_label,
-                margin=dict(l=100, r=50, t=100, b=50),  # Increased left margin for labels
-                legend=dict(
-                    yanchor="top",
-                    y=1.02,
-                    xanchor="right",
-                    x=1
-                )
+                margin=dict(l=100, r=50, t=100, b=50)
             )
 
             # Display the plot
